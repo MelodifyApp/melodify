@@ -14,6 +14,7 @@ import {
     createKickChatAdapter,
     type KickChatAdapter,
 } from "@/features/kick/chat/adapter";
+import { sendToWindowIfAlive } from "./windowSend";
 
 // Kick chat reading runs over the negotiated anonymous guest transport
 // (guestChat.ts). OAuth credentials are only needed for replies.
@@ -147,12 +148,12 @@ export async function listenToChat(window?: Electron.BrowserWindow) {
                 `Kick guest chat ready for chatroom ID: ${chatroomId}`,
                 "kick:listenToChat"
             );
-            window?.webContents.send("kick:chatConnected");
+            sendToWindowIfAlive(window, "kick:chatConnected");
         },
         onDisconnected: () => {
             isListening = false;
             logWarn("Kick guest chat disconnected", "kick:listenToChat");
-            window?.webContents.send("kick:chatDisconnected");
+            sendToWindowIfAlive(window, "kick:chatDisconnected");
         },
         onError: (error) => {
             logError(error, "kick:guestChatError");
@@ -187,7 +188,7 @@ export function stopListeningToChat(window?: Electron.BrowserWindow) {
     logInfo("Stopped listening to Kick chat", "kick:stopListeningToChat");
 
     if (wasListening) {
-        window?.webContents.send("kick:chatDisconnected");
+        sendToWindowIfAlive(window, "kick:chatDisconnected");
     }
 }
 
@@ -214,7 +215,7 @@ export async function startKickTokenAutoRefresh(
                 // Replies still require a valid OAuth session, so surface the
                 // login failure without tearing down the anonymous guest
                 // reader. Manual logout/stop still stops everything.
-                window?.webContents.send("kick:authenticationFailed");
+                sendToWindowIfAlive(window, "kick:authenticationFailed");
             }
         }
     }, 60 * 1000);

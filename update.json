@@ -1,8 +1,8 @@
 {
-    "version": "1.0.4",
+    "version": "1.0.5",
     "platforms": {
         "win32-x64": {
-            "url": "https://github.com/MelodifyApp/melodify/releases/download/v1.0.4/Melodify.Setup.exe"
+            "url": "https://github.com/MelodifyApp/melodify/releases/download/v1.0.5/Melodify.Setup.exe"
         }
     }
 }
