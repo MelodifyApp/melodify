@@ -67,7 +67,7 @@ const config: ForgeConfig = {
             name: "@electron-forge/publisher-github",
             config: {
                 repository: {
-                    owner: "emirhanpisgin",
+                    owner: "MelodifyApp",
                     name: "melodify",
                 },
                 prerelease: false,

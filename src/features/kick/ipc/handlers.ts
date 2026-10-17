@@ -22,6 +22,20 @@ function resetAuthState() {
     authInProgress = false;
 }
 
+/**
+ * OAuth is only required for replies; anonymous guest reading is independent.
+ * An auth failure stops the OAuth refresh timer so the failure is surfaced
+ * once, but it must not tear down a healthy guest reader — only an explicit
+ * logout/stop (or the intentional retry restart) may do that.
+ */
+function handleKickAuthUnavailable(reason: string): void {
+    logWarn(
+        `${reason}; guest chat reading is independent and stays as-is`,
+        "kick:auth"
+    );
+    stopKickTokenAutoRefresh();
+}
+
 ipcMain.on("kick:auth", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     logDebug("IPC kick:auth called", redactSecrets({ sender: !!event.sender }));
@@ -102,15 +116,13 @@ ipcMain.handle("kick:checkAuth", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
 
     if (!kickClient.hasTokens()) {
-        stopKickTokenAutoRefresh();
-        stopListeningToChat(window || undefined);
+        handleKickAuthUnavailable("No Kick OAuth tokens");
         return { authenticated: false };
     }
 
     const refreshed = await kickClient.getValidAccessToken();
     if (!refreshed) {
-        stopKickTokenAutoRefresh();
-        stopListeningToChat(window || undefined);
+        handleKickAuthUnavailable("Kick OAuth token refresh failed");
         return { authenticated: false };
     }
 
@@ -145,8 +157,7 @@ ipcMain.handle("kick:checkAuth", async (event) => {
         return { authenticated: true, username };
     } catch (error) {
         logError(error, "kick:checkAuth");
-        stopKickTokenAutoRefresh();
-        stopListeningToChat(window || undefined);
+        handleKickAuthUnavailable("Kick auth check failed");
         return { authenticated: false };
     }
 });
@@ -156,15 +167,13 @@ ipcMain.handle("kick:retryChat", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
 
     if (!kickClient.hasTokens()) {
-        stopKickTokenAutoRefresh();
-        stopListeningToChat(window || undefined);
+        handleKickAuthUnavailable("No Kick OAuth tokens");
         return { authenticated: false };
     }
 
     const refreshed = await kickClient.getValidAccessToken();
     if (!refreshed) {
-        stopKickTokenAutoRefresh();
-        stopListeningToChat(window || undefined);
+        handleKickAuthUnavailable("Kick OAuth token refresh failed");
         return { authenticated: false };
     }
 

@@ -51,7 +51,7 @@ let isQuiting = false;
 let updater: Updater | null = null;
 try {
     updater = new Updater({
-        repo: "emirhanpisgin/melodify", // Your GitHub repository
+        repo: "MelodifyApp/melodify",
         autoDownload: false, // Don't auto-download, let user choose
         allowPrerelease: false, // Only stable releases
         debug: false, // Enable debug in dev

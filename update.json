@@ -1,14 +1,8 @@
 {
-    "version": "1.0.3",
+    "version": "1.0.4",
     "platforms": {
         "win32-x64": {
-            "url": "https://github.com/emirhanpisgin/melodify/releases/download/v1.0.3/Melodify.Setup.1.0.3.exe"
-        },
-        "darwin-x64": {
-            "url": "https://github.com/emirhanpisgin/melodify/releases/download/v1.0.3/Melodify-1.0.3.zip"
-        },
-        "darwin-arm64": {
-            "url": "https://github.com/emirhanpisgin/melodify/releases/download/v1.0.3/Melodify-1.0.3-arm64.zip"
+            "url": "https://github.com/MelodifyApp/melodify/releases/download/v1.0.4/Melodify.Setup.exe"
         }
     }
 }

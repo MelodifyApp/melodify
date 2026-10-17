@@ -1,17 +1,28 @@
 import Config from "@/core/config";
-import Pusher from "pusher-js";
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { CommandContext } from "@/core/commands/manager";
 import { commandManager } from "@/core/ipc/handlers";
 import { kickClient } from "@/features/kick/api/client";
 import { executeSongRequest } from "@/core/commands/songRequest";
+import {
+    createGuestChatClient,
+    type KickGuestMessageEvent,
+    type KickGuestRewardEvent,
+} from "@/features/kick/chat/guestChat";
+import {
+    createKickChatAdapter,
+    type KickChatAdapter,
+} from "@/features/kick/chat/adapter";
 
+// Kick chat reading runs over the negotiated anonymous guest transport
+// (guestChat.ts). OAuth credentials are only needed for replies.
 export let isListening = false;
 let refreshKickTokenInterval: NodeJS.Timeout | null = null;
-let pusherInstance: Pusher | null = null;
-let messageChannelInstance: any = null;
-let rewardsChannelInstance: any = null;
+let chatAdapter: KickChatAdapter | null = null;
+// Bumped on every start/stop so a chatroom lookup that resolves late can never
+// start a reader after an explicit stop or logout.
+let chatGeneration = 0;
 
 export async function refreshKickAccessToken(): Promise<boolean> {
     return await kickClient.refreshAccessToken();
@@ -29,15 +40,56 @@ export async function sendKickMessage(message: string): Promise<void> {
     await kickClient.sendMessage(message, Number(userId));
 }
 
+async function handleGuestMessage(event: KickGuestMessageEvent): Promise<void> {
+    const ctx: CommandContext = {
+        username: event.username,
+        message: event.message,
+        badges: event.badges,
+        raw: event.raw,
+        platform: "kick",
+    };
+    try {
+        await commandManager.handle(ctx);
+    } catch (error) {
+        logError(error, "kick:messageProcessing");
+    }
+}
+
+function handleGuestReward(event: KickGuestRewardEvent): void {
+    try {
+        // Reward redemptions keep the existing title filter and permission
+        // behavior; chat commands are unaffected.
+        const configuredRewardTitle = Config.get("rewardTitle") || "Song Request";
+        if (configuredRewardTitle !== event.rewardTitle) return;
+
+        const songQuery = event.userInput;
+        const ctx: CommandContext = {
+            username: event.username,
+            message: songQuery,
+            badges: [],
+            raw: event.raw,
+            platform: "kick",
+        };
+
+        void executeSongRequest(ctx, songQuery, commandManager, {
+            sendReply: sendKickMessage,
+            skipPermissionCheck: true,
+        }).catch((error) => {
+            logError(error, "kick:rewardProcessing");
+        });
+    } catch (error) {
+        logError(error, "kick:rewardProcessing");
+    }
+}
+
 export async function listenToChat(window?: Electron.BrowserWindow) {
-    if (isListening) {
+    if (chatAdapter?.isActive()) {
+        logDebug("Kick chat listener already active", "kick:listenToChat");
         return;
     }
 
-    const pusher = new Pusher("32cbd69e4b950bf97679", {
-        cluster: "us2",
-    });
-    pusherInstance = pusher;
+    chatGeneration += 1;
+    const generation = chatGeneration;
 
     let chatroomId = Config.get("chatroomId");
     if (!chatroomId) {
@@ -51,6 +103,13 @@ export async function listenToChat(window?: Electron.BrowserWindow) {
             return;
         }
         const chatroomResult = await kickClient.findChatroom(username);
+        if (generation !== chatGeneration) {
+            logDebug(
+                "Kick chat start superseded while resolving the chatroom",
+                "kick:listenToChat"
+            );
+            return;
+        }
         if (!chatroomResult) {
             logError(
                 "Failed to find chatroom for username: " + username,
@@ -71,110 +130,50 @@ export async function listenToChat(window?: Electron.BrowserWindow) {
         return;
     }
 
-    const messageChannel = pusher.subscribe(`chatrooms.${chatroomId}.v2`);
-    const rewardsChannel = pusher.subscribe(`chatroom_${chatroomId}`);
-    messageChannelInstance = messageChannel;
-    rewardsChannelInstance = rewardsChannel;
-
-    logInfo(`Listening to Kick chat for chatroom ID: ${chatroomId}`);
-    isListening = true;
-    window?.webContents.send("kick:chatConnected");
-
-    // Handle Pusher connection errors
-    pusher.connection.bind("error", (error: any) => {
-        logError(error, "kick:pusherConnectionError");
-        if (error?.error?.data?.code === 4004) {
-            // Authentication error - stop listening
-            logError(
-                "Pusher authentication failed, stopping chat listener",
-                "kick:pusherAuth"
+    const adapter = createKickChatAdapter({
+        createClient: (handlers) =>
+            createGuestChatClient({
+                chatroomId: String(chatroomId),
+                onEvent: handlers.onEvent,
+                onState: handlers.onState,
+            }),
+        onMessage: (event) => {
+            void handleGuestMessage(event);
+        },
+        onReward: handleGuestReward,
+        onConnected: () => {
+            isListening = true;
+            logInfo(
+                `Kick guest chat ready for chatroom ID: ${chatroomId}`,
+                "kick:listenToChat"
             );
-            stopListeningToChat(window);
-            window?.webContents.send("kick:authenticationFailed");
-        }
+            window?.webContents.send("kick:chatConnected");
+        },
+        onDisconnected: () => {
+            isListening = false;
+            logWarn("Kick guest chat disconnected", "kick:listenToChat");
+            window?.webContents.send("kick:chatDisconnected");
+        },
+        onError: (error) => {
+            logError(error, "kick:guestChatError");
+        },
+        onStateChange: (state) => {
+            logDebug(`Kick guest chat state: ${state}`, "kick:listenToChat");
+        },
     });
 
-    pusher.connection.bind("disconnected", () => {
-        logWarn("Pusher connection disconnected", "kick:pusherDisconnected");
-        stopListeningToChat(window);
-    });
-
-    messageChannel.bind("App\\Events\\ChatMessageEvent", async (raw: any) => {
-        try {
-            const data = typeof raw === "string" ? JSON.parse(raw) : raw;
-            const username = data?.sender?.username;
-            const message = data?.content;
-            if (!username || !message) return;
-            const badges =
-                data?.sender?.identity?.badges.map(
-                    (badge: { type: string; text: string; count?: number }) =>
-                        badge.type
-                ) || [];
-            // Command context
-            const ctx: CommandContext = {
-                username,
-                message,
-                badges,
-                raw: data,
-                platform: "kick",
-            };
-            await commandManager.handle(ctx);
-        } catch (error) {
-            logError(error, "kick:messageProcessing");
-        }
-    });
-
-    type RewardRedeemedEvent = {
-        reward_title: string;
-        user_id: number;
-        channel_id: number;
-        username: string;
-        user_input: string;
-        reward_background_color: string;
-    };
-
-    rewardsChannel.bind("RewardRedeemedEvent", (raw: any) => {
-        try {
-            const data: RewardRedeemedEvent =
-                typeof raw === "string" ? JSON.parse(raw) : raw;
-
-            const username = data.username;
-            const rewardTitle = data.reward_title;
-            const configuredRewardTitle =
-                Config.get("rewardTitle") || "Song Request";
-
-            if (
-                !username ||
-                !rewardTitle ||
-                configuredRewardTitle !== rewardTitle
-            )
-                return;
-
-            const songQuery = data.user_input.trim();
-            const ctx: CommandContext = {
-                username,
-                message: songQuery,
-                badges: [],
-                raw: data,
-                platform: "kick",
-            };
-
-            void executeSongRequest(ctx, songQuery, commandManager, {
-                sendReply: sendKickMessage,
-                skipPermissionCheck: true,
-            });
-        } catch (error) {
-            logError(error, "kick:rewardProcessing");
-        }
-    });
-
-    pusherInstance = pusher;
-    messageChannelInstance = messageChannel;
-    rewardsChannelInstance = rewardsChannel;
+    chatAdapter = adapter;
+    logInfo(`Connecting to Kick guest chat for chatroom ID: ${chatroomId}`);
+    adapter.start();
 }
 
 export function stopListeningToChat(window?: Electron.BrowserWindow) {
-    if (!isListening) {
+    // Supersede any in-flight start (including a pending chatroom lookup).
+    chatGeneration += 1;
+
+    const adapter = chatAdapter;
+    chatAdapter = null;
+    if (!adapter) {
         logDebug(
             "Not currently listening to Kick chat",
             "kick:stopListeningToChat"
@@ -182,34 +181,13 @@ export function stopListeningToChat(window?: Electron.BrowserWindow) {
         return;
     }
 
-    try {
-        // Disconnect from Pusher channels
-        if (messageChannelInstance) {
-            messageChannelInstance.unbind_all();
-            messageChannelInstance = null;
-        }
+    const wasListening = isListening;
+    isListening = false;
+    adapter.stop();
+    logInfo("Stopped listening to Kick chat", "kick:stopListeningToChat");
 
-        if (rewardsChannelInstance) {
-            rewardsChannelInstance.unbind_all();
-            rewardsChannelInstance = null;
-        }
-
-        // Disconnect from Pusher entirely
-        if (pusherInstance) {
-            pusherInstance.disconnect();
-            pusherInstance = null;
-        }
-
-        isListening = false;
-        logInfo("Stopped listening to Kick chat", "kick:stopListeningToChat");
+    if (wasListening) {
         window?.webContents.send("kick:chatDisconnected");
-    } catch (error) {
-        logError(error, "kick:stopListeningToChat");
-        // Force reset state even if cleanup failed
-        isListening = false;
-        pusherInstance = null;
-        messageChannelInstance = null;
-        rewardsChannelInstance = null;
     }
 }
 
@@ -228,13 +206,14 @@ export async function startKickTokenAutoRefresh(
 
             if (!refreshSuccess) {
                 logError(
-                    "Failed to refresh Kick token, stopping chat listener",
+                    "Failed to refresh Kick token; guest chat reading stays connected",
                     "kick:tokenRefresh"
                 );
-                stopListeningToChat(window);
                 stopKickTokenAutoRefresh();
 
-                // Notify the UI that authentication failed
+                // Replies still require a valid OAuth session, so surface the
+                // login failure without tearing down the anonymous guest
+                // reader. Manual logout/stop still stops everything.
                 window?.webContents.send("kick:authenticationFailed");
             }
         }

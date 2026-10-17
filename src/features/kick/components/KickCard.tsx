@@ -5,6 +5,7 @@ import { KICK_REDIRECT_URI } from "@/shared/constants";
 import KickIcon from "./KickIcon";
 import { InfoIcon, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { getKickCardView } from "./kickCardView";
 
 export default function KickCard() {
     const { t } = useTranslation();
@@ -48,9 +49,26 @@ export default function KickCard() {
 
         window.electronAPI.on("kick:authenticationFailed", () => {
             setAuthenticated(false);
-            setListeningToChat(false);
-            setKickUsername(null);
             setAuthInProgress(false);
+            // An OAuth failure does not necessarily stop the anonymous guest
+            // reader, so reconcile with the main process instead of assuming
+            // the chat is disconnected.
+            window.electronAPI
+                .invoke("kick:isListeningToChat")
+                .then((isListening) => {
+                    setListeningToChat(!!isListening);
+                })
+                .catch((error) => {
+                    logError(error, "Error reconciling Kick chat state");
+                });
+            window.electronAPI
+                .invoke("kick:getUserData")
+                .then((data) => {
+                    setKickUsername(data?.username || null);
+                })
+                .catch((error) => {
+                    logError(error, "Error reconciling Kick user data");
+                });
         });
 
         window.electronAPI
@@ -68,9 +86,19 @@ export default function KickCard() {
                 setAuthenticated(result.authenticated);
                 if (result.authenticated) {
                     setKickUsername(result.username);
-                } else {
-                    setKickUsername(null);
+                    return;
                 }
+                // Keep the configured channel visible while an anonymous
+                // guest reader is still running after an OAuth failure.
+                return window.electronAPI
+                    .invoke("kick:getUserData")
+                    .then((data) => {
+                        setKickUsername(data?.username || null);
+                    })
+                    .catch((error) => {
+                        logError(error, "Error reading Kick user data");
+                        setKickUsername(null);
+                    });
             })
             .catch((error) => {
                 logError(error, "Error checking Kick authentication");
@@ -156,13 +184,18 @@ export default function KickCard() {
     };
 
     const refreshKickStatus = async () => {
-        const [authResult, isListening] = await Promise.all([
+        const [authResult, isListening, userData] = await Promise.all([
             window.electronAPI.invoke("kick:checkAuth"),
             window.electronAPI.invoke("kick:isListeningToChat"),
+            window.electronAPI.invoke("kick:getUserData"),
         ]);
 
         setAuthenticated(authResult.authenticated);
-        setKickUsername(authResult.authenticated ? authResult.username : null);
+        setKickUsername(
+            authResult.authenticated
+                ? authResult.username
+                : userData?.username || null
+        );
         setListeningToChat(isListening);
     };
 
@@ -197,6 +230,12 @@ export default function KickCard() {
         }
     };
 
+    const view = getKickCardView({
+        hasSecrets,
+        authenticated,
+        listeningToChat,
+    });
+
     return (
         <div className="w-full h-full flex flex-col bg-zinc-800/20 backdrop-blur-sm relative">
             <div className="p-5 pb-3">
@@ -217,20 +256,21 @@ export default function KickCard() {
                 </div>
 
                 <div
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium text-center ${authenticated && listeningToChat
-                        ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                        : authenticated
-                            ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
-                            : hasSecrets
-                                ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                : "bg-red-500/20 text-red-300 border border-red-500/30"
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium text-center ${
+                        view.badge === "listening"
+                            ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                            : view.badge === "chat-unavailable"
+                                ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                : view.badge === "ready"
+                                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                    : "bg-red-500/20 text-red-300 border border-red-500/30"
                         }`}
                 >
-                    {authenticated && listeningToChat
+                    {view.badge === "listening"
                         ? `✓ ${t("common.listeningToChat")}`
-                        : authenticated
+                        : view.badge === "chat-unavailable"
                             ? `⚠ ${t("common.connectToChat")}`
-                            : hasSecrets
+                            : view.badge === "ready"
                                 ? `🔗 ${t("common.readyToConnect")}`
                                 : `⚙ ${t("common.setupRequired")}`}
                 </div>
@@ -315,14 +355,14 @@ export default function KickCard() {
             </div>
 
             <div className="p-5 pt-2">
-                {hasSecrets === false ? (
+                {view.showConfigure ? (
                     <button
                         onClick={() => setShowSetup(true)}
                         className="w-full bg-gradient-to-r from-kick-green to-green-400 hover:from-green-400 hover:to-kick-green text-black font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
                     >
                         {t("common.configureCredentials")}
                     </button>
-                ) : authenticated ? (
+                ) : view.showDisconnect ? (
                     <div className="flex gap-3 items-center">
                         <button
                             onClick={handleLogout}
