@@ -5,6 +5,7 @@ import { SPOTIFY_REDIRECT_URI } from "@/shared/constants";
 import SpotifyIcon from "./SpotifyIcon";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
+import { spotifyCredentialErrorMessage } from "./spotifyCredentialView";
 
 export default function SpotifyCard() {
     const { t } = useTranslation();
@@ -143,7 +144,12 @@ export default function SpotifyCard() {
             setSpotifyClientSecret("");
             setShowSetup(false);
         } else {
-            alert(result.message);
+            alert(
+                spotifyCredentialErrorMessage(
+                    result,
+                    t("common.secretsSaveError")
+                )
+            );
         }
     };
 

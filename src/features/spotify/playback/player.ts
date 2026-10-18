@@ -36,6 +36,20 @@ const songFileSavingEnabled = true;
 let lastSavedSong: { title: string; artist: string } | null = null;
 let songFileSavingInterval: NodeJS.Timeout | null = null;
 
+/** Rebuild the API client after Spotify credentials change in Settings. */
+export function resetSpotifyApi(): void {
+    spotifyApi = null;
+}
+
+/** Persist new Spotify app credentials and invalidate any client built with the previous pair. */
+export function updateSpotifyClientCredentials(
+    spotifyClientId: string,
+    spotifyClientSecret: string
+): void {
+    Config.set({ spotifyClientId, spotifyClientSecret });
+    resetSpotifyApi();
+}
+
 /**
  * Spotify API Client Factory
  * Creates and configures a Spotify Web API client with credentials from configuration

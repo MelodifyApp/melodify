@@ -3,6 +3,7 @@ import psList from "ps-list";
 import Config from "@/core/config";
 import {
     getSpotifyApi,
+    updateSpotifyClientCredentials,
     checkSpotifyAccessToken,
     startSpotifyTokenRefreshInterval,
     stopSpotifyTokenAutoRefresh,
@@ -159,7 +160,9 @@ ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
             return { success: false, error: "Invalid client ID or secret." };
         }
         // Save secrets if valid
-        Config.set({ spotifyClientId, spotifyClientSecret });
+        // Persist credentials and discard the singleton that may still hold
+        // the previous client ID/secret before OAuth starts.
+        updateSpotifyClientCredentials(spotifyClientId, spotifyClientSecret);
         return { success: true };
     } catch (err) {
         return { success: false, error: "Failed to validate credentials." };
