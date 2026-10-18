@@ -6,6 +6,7 @@ import SpotifyIcon from "./SpotifyIcon";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { spotifyCredentialErrorMessage } from "./spotifyCredentialView";
+import { isSpotifyAppAvailable } from "./spotifyStatusView";
 
 export default function SpotifyCard() {
     const { t } = useTranslation();
@@ -251,7 +252,7 @@ export default function SpotifyCard() {
                                 {t("statusCards.app")}
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${spotifyHasSession ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${isSpotifyAppAvailable(spotifyRunning, spotifyHasSession) ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
