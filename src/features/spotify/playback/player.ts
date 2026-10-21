@@ -35,9 +35,14 @@ let nextSaveTimeout: NodeJS.Timeout | null = null;
 const songFileSavingEnabled = true;
 let lastSavedSong: { title: string; artist: string } | null = null;
 let songFileSavingInterval: NodeJS.Timeout | null = null;
+let tokenGeneration = 0;
+let refreshInFlight: Promise<boolean> | null = null;
 
 /** Rebuild the API client after Spotify credentials change in Settings. */
 export function resetSpotifyApi(): void {
+    // Credential changes supersede any refresh that started with the old pair.
+    tokenGeneration += 1;
+    refreshInFlight = null;
     spotifyApi = null;
 }
 
@@ -126,6 +131,9 @@ export function saveTokens({
     refreshToken: string;
     expiresIn: number;
 }) {
+    // Any explicit token save (OAuth login, reconnect) supersedes refreshes
+    // that started earlier and could otherwise overwrite the newer session.
+    tokenGeneration += 1;
     const expiresAt = Date.now() + expiresIn * 1000;
     Config.set({
         spotifyAccessToken: accessToken,
@@ -148,13 +156,42 @@ export function saveTokens({
  * @returns True if the access token was successfully refreshed, false otherwise
  */
 export async function refreshSpotifyAccessToken(): Promise<boolean> {
+    // Concurrent token checks share one refresh so a slower response cannot
+    // overwrite a newer token pair.
+    if (refreshInFlight) return refreshInFlight;
+    const generation = tokenGeneration;
+    const refresh = performSpotifyRefresh(generation);
+    refreshInFlight = refresh;
+    try {
+        return await refresh;
+    } finally {
+        if (refreshInFlight === refresh) refreshInFlight = null;
+    }
+}
+
+async function performSpotifyRefresh(generation: number): Promise<boolean> {
     const tokens = loadTokens();
     if (!tokens) return false;
     try {
         const api = getSpotifyApi();
         if (!api) return false;
         const data = await api.refreshAccessToken();
+        // A login, logout or credential change during the request wins.
+        if (generation !== tokenGeneration) return false;
         const { access_token, expires_in } = data.body;
+        if (
+            typeof access_token !== "string" ||
+            !access_token ||
+            typeof expires_in !== "number" ||
+            !Number.isFinite(expires_in) ||
+            expires_in <= 0
+        ) {
+            logError(
+                "Spotify token refresh returned invalid token data",
+                "spotify:refreshSpotifyAccessToken"
+            );
+            return false;
+        }
         api.setAccessToken(access_token);
         saveTokens({
             accessToken: access_token,
@@ -237,9 +274,13 @@ export async function playSong(
     }
     if (trackUri && track) {
         logDebug("Adding to queue", redactSecrets({ trackUri, track }));
-        await spotifyApi.addToQueue(trackUri).catch((err) => {
+        try {
+            await spotifyApi.addToQueue(trackUri);
+        } catch (err) {
             logError(err, "spotify:playSong:addToQueue");
-        });
+            // A found track is not a successful request until Spotify accepts it.
+            return null;
+        }
 
         return {
             title: track.name,
