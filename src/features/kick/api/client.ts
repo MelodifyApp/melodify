@@ -72,6 +72,8 @@ class KickClient {
     private accessToken: string | null = null;
     private refreshToken: string | null = null;
     private expiresAt: number | null = null;
+    private tokenGeneration = 0;
+    private refreshInFlight: Promise<boolean> | null = null;
 
     constructor() {
         this.loadTokens();
@@ -105,6 +107,10 @@ class KickClient {
      * Clear tokens from config
      */
     public clearTokens(): void {
+        // Supersede any refresh that is already in flight: an explicit logout
+        // must win over a late token response.
+        this.tokenGeneration += 1;
+        this.refreshInFlight = null;
         this.accessToken = null;
         this.refreshToken = null;
         this.expiresAt = null;
@@ -199,7 +205,10 @@ class KickClient {
             const data = (await response.json()) as KickTokenResponse;
             const { access_token, refresh_token, expires_in } = data;
 
-            // Store tokens with calculated expiration time
+            // Store tokens with calculated expiration time. A fresh login
+            // supersedes any refresh that started before it.
+            this.tokenGeneration += 1;
+            this.refreshInFlight = null;
             this.saveTokens({
                 accessToken: access_token,
                 refreshToken: refresh_token,
@@ -229,7 +238,26 @@ class KickClient {
      * This maintains user sessions without requiring re-authentication
      */
     public async refreshAccessToken(): Promise<boolean> {
-        if (!this.refreshToken) {
+        // Concurrent callers (auto-refresh timer, retry/checkAuth) share a
+        // single refresh instead of racing to overwrite the token pair.
+        if (this.refreshInFlight) return this.refreshInFlight;
+        const generation = this.tokenGeneration;
+        const refresh = this.performRefresh(generation);
+        this.refreshInFlight = refresh;
+        try {
+            return await refresh;
+        } finally {
+            if (this.refreshInFlight === refresh) this.refreshInFlight = null;
+        }
+    }
+
+    /**
+     * Performs one refresh for a captured generation. A logout or a fresh
+     * login bumps the generation, making the late response inert.
+     */
+    private async performRefresh(generation: number): Promise<boolean> {
+        const savedRefreshToken = this.refreshToken;
+        if (!savedRefreshToken) {
             logError(
                 "No refresh token available",
                 "KickClient:refreshAccessToken"
@@ -251,7 +279,7 @@ class KickClient {
 
             const params = new URLSearchParams({
                 grant_type: "refresh_token",
-                refresh_token: this.refreshToken,
+                refresh_token: savedRefreshToken,
                 client_id: clientId,
                 client_secret: clientSecret,
             });
@@ -276,12 +304,38 @@ class KickClient {
             }
 
             const data = (await response.json()) as KickTokenResponse;
+
+            // A logout or fresh login happened while the request was in
+            // flight; never resurrect or overwrite those tokens.
+            if (generation !== this.tokenGeneration) {
+                return false;
+            }
+
             const { access_token, refresh_token, expires_in } = data;
+            if (
+                typeof access_token !== "string" ||
+                !access_token.trim() ||
+                typeof expires_in !== "number" ||
+                !Number.isFinite(expires_in) ||
+                expires_in <= 0 ||
+                (refresh_token !== undefined &&
+                    (typeof refresh_token !== "string" ||
+                        !refresh_token.trim()))
+            ) {
+                logError(
+                    "Kick token refresh returned invalid token data",
+                    "KickClient:refreshAccessToken"
+                );
+                return false;
+            }
 
             // Update tokens - refresh token may be rotated
             this.saveTokens({
                 accessToken: access_token,
-                refreshToken: refresh_token || this.refreshToken,
+                refreshToken:
+                    typeof refresh_token === "string" && refresh_token
+                        ? refresh_token
+                        : savedRefreshToken,
                 expiresAt: Date.now() + expires_in * 1000,
             });
 
