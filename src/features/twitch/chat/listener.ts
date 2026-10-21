@@ -6,6 +6,8 @@ import { CommandContext } from "@/core/commands/manager";
 import { commandManager } from "@/core/ipc/handlers";
 import { twitchClient } from "@/features/twitch/api/client";
 import { executeSongRequest } from "@/core/commands/songRequest";
+import { decodeTwitchChatContext } from "./context";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 export let isListening = false;
 let websocketClient: WebSocket | null = null;
@@ -28,7 +30,7 @@ export async function sendTwitchMessage(message: string): Promise<void> {
         throw new Error("Missing Twitch broadcaster or bot user ID");
     }
 
-    const accessToken = twitchClient.getAccessToken();
+    const accessToken = await twitchClient.getValidAccessToken();
     if (!accessToken) {
         logError("Missing Twitch access token", "twitch:sendMessage");
         throw new Error("Missing Twitch access token");
@@ -78,7 +80,7 @@ export async function sendTwitchMessage(message: string): Promise<void> {
 }
 
 async function validateToken(): Promise<boolean> {
-    const accessToken = twitchClient.getAccessToken();
+    const accessToken = await twitchClient.getValidAccessToken();
     if (!accessToken) {
         logError("No access token available", "twitch:validateToken");
         return false;
@@ -162,7 +164,7 @@ function startWebSocketClient(): WebSocket {
 async function registerEventSubListeners(): Promise<void> {
     const broadcasterUserId = Config.get("twitchUserId");
     const botUserId = Config.get("twitchBotUserId");
-    const accessToken = twitchClient.getAccessToken();
+    const accessToken = await twitchClient.getValidAccessToken();
     const clientId = Config.get("twitchClientId");
 
     if (!broadcasterUserId || !botUserId || !accessToken || !clientId) {
@@ -340,54 +342,11 @@ async function handleChannelPointRedemption(
 
 async function handleChatMessage(event: any): Promise<void> {
     try {
-        const username = event.chatter_user_login;
-        const message = event.message.text;
-
-        if (!username || !message) {
+        const ctx = decodeTwitchChatContext(event);
+        if (!ctx) {
             logDebug("Missing message data", "twitch:handleChatMessage");
             return;
         }
-
-        // Build platform badges (best-effort mapping from EventSub payload)
-        const badges: string[] = [];
-        try {
-            if (
-                event.is_broadcaster ||
-                event.chatter_is_broadcaster ||
-                event.user_type === "broadcaster"
-            ) {
-                badges.push("broadcaster");
-            }
-
-            if (
-                event.is_mod ||
-                event.is_moderator ||
-                event.chatter_is_mod ||
-                event.user_type === "mod" ||
-                event.user_type === "moderator"
-            ) {
-                badges.push("moderator");
-            }
-
-            if (event.is_subscriber || event.is_sub || event.tags?.subscriber) {
-                badges.push("subscriber");
-            }
-
-            if (event.is_vip || event.tags?.vip) {
-                badges.push("vip");
-            }
-        } catch (e) {
-            // ignore badge parsing errors
-        }
-
-        // Command context
-        const ctx: CommandContext = {
-            username,
-            message,
-            badges,
-            raw: event,
-            platform: "twitch",
-        };
 
         await commandManager.handle(ctx);
     } catch (error) {
@@ -405,7 +364,7 @@ export async function listenToChat(window?: Electron.BrowserWindow) {
     const tokenValid = await validateToken();
     if (!tokenValid) {
         logError("Token validation failed", "twitch:listenToChat");
-        window?.webContents.send("twitch:authenticationFailed");
+        sendToWindowIfAlive(window, "twitch:authenticationFailed");
         return;
     }
 
@@ -414,12 +373,12 @@ export async function listenToChat(window?: Electron.BrowserWindow) {
         websocketClient = startWebSocketClient();
 
         logInfo("Started listening to Twitch chat", "twitch:listenToChat");
-        window?.webContents.send("twitch:chatConnected");
+        sendToWindowIfAlive(window, "twitch:chatConnected");
     } catch (error) {
         logError(error, "twitch:listenToChat");
         isListening = false;
         websocketClient = null;
-        window?.webContents.send("twitch:authenticationFailed");
+        sendToWindowIfAlive(window, "twitch:authenticationFailed");
     }
 }
 
@@ -446,10 +405,9 @@ export function stopListeningToChat(window?: Electron.BrowserWindow) {
             "Stopped listening to Twitch chat",
             "twitch:stopListeningToChat"
         );
-        window?.webContents.send("twitch:chatDisconnected");
+        sendToWindowIfAlive(window, "twitch:chatDisconnected");
     } catch (error) {
-        logError(error, "twitch:stopListeningToChat");
-        // Force reset state even if cleanup failed
+        logError(error, "twitch:stopListeningToChat");        // Force reset state even if cleanup failed
         isListening = false;
         websocketClient = null;
         websocketSessionID = null;

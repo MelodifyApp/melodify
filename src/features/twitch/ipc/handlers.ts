@@ -14,6 +14,7 @@ import {
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { twitchClient } from "@/features/twitch/api/client";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 let authInProgress = false;
 
@@ -50,7 +51,7 @@ ipcMain.on("twitch:auth", async (event) => {
         }, 60000); // 1 minute timeout
     } catch (error) {
         logError(error, "twitch:auth:ipcHandler");
-        window.webContents.send("twitch:authenticationFailed");
+        sendToWindowIfAlive(window, "twitch:authenticationFailed");
         resetAuthState();
     }
 });
@@ -77,7 +78,7 @@ ipcMain.on("twitch:sendMessage", async (event, message) => {
     } catch (error) {
         logError(error, "twitch:sendMessage:ipcHandler");
         const window = BrowserWindow.fromWebContents(event.sender);
-        window?.webContents.send("twitch:sendMessageError", {
+        sendToWindowIfAlive(window, "twitch:sendMessageError", {
             message: error instanceof Error ? error.message : "Unknown error",
         });
     }
@@ -91,9 +92,7 @@ ipcMain.handle("twitch:checkAuth", async (event) => {
         return { authenticated: false };
     }
 
-    if (twitchClient.isTokenExpired()) {
-        // Token is expired, clear it
-        twitchClient.clearTokens();
+    if (!(await twitchClient.getValidAccessToken())) {
         stopListeningToChat(window);
         return { authenticated: false };
     }
@@ -120,7 +119,7 @@ ipcMain.on("twitch:logout", (event) => {
     });
 
     // Notify UI that authentication is cleared
-    window?.webContents.send("twitch:authenticationFailed");
+    sendToWindowIfAlive(window, "twitch:authenticationFailed");
 
     logInfo(
         "Twitch logout completed - stopped chat listener and cleared tokens"
