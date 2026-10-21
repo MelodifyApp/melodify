@@ -4,6 +4,7 @@ import express from "express";
 import { Server } from "http";
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 // Make startSpotifyAuthServer accept window or webContents to send events back to frontend
 export function startSpotifyAuthServer(window: BrowserWindow) {
@@ -14,12 +15,11 @@ export function startSpotifyAuthServer(window: BrowserWindow) {
     const app = express();
     const port = 8888;
 
-    //@ts-ignore
     let authServer: Server | null = null;
 
     app.get("/callback", async (req, res) => {
         const code = req.query.code as string | undefined;
-        logDebug("Spotify auth callback hit", redactSecrets({ code }));
+        logDebug("Spotify auth callback hit", { hasCode: !!code });
         if (!code) {
             res.status(400).send("Missing code");
             return;
@@ -29,7 +29,7 @@ export function startSpotifyAuthServer(window: BrowserWindow) {
             const spotifyApi = getSpotifyApi();
 
             if (!spotifyApi) {
-                window.webContents.send("toast", {
+                sendToWindowIfAlive(window, "toast", {
                     type: "error",
                     message: "Spotify API not initialized. Please try again.",
                 });
@@ -71,11 +71,11 @@ export function startSpotifyAuthServer(window: BrowserWindow) {
             );
 
             // Send IPC message back to frontend
-            if (window && !window.isDestroyed()) {
-                window.webContents.send("spotify:authenticated", {
+            if (
+                !sendToWindowIfAlive(window, "spotify:authenticated", {
                     username: user.body.display_name,
-                });
-            } else {
+                })
+            ) {
                 logWarn(
                     "Window is destroyed or invalid, cannot send authentication event",
                     "spotifyAuthServer"

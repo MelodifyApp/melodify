@@ -29,6 +29,7 @@ import {
 } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { CommandManager } from "@/core/commands/manager";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import {
     startSongFileSaving,
     stopSongFileSaving,
@@ -331,7 +332,7 @@ ipcMain.handle("file:selectSongFilePath", async () => {
             title: "Select file to save current song",
             defaultPath:
                 Config.get("currentSongFilePath") ||
-                path.join(app.getPath("userData"), "current-song.txt"),
+                path.join(path.dirname(Config.getPath()), "current-song.txt"),
             filters: [
                 { name: "Text Files", extensions: ["txt"] },
                 { name: "All Files", extensions: ["*"] },
@@ -403,7 +404,7 @@ export function incrementSongRequestCount(songInfo?: {
 
     // Broadcast to all renderer processes
     BrowserWindow.getAllWindows().forEach((window: BrowserWindow) => {
-        window.webContents.send("songRequest:completed", songInfo);
+        sendToWindowIfAlive(window, "songRequest:completed", songInfo);
     });
 }
 

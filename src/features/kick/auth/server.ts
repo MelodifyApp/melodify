@@ -10,12 +10,12 @@ import { listenToChat } from "@/features/kick/chat/listener";
 import { logInfo, logError, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { kickClient } from "@/features/kick/api/client";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 const redirectUri =
     Config.get("kickRedirectUri") || "http://localhost:8889/callback";
 const port = 8889;
 
-//@ts-ignore
 let serverInstance: Server | null = null;
 let serverStarting = false;
 
@@ -37,7 +37,7 @@ export async function startKickAuthServer(
     return new Promise((resolve, reject) => {
         app.get("/callback", async (req, res) => {
             const code = req.query.code as string | undefined;
-            logDebug("Kick auth callback hit", redactSecrets({ code }));
+            logDebug("Kick auth callback hit", { hasCode: !!code });
 
             if (!code) {
                 const errorMsg = "Missing code parameter in callback";
@@ -45,7 +45,7 @@ export async function startKickAuthServer(
                 res.status(400).send(
                     "❌ Authentication failed: Missing authorization code"
                 );
-                window.webContents.send("kick:authenticationFailed");
+                sendToWindowIfAlive(window, "kick:authenticationFailed");
                 // Emit auth completion to main process even on failure
                 ipcMain.emit("kick:authComplete");
 
@@ -138,7 +138,7 @@ export async function startKickAuthServer(
                 res.send(
                     "✅ Kick authentication successful! You can close this window."
                 );
-                window.webContents.send("kick:authenticated", {
+                sendToWindowIfAlive(window, "kick:authenticated", {
                     username,
                 });
                 // Emit auth completion to main process
@@ -164,7 +164,7 @@ export async function startKickAuthServer(
                 }
 
                 res.status(500).send(errorMessage);
-                window.webContents.send("kick:authenticationFailed");
+                sendToWindowIfAlive(window, "kick:authenticationFailed");
                 // Emit auth completion to main process even on failure
                 ipcMain.emit("kick:authComplete");
                 // Don't resolve here - server startup Promise already resolved

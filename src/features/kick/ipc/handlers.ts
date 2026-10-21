@@ -15,6 +15,7 @@ import {
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { kickClient } from "@/features/kick/api/client";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 let authInProgress = false;
 
@@ -61,7 +62,7 @@ ipcMain.on("kick:auth", async (event) => {
         }, 60000); // 1 minute timeout
     } catch (error) {
         logError(error, "kick:auth:ipcHandler");
-        window.webContents.send("kick:authenticationFailed");
+        sendToWindowIfAlive(window, "kick:authenticationFailed");
         resetAuthState();
     }
 });
@@ -218,7 +219,7 @@ ipcMain.on("kick:logout", (event) => {
     kickClient.clearTokens();
 
     // Notify UI that authentication is cleared
-    window?.webContents.send("kick:authenticationFailed");
+    sendToWindowIfAlive(window, "kick:authenticationFailed");
 
     logInfo("Kick logout completed - stopped chat listener and cleared tokens");
 });

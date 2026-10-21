@@ -11,10 +11,10 @@ import { logInfo, logError, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { twitchClient } from "@/features/twitch/api/client";
 import { TWITCH_REDIRECT_URI } from "@/shared/constants";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 const port = 8890;
 
-//@ts-ignore
 let serverInstance: Server | null = null;
 let serverStarting = false;
 
@@ -42,7 +42,7 @@ export async function startTwitchAuthServer(
             const scope = req.query.scope as string | undefined;
             logDebug(
                 "Twitch auth callback hit",
-                redactSecrets({ code, scope })
+                { hasCode: !!code, scope }
             );
 
             if (!code) {
@@ -51,7 +51,7 @@ export async function startTwitchAuthServer(
                 res.status(400).send(
                     "❌ Authentication failed: Missing authorization code"
                 );
-                window.webContents.send("twitch:authenticationFailed");
+                sendToWindowIfAlive(window, "twitch:authenticationFailed");
                 // Emit auth completion to main process even on failure
                 ipcMain.emit("twitch:authComplete");
 
@@ -171,7 +171,7 @@ export async function startTwitchAuthServer(
                 res.send(
                     "✅ Twitch authentication successful! You can close this window."
                 );
-                window.webContents.send("twitch:authenticated", {
+                sendToWindowIfAlive(window, "twitch:authenticated", {
                     twitchUsername,
                 });
                 // Emit auth completion to main process
@@ -197,7 +197,7 @@ export async function startTwitchAuthServer(
                 }
 
                 res.status(500).send(errorMessage);
-                window.webContents.send("twitch:authenticationFailed");
+                sendToWindowIfAlive(window, "twitch:authenticationFailed");
                 // Emit auth completion to main process even on failure
                 ipcMain.emit("twitch:authComplete");
                 // Don't resolve here - server startup Promise already resolved
