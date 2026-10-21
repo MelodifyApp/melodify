@@ -3,6 +3,7 @@ import path from "path";
 import { app } from "electron";
 import { logInfo, logError, logDebug, logWarn } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
+import { resolveUserDataDirectory, previewOverrideIgnored } from "./userDataDirectory";
 
 /**
  * Configuration management system with multi-language support
@@ -111,6 +112,26 @@ interface AppConfig {
     cooldownMessageTemplate?: string;
 }
 
+const userDataDirectory = resolveUserDataDirectory(
+    app.getPath("userData"),
+    process.env.MELODIFY_PREVIEW_USER_DATA,
+    process.env.NODE_ENV === "development"
+);
+
+// Never silently fall back to the real profile when a preview was requested.
+if (
+    previewOverrideIgnored(
+        app.getPath("userData"),
+        process.env.MELODIFY_PREVIEW_USER_DATA,
+        process.env.NODE_ENV === "development"
+    )
+) {
+    logWarn(
+        "MELODIFY_PREVIEW_USER_DATA ignored: preview isolation only applies to development builds",
+        "config:userDataDirectory"
+    );
+}
+
 /**
  * Returns language-specific default configuration values
  * Used when changing languages to provide appropriate default templates and aliases
@@ -118,7 +139,7 @@ interface AppConfig {
  * @param language - Target language code ('en', 'tr', etc.)
  * @returns Object containing translated defaults for templates and command aliases
  */
-function getTranslatedDefaults(language: string = "en") {
+function getTranslatedDefaults(language = "en") {
     const translations = {
         en: {
             songRequestReplyTemplate: "✅ Added to queue: {title} by {artist}",
@@ -174,7 +195,7 @@ const defaultConfig: AppConfig = {
     allowedBadges: ["og", "vip", "subscriber"],
     customModerators: [],
     saveCurrentSongToFile: false,
-    currentSongFilePath: path.join(app.getPath("userData"), "current-song.txt"),
+    currentSongFilePath: path.join(userDataDirectory, "current-song.txt"),
     kickRedirectUri: "http://localhost:8889/callback",
     spotifyRedirectUri: "http://127.0.0.1:8888/callback",
 
@@ -194,7 +215,7 @@ const defaultConfig: AppConfig = {
     ...getTranslatedDefaults("en"),
 };
 
-const storePath = path.join(app.getPath("userData"), "config.json");
+const storePath = path.join(userDataDirectory, "config.json");
 
 let cache: AppConfig = { ...defaultConfig };
 

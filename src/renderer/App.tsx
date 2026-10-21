@@ -9,7 +9,6 @@ import Settings from "@/features/settings/components/Settings";
 import Titlebar from "@/ui/components/Titlebar";
 import UpdateDialog from "@/ui/components/UpdateDialog";
 import UITestPage from "@/ui/components/UITestPage";
-import { useTranslation } from "react-i18next";
 import "@/core/i18n"; // Initialize i18n
 
 /**
@@ -17,7 +16,6 @@ import "@/core/i18n"; // Initialize i18n
  * Handles navigation between HomePage and Settings, and displays update dialogs.
  */
 export default function App() {
-    const { t } = useTranslation();
     // Check if this is the test window
     const isTestMode =
         new URLSearchParams(window.location.search).get("testmode") === "true";
@@ -53,6 +51,7 @@ export default function App() {
                     onMinimize={handleMinimize}
                     onClose={handleClose}
                     onSettings={handleSettings}
+                    showSettings={false}
                 />
                 <UITestPage />
             </ErrorBoundary>

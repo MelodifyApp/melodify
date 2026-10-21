@@ -15,6 +15,7 @@ interface TitlebarProps {
     onMinimize: () => void;
     onClose: () => void;
     onSettings: () => void;
+    showSettings?: boolean;
 }
 
 /**
@@ -25,6 +26,7 @@ export default function Titlebar({
     onMinimize,
     onClose,
     onSettings,
+    showSettings = true,
 }: TitlebarProps) {
     const { t } = useTranslation();
     const isDevelopment = process.env.NODE_ENV === "development";
@@ -35,13 +37,13 @@ export default function Titlebar({
 
     return (
         <div
-            className="w-full flex items-center border-b border-zinc-700/50 justify-between bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 h-9 select-none pl-2 gap-3"
+            className="w-full flex items-center border-b border-zinc-700/70 justify-between bg-zinc-900 h-9 select-none pl-3 gap-3"
             style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         >
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-blue-500 rounded-md flex items-center justify-center">
-                        <Music className="w-3 h-3 text-white" />
+                    <div className="w-6 h-6 bg-melodify-primary rounded-md flex items-center justify-center">
+                        <Music className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div className="flex items-center font-bold text-white">
                         {t("app.name")}
@@ -55,30 +57,29 @@ export default function Titlebar({
             >
                 {isDevelopment && (
                     <button
-                        className="h-full aspect-[1.25_/_1] flex items-center justify-center transition-colors hover:bg-blue-500/20 text-blue-400 border-none bg-transparent focus:outline-none"
+                        className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-melodify-secondary border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-secondary"
                         onClick={openUITestWindow}
                         title="UI Test Window (Dev Only)"
                         aria-label="Open UI Test Window"
-                        tabIndex={-1}
                     >
                         <TestTube className="size-4" />
                     </button>
                 )}
+                {showSettings && (
+                    <button
+                        className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-primary"
+                        onClick={onSettings}
+                        title={t("settings.title")}
+                        aria-label={t("settings.title")}
+                    >
+                        <SettingsIcon className="size-4" />
+                    </button>
+                )}
                 <button
-                    className="h-full aspect-[1.25_/_1] flex items-center justify-center transition-colors hover:bg-white/10 text-zinc-300 border-none bg-transparent focus:outline-none"
-                    onClick={onSettings}
-                    title="Settings"
-                    aria-label="Open Settings"
-                    tabIndex={-1}
-                >
-                    <SettingsIcon className="size-4" />
-                </button>
-                <button
-                    className="h-full aspect-[1.25_/_1] flex items-center justify-center transition-colors hover:bg-white/10 text-zinc-300 border-none bg-transparent focus:outline-none"
+                    className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-primary"
                     onClick={onMinimize}
                     title="Minimize"
                     aria-label="Minimize window"
-                    tabIndex={-1}
                 >
                     <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
                         <rect
@@ -91,11 +92,10 @@ export default function Titlebar({
                     </svg>
                 </button>
                 <button
-                    className="h-full aspect-[1.25_/_1] flex items-center justify-center transition-colors hover:bg-red-500 text-zinc-300 border-none bg-transparent focus:outline-none"
+                    className="h-full w-12 flex items-center justify-center transition-colors hover:bg-red-700 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
                     onClick={onClose}
                     title={t("common.close")}
                     aria-label="Close application"
-                    tabIndex={-1}
                 >
                     <XIcon className="size-5" />
                 </button>

@@ -49,23 +49,30 @@ let isQuiting = false;
 
 // Initialize the updater with configuration
 let updater: Updater | null = null;
-try {
-    updater = new Updater({
-        repo: "MelodifyApp/melodify",
-        autoDownload: false, // Don't auto-download, let user choose
-        allowPrerelease: false, // Only stable releases
-        debug: false, // Enable debug in dev
-        logger: {
-            info: (message: string) => logInfo(message, "updater"),
-            debug: (message: string) => logDebug(message, "updater"),
-            warn: (message: string) => logWarn(message, "updater"),
-            error: (message: string) => logError(message, "updater"),
-        },
-    });
-    logInfo("Updater initialized successfully", "updater:init");
-} catch (error: any) {
-    logError(error, "updater:init");
-    // Continue without updater if initialization fails
+const isIsolatedPreview =
+    process.env.NODE_ENV === "development" &&
+    !!process.env.MELODIFY_PREVIEW_USER_DATA;
+if (isIsolatedPreview) {
+    logInfo("Updater disabled for isolated UI preview", "updater:init");
+} else {
+    try {
+        updater = new Updater({
+            repo: "MelodifyApp/melodify",
+            autoDownload: false, // Don't auto-download, let user choose
+            allowPrerelease: false, // Only stable releases
+            debug: false, // Enable debug in dev
+            logger: {
+                info: (message: string) => logInfo(message, "updater"),
+                debug: (message: string) => logDebug(message, "updater"),
+                warn: (message: string) => logWarn(message, "updater"),
+                error: (message: string) => logError(message, "updater"),
+            },
+        });
+        logInfo("Updater initialized successfully", "updater:init");
+    } catch (error: any) {
+        logError(error, "updater:init");
+        // Continue without updater if initialization fails
+    }
 }
 
 function broadcast(channel: string, ...args: any[]) {
