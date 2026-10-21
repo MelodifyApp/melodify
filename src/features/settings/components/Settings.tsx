@@ -147,7 +147,7 @@ export default function Settings({ onClose }: SettingsProps) {
             //     );
             case "saved":
                 return (
-                    <div className="flex items-center gap-1.5 text-green-400">
+                    <div className="flex items-center gap-1.5 text-melodify-primary">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {/* <span className="text-xs whitespace-nowrap">
                             {t("common.saved")}
@@ -177,9 +177,9 @@ export default function Settings({ onClose }: SettingsProps) {
         }
     };
     return (
-        <div className="fixed left-0 bottom-0 w-full h-screen backdrop-blur-sm z-50 flex">
-            <div className="w-48 bg-zinc-900 border-r border-zinc-800 flex flex-col">
-                <div className="p-4 border-b border-zinc-800">
+        <div className="fixed left-0 bottom-0 w-full h-screen z-50 flex bg-zinc-950">
+            <div className="w-48 bg-zinc-900 border-r border-zinc-700/70 flex flex-col">
+                <div className="p-4 border-b border-zinc-700/60">
                     <div className="flex items-center justify-between">
                         <h1 className="text-lg font-semibold text-white">
                             {t("settings.title")}
@@ -196,7 +196,7 @@ export default function Settings({ onClose }: SettingsProps) {
                                 onClick={() => setActiveSection(section.id)}
                                 className={`w-full px-3 py-2 rounded text-left text-sm transition-colors ${
                                     isActive
-                                        ? "bg-zinc-800 text-white"
+                                        ? "bg-zinc-800 text-white border-l-2 border-l-melodify-primary"
                                         : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                                 }`}
                             >
@@ -222,9 +222,9 @@ export default function Settings({ onClose }: SettingsProps) {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
+            <div className="flex-1 flex flex-col bg-zinc-900">
                 <div ref={contentRef} className="flex-1 overflow-y-auto">
-                    <div className="p-6">
+                    <div className="p-6 max-w-5xl">
                         {activeSection === "general" && (
                             <General
                                 config={config}

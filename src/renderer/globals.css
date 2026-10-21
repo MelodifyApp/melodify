@@ -4,6 +4,7 @@
 
 body {
     @apply m-0 flex flex-col;
+    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
 }
 
 html,
@@ -16,16 +17,26 @@ body {
     background: #18181b;
 }
 ::-webkit-scrollbar-thumb {
-    background: #1db954;
+    background: #5F8BBF;
     border-radius: 8px;
     border: 2px solid #23232a;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #1ed760;
+    background: #8B5FBF;
 }
 ::-webkit-scrollbar-corner {
     background: #18181b;
 }
+
+.settings-section {
+    padding: 1rem 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgb(63 72 77 / 0.75);
+    border-radius: 0;
+}
+
+.settings-section:first-of-type { padding-top: 0; }
 
 /* Hide number input spinners for all browsers */
 .hide-number-spin::-webkit-outer-spin-button,

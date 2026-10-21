@@ -131,7 +131,7 @@ export default function Commands({
                 {t("commands.title")}
             </h2>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("requests.commandPrefix")}
                 </h3>
@@ -156,7 +156,7 @@ export default function Commands({
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("commands.customModerators")}
                 </h3>

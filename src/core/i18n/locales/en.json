@@ -44,7 +44,7 @@
     },
     "home": {
         "songRequests": "Song Requests",
-        "totalToday": "Total today",
+        "totalToday": "Today · this session",
         "byArtist": "by {{artist}}",
         "checkingUpdates": "Checking for updates...",
         "downloadingUpdate": "Downloading update... {{percent}}%",
@@ -170,6 +170,8 @@
         "active": "Active",
         "inactive": "Inactive",
         "activeListening": "Active listening",
+        "listenerStarted": "Listener started",
+        "eventDeliveryUnconfirmed": "Twitch has not confirmed delivery of chat events yet.",
         "notConnected": "Not connected",
         "connecting": "Connecting...",
         "refresh": "Refresh",
@@ -178,11 +180,11 @@
         "configureCredentials": "Configure API Credentials"
     },
     "statusCards": {
-        "api": "API",
-        "app": "APP",
-        "auth": "AUTH",
-        "session": "SESSION",
-        "chatConnection": "CHAT CONNECTION"
+        "api": "Developer credentials",
+        "app": "Spotify app",
+        "auth": "Account",
+        "session": "Active device",
+        "chatConnection": "Chat connection"
     },
     "setup": {
         "configureKickAPI": "Configure Kick API",

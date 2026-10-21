@@ -48,7 +48,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 {t("requests.title")}
             </h2>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("requests.basicSettings")}
                 </h3>
@@ -93,7 +93,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("requests.currentSongDisplay")}
                 </h3>
@@ -165,7 +165,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     Song Request Rewards
                 </h3>
@@ -208,7 +208,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("requests.chatResponses")}
                 </h3>
@@ -289,7 +289,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 border border-zinc-700/50 p-4 rounded-md">
+            <div className="settings-section">
                 <h3 className="text-base font-medium text-white mb-4">
                     {t("requests.cooldowns")}
                 </h3>

@@ -104,7 +104,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                 Development Tools
             </h3>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center">
                         <Monitor className="w-3 h-3 text-blue-300" />
@@ -169,7 +169,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 bg-purple-500/20 rounded flex items-center justify-center">
                         <Bug className="w-3 h-3 text-purple-300" />
@@ -261,7 +261,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                             <Input
                                 label="Error Input"
                                 value=""
-                                onChange={() => {}}
+                                readOnly
                                 placeholder="Error state..."
                                 error={true}
                                 helperText="This is an error message"
@@ -272,7 +272,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
+            <div className="settings-section">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                         <div className="w-6 h-6 bg-purple-500/20 rounded flex items-center justify-center">
@@ -353,7 +353,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                 )}
             </div>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
+            <div className="settings-section">
                 <div className="flex items-center justify-between mb-3">
                     <div>
                         <h3 className="text-sm font-semibold text-white">

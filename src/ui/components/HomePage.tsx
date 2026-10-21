@@ -141,13 +141,13 @@ export default function HomePage() {
     }
 
     return (
-        <div className="flex-1 flex flex-col bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 overflow-hidden">
-            <div className="px-8 py-3 border-b border-zinc-700/50">
-                <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg p-3 border border-green-500/20">
+        <div className="flex-1 flex flex-col bg-zinc-900 overflow-hidden">
+            <div className="px-6 py-3 border-b border-zinc-700/60">
+                <div className="bg-zinc-800/50 rounded-md p-3 border border-zinc-700/60 border-l-2 border-l-melodify-primary">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-green-500/20 rounded-md flex items-center justify-center">
-                                <Headphones className="w-4 h-4 text-green-400" />
+                            <div className="w-8 h-8 bg-melodify-primary/10 rounded-md flex items-center justify-center">
+                                <Headphones className="w-4 h-4 text-melodify-primary" />
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-white">
@@ -159,14 +159,14 @@ export default function HomePage() {
                             </div>
                         </div>
                         <div className="text-right">
-                            <div className="text-2xl font-bold text-green-400">
+                            <div className="text-2xl font-semibold text-melodify-primary">
                                 {songRequestCount}
                             </div>
                         </div>
                     </div>
 
                     {lastRequestedSong && songRequestCount > 0 && (
-                        <div className="mt-2 pt-2 border-t border-green-500/20">
+                        <div className="mt-2 pt-2 border-t border-zinc-700/60">
                             <div className="flex items-center justify-between">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs text-white font-medium truncate">
@@ -192,24 +192,24 @@ export default function HomePage() {
                 </div>
             </div>
 
-            <div className="flex-1 p-8">
-                <div className="h-full flex gap-8">
-                    <div className="flex-1 grid grid-cols-3 gap-8">
-                        <div className="bg-zinc-800/30 rounded-xl border border-zinc-700/50 overflow-hidden">
+            <div className="flex-1 p-6">
+                <div className="h-full flex gap-5">
+                    <div className="flex-1 grid grid-cols-3 gap-5">
+                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
                             <SpotifyCard />
                         </div>
-                        <div className="bg-zinc-800/30 rounded-xl border border-zinc-700/50 overflow-hidden">
+                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
                             <KickCard />
                         </div>
-                        <div className="bg-zinc-800/30 rounded-xl border border-zinc-700/50 overflow-hidden">
+                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
                             <TwitchCard />
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="px-8 py-4 border-t border-zinc-700/50">
-                <div className="flex items-center justify-between text-base text-zinc-400">
+            <div className="px-6 py-3 border-t border-zinc-700/60">
+                <div className="flex items-center justify-between text-xs text-zinc-400">
                     <div className="flex items-center gap-2">
                         <span>v{version}</span>
                     </div>

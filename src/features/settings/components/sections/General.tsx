@@ -6,7 +6,6 @@ import {
     Settings2,
     Clock as Spinner,
     Globe,
-    ChevronDown,
 } from "lucide-react";
 import Toggle from "@/ui/components/Toggle";
 import { Button } from "@/ui/components/Button";
@@ -94,7 +93,7 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 {t("general.title")}
             </h3>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-4">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-4">
                     <div className="w-7 h-7 bg-blue-500/20 rounded flex items-center justify-center">
                         <Settings2 className="w-4 h-4 text-blue-300" />
@@ -139,7 +138,7 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-4">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-4">
                     <div className="w-7 h-7 bg-purple-500/20 rounded flex items-center justify-center">
                         <Globe className="w-4 h-4 text-purple-300" />
@@ -193,60 +192,30 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                                         {t("general.defaultsLanguageDesc")}
                                     </p>
                                 </div>
-                                <div className="relative group">
-                                    <button className="flex items-center gap-2 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded text-white text-sm transition-colors">
-                                        <Globe size={16} />
-                                        <span className="hidden sm:inline">
-                                            {supportedLanguages.find(
-                                                (lang) =>
-                                                    lang.code ===
-                                                    config.defaultsLanguage
-                                            )?.name || "English"}
-                                        </span>
-                                        <span className="sm:hidden">
-                                            {supportedLanguages.find(
-                                                (lang) =>
-                                                    lang.code ===
-                                                    config.defaultsLanguage
-                                            )?.flag || "🇺🇸"}
-                                        </span>
-                                        <ChevronDown size={14} />
-                                    </button>
-
-                                    <div className="absolute right-0 top-full mt-1 bg-zinc-800 border border-zinc-600 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 min-w-[140px]">
-                                        {supportedLanguages.map((language) => (
-                                            <button
-                                                key={language.code}
-                                                onClick={() =>
-                                                    handleDefaultsLanguageChange(
-                                                        language.code
-                                                    )
-                                                }
-                                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-zinc-700 transition-colors first:rounded-t-md last:rounded-b-md ${
-                                                    config.defaultsLanguage ===
-                                                    language.code
-                                                        ? "bg-zinc-700 text-white"
-                                                        : "text-zinc-300"
-                                                }`}
-                                            >
-                                                <span className="text-lg">
-                                                    {language.flag}
-                                                </span>
-                                                <span>{language.name}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                <select
+                                    aria-label={t("general.defaultsLanguage")}
+                                    value={config.defaultsLanguage || "en"}
+                                    onChange={(event) =>
+                                        handleDefaultsLanguageChange(event.target.value)
+                                    }
+                                    className="min-w-[160px] rounded border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-primary"
+                                >
+                                    {supportedLanguages.map((language) => (
+                                        <option key={language.code} value={language.code}>
+                                            {language.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </>
                     )}
                 </div>
             </div>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-4">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-4">
-                    <div className="w-7 h-7 bg-green-500/20 rounded flex items-center justify-center">
-                        <Settings2 className="w-4 h-4 text-green-300" />
+                    <div className="w-7 h-7 bg-melodify-primary/10 rounded flex items-center justify-center">
+                        <Settings2 className="w-4 h-4 text-melodify-primary" />
                     </div>
                     <h3 className="text-base font-semibold text-white">
                         {t("general.updates")}
@@ -345,7 +314,7 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                             )}
                             {status === "not-available" && (
                                 <span className="text-sm text-zinc-400 flex items-center gap-1">
-                                    <CheckIcon className="text-green-400" />{" "}
+                                    <CheckIcon className="text-melodify-primary" />{" "}
                                     {t("general.upToDate")}
                                 </span>
                             )}

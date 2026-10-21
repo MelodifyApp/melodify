@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { logDebug, logError } from "@/renderer/rendererLogger";
-import StatusMessage from "@/ui/components/StatusMessage";
 import { KICK_REDIRECT_URI } from "@/shared/constants";
 import KickIcon from "./KickIcon";
-import { InfoIcon, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getKickCardView } from "./kickCardView";
 
@@ -14,7 +13,9 @@ export default function KickCard() {
     const [kickClientSecret, setKickClientSecret] = useState("");
     const [kickUsername, setKickUsername] = useState<string | null>(null);
     const [authenticated, setAuthenticated] = useState(false);
-    const [listeningToChat, setListeningToChat] = useState(false);
+    const [authStatusKnown, setAuthStatusKnown] = useState(false);
+    const [listeningToChat, setListeningToChat] = useState<boolean | null>(null);
+    const [chatStatusKnown, setChatStatusKnown] = useState(false);
     const [showSetup, setShowSetup] = useState(false);
     const [kickRedirectUri, setKickRedirectUri] =
         useState<string>(KICK_REDIRECT_URI);
@@ -34,6 +35,7 @@ export default function KickCard() {
 
         window.electronAPI.on("kick:authenticated", (data) => {
             setAuthenticated(true);
+            setAuthStatusKnown(true);
             setAuthInProgress(false);
             logDebug(`Kick authenticated: ${data?.username}`);
             setKickUsername(data.username);
@@ -41,14 +43,17 @@ export default function KickCard() {
 
         window.electronAPI.on("kick:chatConnected", () => {
             setListeningToChat(true);
+            setChatStatusKnown(true);
         });
 
         window.electronAPI.on("kick:chatDisconnected", () => {
             setListeningToChat(false);
+            setChatStatusKnown(true);
         });
 
         window.electronAPI.on("kick:authenticationFailed", () => {
             setAuthenticated(false);
+            setAuthStatusKnown(true);
             setAuthInProgress(false);
             // An OAuth failure does not necessarily stop the anonymous guest
             // reader, so reconcile with the main process instead of assuming
@@ -57,6 +62,7 @@ export default function KickCard() {
                 .invoke("kick:isListeningToChat")
                 .then((isListening) => {
                     setListeningToChat(!!isListening);
+                    setChatStatusKnown(true);
                 })
                 .catch((error) => {
                     logError(error, "Error reconciling Kick chat state");
@@ -75,6 +81,7 @@ export default function KickCard() {
             .invoke("kick:isListeningToChat")
             .then((isListening) => {
                 setListeningToChat(isListening);
+                setChatStatusKnown(true);
             })
             .catch((error) => {
                 logError(error, "Error checking Kick chat listening status");
@@ -84,6 +91,7 @@ export default function KickCard() {
             .invoke("kick:checkAuth")
             .then((result) => {
                 setAuthenticated(result.authenticated);
+                setAuthStatusKnown(true);
                 if (result.authenticated) {
                     setKickUsername(result.username);
                     return;
@@ -103,6 +111,7 @@ export default function KickCard() {
             .catch((error) => {
                 logError(error, "Error checking Kick authentication");
                 setAuthenticated(false);
+                setAuthStatusKnown(true);
                 setKickUsername(null);
             });
 
@@ -173,6 +182,7 @@ export default function KickCard() {
                 .invoke("kick:isListeningToChat")
                 .then((isListening) => {
                     setListeningToChat(isListening);
+                    setChatStatusKnown(true);
                 })
                 .catch((error) => {
                     logError(
@@ -191,12 +201,14 @@ export default function KickCard() {
         ]);
 
         setAuthenticated(authResult.authenticated);
+        setAuthStatusKnown(true);
         setKickUsername(
             authResult.authenticated
                 ? authResult.username
                 : userData?.username || null
         );
         setListeningToChat(isListening);
+        setChatStatusKnown(true);
     };
 
     const handleRefreshStatus = async () => {
@@ -233,18 +245,18 @@ export default function KickCard() {
     const view = getKickCardView({
         hasSecrets,
         authenticated,
-        listeningToChat,
+        listeningToChat: listeningToChat === true,
     });
 
     return (
-        <div className="w-full h-full flex flex-col bg-zinc-800/20 backdrop-blur-sm relative">
-            <div className="p-5 pb-3">
+        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative">
+            <div className="p-4 pb-3">
                 <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-kick-green to-green-400 rounded-xl flex items-center justify-center shadow-lg">
+                    <div className="w-10 h-10 bg-kick-green rounded-md flex items-center justify-center">
                         <KickIcon className="w-6 h-6 text-black" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">
+                        <h2 className="text-base font-semibold text-white">
                             Kick
                         </h2>
                         {kickUsername && (
@@ -256,8 +268,9 @@ export default function KickCard() {
                 </div>
 
                 <div
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium text-center ${
-                        view.badge === "listening"
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium text-center ${hasSecrets === null || !authStatusKnown || !chatStatusKnown
+                        ? "bg-zinc-700/40 text-zinc-300 border border-zinc-600/50"
+                        : view.badge === "listening"
                             ? "bg-green-500/20 text-green-300 border border-green-500/30"
                             : view.badge === "chat-unavailable"
                                 ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
@@ -266,7 +279,9 @@ export default function KickCard() {
                                     : "bg-red-500/20 text-red-300 border border-red-500/30"
                         }`}
                 >
-                    {view.badge === "listening"
+                    {hasSecrets === null || !authStatusKnown || !chatStatusKnown
+                        ? t("common.checking")
+                        : view.badge === "listening"
                         ? `✓ ${t("common.listeningToChat")}`
                         : view.badge === "chat-unavailable"
                             ? `⚠ ${t("common.connectToChat")}`
@@ -276,15 +291,15 @@ export default function KickCard() {
                 </div>
             </div>
 
-            <div className="flex-1 px-5 pb-3">
+            <div className="flex-1 px-4 pb-3">
                 <div className="grid gap-2.5">
-                    <div className="bg-zinc-700/20 rounded-lg p-2 border border-zinc-600/20">
+                    <div className="border-b border-zinc-700/50 py-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                            <span className="text-xs font-medium text-zinc-400">
                                 API
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${hasSecrets ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${hasSecrets === null ? "bg-zinc-500" : hasSecrets ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
@@ -296,13 +311,13 @@ export default function KickCard() {
                         </p>
                     </div>
 
-                    <div className="bg-zinc-700/20 rounded-lg p-2 border border-zinc-600/20">
+                    <div className="border-b border-zinc-700/50 py-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                            <span className="text-xs font-medium text-zinc-400">
                                 {t("statusCards.auth")}
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${authenticated ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${!authStatusKnown ? "bg-zinc-500" : authenticated ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
@@ -314,19 +329,19 @@ export default function KickCard() {
                         </p>
                     </div>
 
-                    <div className="bg-zinc-700/20 rounded-lg p-2 border border-zinc-600/20">
+                    <div className="py-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                            <span className="text-xs font-medium text-zinc-400">
                                 {t("statusCards.chatConnection")}
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${listeningToChat ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${!chatStatusKnown ? "bg-zinc-500" : listeningToChat ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <div className="text-xs text-zinc-300 mt-0.5 leading-none">
-                            {listeningToChat === null
+                            {!chatStatusKnown
                                 ? t("common.checking")
-                                : listeningToChat
+                                : listeningToChat === true
                                     ? t("common.activeListening")
                                     : authenticated
                                         ? (
@@ -354,11 +369,11 @@ export default function KickCard() {
                 </div>
             </div>
 
-            <div className="p-5 pt-2">
+            <div className="p-4 pt-2">
                 {view.showConfigure ? (
                     <button
                         onClick={() => setShowSetup(true)}
-                        className="w-full bg-gradient-to-r from-kick-green to-green-400 hover:from-green-400 hover:to-kick-green text-black font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                        className="w-full bg-kick-green hover:bg-kick-green-dark text-black font-semibold py-2 px-4 rounded-md transition-colors"
                     >
                         {t("common.configureCredentials")}
                     </button>
@@ -366,15 +381,19 @@ export default function KickCard() {
                     <div className="flex gap-3 items-center">
                         <button
                             onClick={handleLogout}
-                            className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+                            className="flex-1 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md transition-colors"
                         >
                             {t("authentication.disconnect")}
                         </button>
                         <button
-                                                    onClick={handleRetryChat}
+                            onClick={
+                                listeningToChat
+                                    ? handleRefreshStatus
+                                    : handleRetryChat
+                            }
                             disabled={refreshInProgress}
                             aria-label={t("common.refresh")}
-                            className={`w-11 h-11 flex items-center justify-center text-white rounded-lg transition-all duration-200 ${refreshInProgress
+                            className={`w-10 h-10 flex items-center justify-center text-white rounded-md transition-colors ${refreshInProgress
                                 ? "bg-white/10 cursor-not-allowed"
                                 : "bg-transparent hover:bg-white/10"
                                 }`}
@@ -387,13 +406,15 @@ export default function KickCard() {
                 ) : (
                     <button
                         onClick={() => handleLogin()}
-                        disabled={authInProgress}
-                        className={`w-full font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg flex items-center justify-center gap-2 ${authInProgress
+                        disabled={authInProgress || hasSecrets === null || !authStatusKnown}
+                        className={`w-full font-semibold py-2 px-4 rounded-md transition-colors flex items-center justify-center gap-2 ${authInProgress
                             ? "bg-gray-500 cursor-not-allowed"
-                            : "bg-gradient-to-r from-kick-green to-green-400 hover:from-green-400 hover:to-kick-green hover:shadow-xl transform hover:scale-105"
+                            : "bg-kick-green hover:bg-kick-green-dark"
                             } text-black`}
                     >
-                        {authInProgress ? (
+                        {!authStatusKnown || hasSecrets === null ? (
+                            t("common.checking")
+                        ) : authInProgress ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
                                 {t("common.connecting")}
@@ -409,14 +430,14 @@ export default function KickCard() {
             </div>
 
             {showSetup && (
-                <div className="absolute inset-0 bg-zinc-900/95 backdrop-blur-sm flex flex-col overflow-hidden z-10">
+                <div className="absolute inset-0 bg-zinc-900 flex flex-col overflow-hidden z-10">
                     <div className="p-5 pb-3 flex-shrink-0">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-kick-green to-green-400 rounded-xl flex items-center justify-center shadow-lg">
+                            <div className="w-10 h-10 bg-kick-green rounded-md flex items-center justify-center">
                                 <KickIcon className="w-6 h-6 text-black" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">
+                                <h2 className="text-base font-semibold text-white">
                                     {t("setup.configureKickAPI")}
                                 </h2>
                             </div>
@@ -455,14 +476,14 @@ export default function KickCard() {
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-kick-green focus:ring-1 focus:ring-kick-green"
                                 />
                             </div>
-                            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                                <p className="text-xs text-blue-300">
+                            <div className="bg-zinc-800 border border-zinc-700 rounded-md p-3">
+                                <p className="text-xs text-zinc-300">
                                     {t("setup.kickInstructions")}{" "}
                                     <a
                                         href="https://kick.com/settings/developer"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-400 underline hover:text-blue-300 cursor-pointer"
+                                        className="text-melodify-secondary underline hover:text-white cursor-pointer"
                                         onClick={(e) => {
                                             e.preventDefault();
                                             window.electronAPI.openExternal(
@@ -475,10 +496,10 @@ export default function KickCard() {
                                     {t("setup.kickInstructionsEnd")}{" "}
                                     {kickRedirectUri}
                                 </p>
-                                <p className="text-xs text-blue-300 mt-1">
+                                <p className="text-xs text-zinc-400 mt-1">
                                     {t("setup.kickAdditionalInfo1")}
                                 </p>
-                                <p className="text-xs text-blue-300 mt-1">
+                                <p className="text-xs text-zinc-400 mt-1">
                                     {t("setup.kickAdditionalInfo2")}
                                 </p>
                             </div>
@@ -489,13 +510,13 @@ export default function KickCard() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowSetup(false)}
-                                className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white py-2 px-4 rounded-lg transition-colors"
+                                className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white py-2 px-4 rounded-md transition-colors"
                             >
                                 {t("common.cancel")}
                             </button>
                             <button
                                 onClick={handleSecretsSubmit}
-                                className="flex-1 bg-kick-green hover:bg-green-400 text-black font-semibold py-2 px-4 rounded-lg transition-colors"
+                                className="flex-1 bg-kick-green hover:bg-kick-green-dark text-black font-semibold py-2 px-4 rounded-md transition-colors"
                             >
                                 {t("common.save")}
                             </button>

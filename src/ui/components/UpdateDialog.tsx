@@ -44,7 +44,7 @@ export default function UpdateDialog() {
     };
 
     return (
-        <div className="fixed bottom-8 right-8 bg-melodify-primary text-white px-4 py-3 rounded shadow z-50 max-w-sm">
+        <div className="fixed bottom-5 right-5 bg-zinc-900 border border-zinc-700 border-l-2 border-l-melodify-primary text-white px-4 py-3 rounded-md shadow-lg z-50 max-w-sm">
             {status === "downloaded" ? (
                 <div>
                     <div className="font-bold mb-1">Update Ready!</div>

@@ -44,7 +44,7 @@
     },
     "home": {
         "songRequests": "Şarkı İstekleri",
-        "totalToday": "Bugün toplam",
+        "totalToday": "Bugün · bu oturum",
         "byArtist": "{{artist}} tarafından",
         "checkingUpdates": "Güncellemeler kontrol ediliyor...",
         "downloadingUpdate": "Güncelleme indiriliyor... {{percent}}%",
@@ -171,6 +171,8 @@
         "active": "Aktif",
         "inactive": "Yok",
         "activeListening": "Dinleniyor",
+        "listenerStarted": "Dinleyici başlatıldı",
+        "eventDeliveryUnconfirmed": "Twitch sohbet olaylarının ulaştığı henüz doğrulanmadı.",
         "notConnected": "Bağlı değil",
         "connecting": "Bağlanıyor...",
         "refresh": "Yenile",
@@ -179,11 +181,11 @@
         "configureCredentials": "API Bilgilerini Ayarla"
     },
     "statusCards": {
-        "api": "API",
-        "app": "UYGULAMA",
-        "auth": "DOĞRULAMA",
-        "session": "OTURUM",
-        "chatConnection": "SOHBET BAĞLANTISI"
+        "api": "Geliştirici bilgileri",
+        "app": "Spotify uygulaması",
+        "auth": "Hesap",
+        "session": "Etkin cihaz",
+        "chatConnection": "Sohbet bağlantısı"
     },
     "setup": {
         "configureKickAPI": "Kick API Ayarları",

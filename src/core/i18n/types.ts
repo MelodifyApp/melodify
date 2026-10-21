@@ -160,9 +160,12 @@ export interface TranslationKeys {
         checking: string;
         running: string;
         closed: string;
+        runningOnAnotherDevice: string;
         active: string;
         inactive: string;
         activeListening: string;
+        listenerStarted: string;
+        eventDeliveryUnconfirmed: string;
         notConnected: string;
         connecting: string;
         refresh: string;
