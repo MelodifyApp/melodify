@@ -21,6 +21,7 @@
         "test:permissions": "node --require ts-node/register/transpile-only --test test/command-permissions.test.cjs test/twitch-chat-context.test.cjs test/spotify-request-result.test.cjs",
         "test:logging": "node --require ts-node/register/transpile-only --test test/logging-redaction.test.cjs",
         "test:i18n": "node --require ts-node/register/transpile-only --test test/i18n-usage.test.cjs",
+        "test:security": "node --require ts-node/register/transpile-only --test test/oauth-ipc-security.test.cjs",
         "test:routing": "node --require ts-node/register/transpile-only --test test/reply-routing.test.cjs"
     },
     "keywords": [],

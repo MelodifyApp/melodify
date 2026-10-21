@@ -8,7 +8,7 @@ import {
     startSpotifyTokenRefreshInterval,
     stopSpotifyTokenAutoRefresh,
 } from "@/features/spotify/playback/player";
-import { startSpotifyAuthServer } from "@/features/spotify/auth/server";
+import { startSpotifyAuthServer, stopSpotifyAuthServer } from "@/features/spotify/auth/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { logInfo, logError, logDebug } from "@/core/logging";
@@ -23,8 +23,6 @@ ipcMain.on("spotify:auth", (event) => {
         return;
     }
 
-    startSpotifyAuthServer(window);
-
     const scopes = [
         "user-read-playback-state",
         "user-modify-playback-state",
@@ -37,7 +35,12 @@ ipcMain.on("spotify:auth", (event) => {
         return;
     }
 
-    const authURL = spotifyApi.createAuthorizeURL(scopes, "state");
+    const state = startSpotifyAuthServer(window);
+    if (!state) {
+        return;
+    }
+
+    const authURL = spotifyApi.createAuthorizeURL(scopes, state);
     logDebug("Opening Spotify auth URL", redactSecrets({ authURL }));
     shell.openExternal(authURL);
 });
@@ -90,6 +93,7 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
 });
 
 ipcMain.on("spotify:logout", () => {
+    stopSpotifyAuthServer();
     stopSpotifyTokenAutoRefresh();
     const spotifyApi = getSpotifyApi();
     Config.set({
@@ -134,7 +138,18 @@ ipcMain.handle("spotify:getSecrets", () => {
 });
 
 ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
-    const { spotifyClientId, spotifyClientSecret } = secrets;
+    const record =
+        secrets && typeof secrets === "object" && !Array.isArray(secrets)
+            ? (secrets as Record<string, unknown>)
+            : null;
+    const spotifyClientId =
+        typeof record?.spotifyClientId === "string"
+            ? record.spotifyClientId.trim()
+            : "";
+    const spotifyClientSecret =
+        typeof record?.spotifyClientSecret === "string"
+            ? record.spotifyClientSecret.trim()
+            : "";
     if (!spotifyClientId || !spotifyClientSecret) {
         return { success: false, error: "Missing client ID or secret." };
     }

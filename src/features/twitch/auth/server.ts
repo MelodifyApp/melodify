@@ -1,5 +1,6 @@
 import express from "express";
 import { BrowserWindow, shell, ipcMain } from "electron";
+import { randomUUID } from "node:crypto";
 import {
     generateCodeChallenge,
     generateCodeVerifier,
@@ -17,6 +18,7 @@ const port = 8890;
 
 let serverInstance: Server | null = null;
 let serverStarting = false;
+let expectedOAuthState: string | null = null;
 
 export async function startTwitchAuthServer(
     window: BrowserWindow
@@ -38,6 +40,26 @@ export async function startTwitchAuthServer(
 
     return new Promise((resolve, reject) => {
         app.get("/callback", async (req, res) => {
+            const expectedState = expectedOAuthState;
+            expectedOAuthState = null;
+            if (!expectedState || req.query.state !== expectedState) {
+                logError(
+                    "Twitch auth callback rejected: OAuth state mismatch",
+                    "twitchAuthServer:callback"
+                );
+                res.status(400).send(
+                    "❌ Authentication failed: invalid OAuth state"
+                );
+                sendToWindowIfAlive(window, "twitch:authenticationFailed");
+                ipcMain.emit("twitch:authComplete");
+                if (serverInstance) {
+                    serverInstance.close();
+                    serverInstance = null;
+                }
+                serverStarting = false;
+                return;
+            }
+
             const code = req.query.code as string | undefined;
             const scope = req.query.scope as string | undefined;
             logDebug(
@@ -243,7 +265,8 @@ export function openTwitchAuthUrl() {
     Config.set({ codeVerifier });
 
     const twitchClientId = Config.get("twitchClientId");
-    const state = Math.random().toString(36).slice(2);
+    expectedOAuthState = randomUUID();
+    const state = expectedOAuthState;
 
     const url =
         `https://id.twitch.tv/oauth2/authorize?` +
@@ -259,6 +282,7 @@ export function openTwitchAuthUrl() {
 }
 
 export function stopTwitchAuthServer(): void {
+    expectedOAuthState = null;
     if (serverInstance) {
         logInfo("Stopping Twitch auth server");
         serverInstance.close();

@@ -1,5 +1,6 @@
 import express from "express";
 import { BrowserWindow, shell, ipcMain } from "electron";
+import { randomUUID } from "node:crypto";
 import {
     generateCodeChallenge,
     generateCodeVerifier,
@@ -18,6 +19,7 @@ const port = 8889;
 
 let serverInstance: Server | null = null;
 let serverStarting = false;
+let expectedOAuthState: string | null = null;
 
 export async function startKickAuthServer(
     window: BrowserWindow
@@ -36,6 +38,26 @@ export async function startKickAuthServer(
 
     return new Promise((resolve, reject) => {
         app.get("/callback", async (req, res) => {
+            const expectedState = expectedOAuthState;
+            expectedOAuthState = null;
+            if (!expectedState || req.query.state !== expectedState) {
+                logError(
+                    "Kick auth callback rejected: OAuth state mismatch",
+                    "kickAuthServer:callback"
+                );
+                res.status(400).send(
+                    "❌ Authentication failed: invalid OAuth state"
+                );
+                sendToWindowIfAlive(window, "kick:authenticationFailed");
+                ipcMain.emit("kick:authComplete");
+                if (serverInstance) {
+                    serverInstance.close();
+                    serverInstance = null;
+                }
+                serverStarting = false;
+                return;
+            }
+
             const code = req.query.code as string | undefined;
             logDebug("Kick auth callback hit", { hasCode: !!code });
 
@@ -207,7 +229,8 @@ export function openKickAuthUrl() {
     Config.set({ codeVerifier });
 
     const kickClientId = Config.get("kickClientId");
-    const state = Math.random().toString(36).slice(2);
+    expectedOAuthState = randomUUID();
+    const state = expectedOAuthState;
 
     const url =
         `https://id.kick.com/oauth/authorize?` +
@@ -223,6 +246,7 @@ export function openKickAuthUrl() {
 }
 
 export function stopKickAuthServer(): void {
+    expectedOAuthState = null;
     if (serverInstance) {
         logInfo("Stopping Kick auth server");
         serverInstance.close();

@@ -3,6 +3,7 @@ import Config from "@/core/config";
 import {
     startKickAuthServer,
     openKickAuthUrl,
+    stopKickAuthServer,
 } from "@/features/kick/auth/server";
 import {
     isListening,
@@ -214,6 +215,7 @@ ipcMain.on("kick:logout", (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
 
     // Stop all Kick-related services
+    stopKickAuthServer();
     stopKickTokenAutoRefresh();
     stopListeningToChat(window || undefined);
     kickClient.clearTokens();
@@ -245,9 +247,28 @@ ipcMain.handle("kick:getSecrets", async () => {
     };
 });
 
-ipcMain.on("kick:setSecrets", async (event, secrets) => {
-    logInfo("kick:setSecrets called", redactSecrets(secrets));
-    Config.set(secrets);
+ipcMain.on("kick:setSecrets", (event, secrets) => {
+    const record =
+        secrets && typeof secrets === "object" && !Array.isArray(secrets)
+            ? (secrets as Record<string, unknown>)
+            : null;
+    const kickClientId =
+        typeof record?.kickClientId === "string"
+            ? record.kickClientId.trim()
+            : "";
+    const kickClientSecret =
+        typeof record?.kickClientSecret === "string"
+            ? record.kickClientSecret.trim()
+            : "";
+    if (!kickClientId || !kickClientSecret) {
+        logWarn(
+            "kick:setSecrets ignored a malformed payload",
+            "kick:setSecrets"
+        );
+        return;
+    }
+    logInfo("kick:setSecrets called");
+    Config.set({ kickClientId, kickClientSecret });
 });
 
 ipcMain.handle("kick:isListeningToChat", async () => {

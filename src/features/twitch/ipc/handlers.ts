@@ -108,6 +108,7 @@ ipcMain.on("twitch:logout", (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
 
     // Stop all Twitch-related services
+    stopTwitchAuthServer();
     stopListeningToChat(window);
     twitchClient.clearTokens();
 
@@ -147,9 +148,28 @@ ipcMain.handle("twitch:getSecrets", async () => {
     };
 });
 
-ipcMain.on("twitch:setSecrets", async (event, secrets) => {
-    logInfo("twitch:setSecrets called", redactSecrets(secrets));
-    Config.set(secrets);
+ipcMain.on("twitch:setSecrets", (event, secrets) => {
+    const record =
+        secrets && typeof secrets === "object" && !Array.isArray(secrets)
+            ? (secrets as Record<string, unknown>)
+            : null;
+    const twitchClientId =
+        typeof record?.twitchClientId === "string"
+            ? record.twitchClientId.trim()
+            : "";
+    const twitchClientSecret =
+        typeof record?.twitchClientSecret === "string"
+            ? record.twitchClientSecret.trim()
+            : "";
+    if (!twitchClientId || !twitchClientSecret) {
+        logWarn(
+            "twitch:setSecrets ignored a malformed payload",
+            "twitch:setSecrets"
+        );
+        return;
+    }
+    logInfo("twitch:setSecrets called");
+    Config.set({ twitchClientId, twitchClientSecret });
 });
 
 ipcMain.handle("twitch:isListeningToChat", async () => {
