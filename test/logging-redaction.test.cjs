@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { redactSecrets } = require("../src/core/logging/utils");
+const { redactSecrets, redactLogText } = require("../src/core/logging/utils");
 
 test("redacts snake_case credentials, callback codes and headers recursively without mutating input", () => {
     const input = {
@@ -38,6 +38,64 @@ test("preserves non-credential diagnostics: session ids, error codes and state",
     assert.match(result.message, /ECONNREFUSED/);
     assert.equal(result.session, "[REDACTED]");
     assert.equal(redactSecrets('{"code":"ECONNREFUSED","state":"running"}'), '{"code":"ECONNREFUSED","state":"running"}');
+});
+
+test("boolean credential flags stay visible while credential values are masked", () => {
+    const result = redactSecrets({
+        hasClientSecret: false,
+        hasAccessToken: true,
+        clientSecret: "actual-client-secret",
+        accessToken: "actual-access-token",
+        nested: { hasRefreshToken: false, refreshToken: "actual-refresh-token" },
+    });
+    assert.equal(result.hasClientSecret, false);
+    assert.equal(result.hasAccessToken, true);
+    assert.equal(result.clientSecret, "[REDACTED]");
+    assert.equal(result.accessToken, "[REDACTED]");
+    assert.equal(result.nested.hasRefreshToken, false);
+    assert.equal(result.nested.refreshToken, "[REDACTED]");
+});
+
+test("serialized boolean credential flags remain readable in logs and JSON", () => {
+    const text =
+        'hasClientSecret=false hasAccessToken=true "hasRefreshToken": false, "clientSecret":"actual-secret"';
+    const result = redactLogText(text);
+    assert.match(result, /hasClientSecret=false/);
+    assert.match(result, /hasAccessToken=true/);
+    assert.match(result, /"hasRefreshToken": false/);
+    assert.doesNotMatch(result, /actual-secret/);
+
+    const urlResult = redactLogText(
+        "callback?hasClientSecret=false&code=callback-code"
+    );
+    assert.match(urlResult, /hasClientSecret=false/);
+    assert.doesNotMatch(urlResult, /callback-code/);
+});
+
+test("boolean-looking credential strings and direct credential flags stay redacted", () => {
+    assert.equal(
+        redactLogText('{"clientSecret":"true"}'),
+        '{"clientSecret":"[REDACTED]"}'
+    );
+    assert.equal(
+        redactLogText('{"refreshToken":"false"}'),
+        '{"refreshToken":"[REDACTED]"}'
+    );
+    assert.equal(
+        redactLogText('{"hasClientSecret": false}'),
+        '{"hasClientSecret": false}'
+    );
+    assert.equal(
+        redactLogText("callback?clientSecret=false&hasClientSecret=false"),
+        "callback?clientSecret=[REDACTED]&hasClientSecret=false"
+    );
+
+    const metadata = redactSecrets({
+        clientSecret: false,
+        hasClientSecret: false,
+    });
+    assert.equal(metadata.clientSecret, "[REDACTED]");
+    assert.equal(metadata.hasClientSecret, false);
 });
 
 test("still masks OAuth code, state and credentials in callback URLs and query strings", () => {
