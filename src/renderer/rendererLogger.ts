@@ -27,6 +27,8 @@
 /**
  * Log levels for the renderer logger.
  */
+import { redactLogText } from "@/core/logging/utils";
+
 type LogLevel = "info" | "debug" | "warn" | "error";
 
 /**
@@ -38,6 +40,8 @@ type LogLevel = "info" | "debug" | "warn" | "error";
  * @param context - Optional context identifier for log source tracking
  */
 function logToMain(level: LogLevel, message: string, context?: string) {
+    message = redactLogText(message);
+    context = context ? redactLogText(context) : context;
     // Console output with appropriate method selection for proper styling
     const consoleMethod =
         level === "error" ? "error" : level === "warn" ? "warn" : "log";

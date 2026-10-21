@@ -13,6 +13,7 @@ import {
 import { Button } from "@/ui/components/Button";
 import Input from "@/ui/components/Input";
 import { useTranslation } from "react-i18next";
+import { formatLogsForExport } from "@/core/logging/export";
 
 interface LogsProps {
     logs: any[];
@@ -76,14 +77,7 @@ export default function Logs({ logs, searchQuery }: LogsProps) {
 
     const handleExportLogs = () => {
         // Create a downloadable log file
-        const logData = logs
-            .map((log) => {
-                const level = log?.level ?? "info";
-                const timestamp = log?.timestamp ?? Date.now();
-                const message = log?.message ?? JSON.stringify(log);
-                return `[${level.toUpperCase()}] [${new Date(timestamp).toISOString()}] ${message}`;
-            })
-            .join("\n");
+        const logData = formatLogsForExport(logs);
 
         const blob = new Blob([logData], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
@@ -107,7 +101,7 @@ export default function Logs({ logs, searchQuery }: LogsProps) {
                 {t("logs.title")}
             </h3>
 
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
+            <div className="settings-section">
                 <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center">
                         <Terminal className="w-3 h-3 text-blue-300" />

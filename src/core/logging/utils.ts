@@ -1,43 +1,75 @@
 const SECRET_KEYS = [
-    "accessToken",
-    "refreshToken",
-    "clientSecret",
-    "spotifyAccessToken",
-    "spotifyRefreshToken",
-    "spotifyClientSecret",
-    "kickAccessToken",
-    "kickRefreshToken",
-    "kickClientSecret",
-    "token",
-    "secret",
-    "password",
-    "jwt",
-    "idToken",
-    "session",
-    "codeVerifier",
+    "accesstoken", "refreshtoken", "clientsecret", "token", "secret",
+    "password", "jwt", "idtoken", "codeverifier",
+    "authorization", "cookie", "apikey",
 ];
+// OAuth callback parameters are sensitive in URLs, but "code"/"state" also
+// appear as harmless diagnostics (Node error codes, connection state).
+const OAUTH_PARAM_KEYS = ["code", "state"];
+const REDACTED = "[REDACTED]";
 
-function isObject(val: any): val is Record<string, any> {
-    return val && typeof val === "object" && !Array.isArray(val);
+/**
+ * Header values are only masked when they actually look like credentials.
+ * Prose such as "OAuth tokens" or "Bearer flow" must survive redaction.
+ */
+function looksLikeCredential(candidate: string): boolean {
+    if (candidate.length < 12) return false;
+    return /\d/.test(candidate) || /[._~+/%=-]/.test(candidate) || candidate.length >= 24;
 }
 
-export function redactSecrets(obj: any, depth = 0): any {
-    if (depth > 3) return "[Object]";
-    if (Array.isArray(obj)) return obj.map((v) => redactSecrets(v, depth + 1));
-    if (!isObject(obj)) return obj;
-    const redacted: Record<string, any> = {};
-    for (const key in obj) {
-        if (
-            SECRET_KEYS.some((secretKey) =>
-                key.toLowerCase().includes(secretKey.toLowerCase())
-            )
-        ) {
-            redacted[key] = "[REDACTED]";
-        } else if (typeof obj[key] === "object") {
-            redacted[key] = redactSecrets(obj[key], depth + 1);
-        } else {
-            redacted[key] = obj[key];
-        }
+function normalizeKey(key: string): string {
+    return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function isSecretKey(key: string): boolean {
+    const normalized = normalizeKey(key);
+    return normalized === "session" ||
+        SECRET_KEYS.some((secret) => normalized.includes(secret));
+}
+
+function isSecretParamKey(key: string): boolean {
+    return isSecretKey(key) || OAUTH_PARAM_KEYS.includes(normalizeKey(key));
+}
+
+/** Mask recognizable credential syntax, not arbitrary unlabelled text. */
+export function redactLogText(text: string): string {
+    // URL/form parameters (including percent-encoded parameter names).
+    let safe = text.replace(/([?&#]|^)([^\s?&#=]+)=([^\s&#]*)/g,
+        (match, separator: string, key: string) => {
+            let decodedKey = key;
+            try { decodedKey = decodeURIComponent(key); } catch { /* leave malformed keys unchanged */ }
+            return isSecretParamKey(decodedKey) ? `${separator}${key}=${REDACTED}` : match;
+        });
+    // Header schemes and SDK error text can contain raw credentials.
+    safe = safe.replace(/\b(Bearer|Basic|OAuth)\s+([A-Za-z0-9._~+/%=-]+)/gi,
+        (match, scheme: string, candidate: string) =>
+            looksLikeCredential(candidate) ? `${scheme} ${REDACTED}` : match);
+    // JSON, object-dump and key=value forms; keep HTTP status/error labels intact.
+    safe = safe.replace(/(?<![\w-])(["']?)([\w-]*(?:token|secret|password|jwt|code[_-]?verifier|authorization|cookie|api[_-]?key)[\w-]*|session)\1\s*([:=])\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[REDACTED\]|[^\s,;&}\]]+)/gi,
+        (match, quote: string, key: string, separator: string, raw: string) => {
+            if (!isSecretKey(key)) return match;
+            const valueQuote = raw.startsWith('"') ? '"' : raw.startsWith("'") ? "'" : "";
+            return `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}${valueQuote}`;
+        });
+    return safe;
+}
+
+/** Returns a serializable copy suitable for every log destination. */
+export function redactSecrets(value: unknown, depth = 0): any {
+    if (depth > 6) return "[Object]";
+    if (typeof value === "string") return redactLogText(value);
+    if (value instanceof Error) {
+        return { name: redactLogText(value.name), message: redactLogText(value.message), stack: redactLogText(value.stack || value.message) };
+    }
+    if (typeof value === "bigint") return value.toString();
+    if (Array.isArray(value)) return value.map((item) => redactSecrets(item, depth + 1));
+    if (!value || typeof value !== "object") return value;
+    const redacted: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+        Object.defineProperty(redacted, key, {
+            enumerable: true, configurable: true, writable: true,
+            value: isSecretKey(key) ? REDACTED : redactSecrets(item, depth + 1),
+        });
     }
     return redacted;
 }

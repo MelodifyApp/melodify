@@ -13,6 +13,9 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import chalk from "chalk";
 import fs from "fs";
 import path from "path";
+import { redactSecrets, redactLogText } from "./utils";
+import { resolveUserDataDirectory } from "@/core/config/userDataDirectory";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 // Log levels and their visual styling for console output
 const LEVELS = {
@@ -52,11 +55,18 @@ const MAX_LOGS = 1000;
 
 // Session-based organization for better log tracking across app restarts
 const SESSION_ID = `session_${Date.now()}`;
+const userDataDirectory = app
+    ? resolveUserDataDirectory(
+          app.getPath("userData"),
+          process.env.MELODIFY_PREVIEW_USER_DATA,
+          process.env.NODE_ENV === "development"
+      )
+    : process.cwd();
 const LOG_DIR = app
-    ? path.join(app.getPath("userData"), "logs")
+    ? path.join(userDataDirectory, "logs")
     : path.join(process.cwd(), "logs");
 const SONG_REQUESTS_DIR = app
-    ? path.join(app.getPath("userData"), "song-requests")
+    ? path.join(userDataDirectory, "song-requests")
     : path.join(process.cwd(), "song-requests");
 
 /**
@@ -107,9 +117,7 @@ function sendLogToRenderers(entry: LogEntry) {
     try {
         const windows = BrowserWindow.getAllWindows();
         windows.forEach((window) => {
-            if (window && !window.isDestroyed()) {
-                window.webContents.send("log:entry", entry);
-            }
+            sendToWindowIfAlive(window, "log:entry", entry);
         });
     } catch (error) {
         // Avoid recursive logging errors
@@ -122,34 +130,32 @@ function sendLogToRenderers(entry: LogEntry) {
  * Maintains 30-day retention policy to prevent disk space issues
  * Runs on application startup to clean up old sessions
  */
+/**
+ * Deletes regular files older than the cutoff. Directories and other entries
+ * are skipped, and one unreadable/vanished entry must not abort cleanup of the
+ * remaining files.
+ */
+function removeExpiredLogEntries(directory: string, cutoff: Date): void {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory)) {
+        const entryPath = path.join(directory, entry);
+        try {
+            const stats = fs.statSync(entryPath);
+            if (!stats.isFile() || stats.mtime >= cutoff) continue;
+            fs.unlinkSync(entryPath);
+        } catch {
+            // Leave the entry in place; continue with the rest.
+        }
+    }
+}
+
 function cleanupOldLogs() {
     try {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Clean application logs
-        if (fs.existsSync(LOG_DIR)) {
-            const files = fs.readdirSync(LOG_DIR);
-            files.forEach((file) => {
-                const filePath = path.join(LOG_DIR, file);
-                const stats = fs.statSync(filePath);
-                if (stats.mtime < thirtyDaysAgo) {
-                    fs.unlinkSync(filePath);
-                }
-            });
-        }
-
-        // Clean song request logs
-        if (fs.existsSync(SONG_REQUESTS_DIR)) {
-            const songFiles = fs.readdirSync(SONG_REQUESTS_DIR);
-            songFiles.forEach((file) => {
-                const filePath = path.join(SONG_REQUESTS_DIR, file);
-                const stats = fs.statSync(filePath);
-                if (stats.mtime < thirtyDaysAgo) {
-                    fs.unlinkSync(filePath);
-                }
-            });
-        }
+        removeExpiredLogEntries(LOG_DIR, thirtyDaysAgo);
+        removeExpiredLogEntries(SONG_REQUESTS_DIR, thirtyDaysAgo);
     } catch (error) {
         console.error("Failed to cleanup old logs:", error);
     }
@@ -171,6 +177,9 @@ function initializeSessionLog() {
     ].join("\n");
 
     try {
+        if (!fs.existsSync(LOG_DIR)) {
+            fs.mkdirSync(LOG_DIR, { recursive: true });
+        }
         fs.appendFileSync(getLogFilePath(), sessionHeader + "\n");
     } catch (error) {
         console.error("Failed to initialize session log:", error);
@@ -188,10 +197,10 @@ function initializeSessionLog() {
 function log(level: LogLevel, message: string, meta?: any) {
     const entry: LogEntry = {
         level,
-        message,
+        message: redactLogText(message),
         timestamp: Date.now(),
         session: SESSION_ID,
-        meta,
+        meta: redactSecrets(meta),
     };
 
     // Memory storage with circular buffer behavior
@@ -330,7 +339,8 @@ export function logWarn(message: string, meta?: any) {
 
 export function logError(error: any, context?: string) {
     let msg =
-        error instanceof Error ? error.stack || error.message : String(error);
+        error instanceof Error ? error.stack || error.message :
+            typeof error === "string" ? error : JSON.stringify(redactSecrets(error)) || "Unknown error";
     if (context) msg = `[${context}] ${msg}`;
     log("error", msg);
 }
