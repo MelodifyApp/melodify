@@ -2,7 +2,7 @@ import Config from "@/core/config";
 import { playSong } from "@/features/spotify/playback/player";
 import { incrementSongRequestCount } from "@/core/ipc/handlers";
 import { logDebug, logError, logSongRequest } from "@/core/logging";
-import { CommandContext, CommandManager } from "./manager";
+import { type CommandContext, type CommandManager, isModerator } from "./manager";
 
 function formatTemplate(
     template: string,
@@ -37,16 +37,19 @@ export async function executeSongRequest(
     });
 
     if (!skipPermissionCheck) {
-        const canAnyonePlaySong = Config.get("canAnyonePlaySong");
-        const userRoles = Config.get("allowedBadges") || [
-            "og",
-            "vip",
-            "subscriber",
-        ];
+        const canAnyonePlaySong = Config.get("canAnyonePlaySong") === true;
+        const configuredRoles = Config.get("allowedBadges");
+        const userRoles = Array.isArray(configuredRoles)
+            ? configuredRoles.filter((role): role is string => typeof role === "string")
+            : configuredRoles === undefined
+              ? ["og", "vip", "subscriber"]
+              : [];
+        const badges = Array.isArray(ctx.badges) ? ctx.badges : [];
         const allowedRoles = [...userRoles, "broadcaster", "moderator"];
         if (
             !canAnyonePlaySong &&
-            !ctx.badges.some((badge) => allowedRoles.includes(badge))
+            !isModerator(badges, ctx.username) &&
+            !badges.some((badge) => allowedRoles.includes(badge))
         ) {
             if (Config.get("replyOnSongRequestError") && sendReply) {
                 await sendReply(
@@ -85,13 +88,16 @@ export async function executeSongRequest(
         }
     }
 
-    if (isOnCooldown && Config.get("replyOnCooldown") && sendReply) {
-        const cooldownMessage = formatTemplate(
-            Config.get("cooldownMessageTemplate") ||
-                "Please wait {time} seconds before requesting another song.",
-            { time: longestRemainingTime }
-        );
-        await sendReply(`@${ctx.username} ${cooldownMessage}`);
+    if (isOnCooldown) {
+        if (Config.get("replyOnCooldown") && sendReply) {
+            const cooldownMessage = formatTemplate(
+                Config.get("cooldownMessageTemplate") ||
+                    "Please wait {time} seconds before requesting another song.",
+                { time: longestRemainingTime }
+            );
+            await sendReply(`@${ctx.username} ${cooldownMessage}`);
+        }
+        // Enforce the cooldown even when chat notifications are disabled/unavailable.
         return false;
     }
 

@@ -2,9 +2,10 @@ import { getSpotifyApi } from "@/features/spotify/playback/player";
 import Config from "@/core/config";
 import { sendKickMessage } from "@/features/kick/chat/listener";
 import { sendTwitchMessage } from "@/features/twitch/chat/listener";
-import { logDebug, logError } from "@/core/logging";
+import { logDebug, logError, logWarn } from "@/core/logging";
 import { Command, CommandContext } from "./manager";
 import { executeSongRequest } from "./songRequest";
+import { resolveReplyPlatform } from "./replyRouting";
 
 function formatTemplate(
     template: string,
@@ -17,31 +18,20 @@ function formatTemplate(
 
 async function sendChatReply(ctx: CommandContext, message: string) {
     try {
-        if (ctx.platform === "twitch") {
+        const platform = resolveReplyPlatform(ctx);
+        if (!platform) {
+            logWarn(
+                "Chat reply skipped: context has no known platform",
+                "sendChatReply"
+            );
+            return;
+        }
+
+        if (platform === "twitch") {
             await sendTwitchMessage(message);
-            return;
-        }
-
-        if (ctx.platform === "kick") {
+        } else {
             await sendKickMessage(message);
-            return;
         }
-
-        // Fallback to inspecting raw event shape
-        if (ctx.raw && typeof ctx.raw === "object") {
-            if (Object.prototype.hasOwnProperty.call(ctx.raw, "chatter_user_login")) {
-                await sendTwitchMessage(message);
-                return;
-            }
-
-            if (Object.prototype.hasOwnProperty.call(ctx.raw, "sender")) {
-                await sendKickMessage(message);
-                return;
-            }
-        }
-
-        // Default fallback
-        await sendKickMessage(message);
     } catch (error) {
         logError(error, "sendChatReply");
     }

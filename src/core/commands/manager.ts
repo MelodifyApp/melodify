@@ -15,7 +15,8 @@ export interface CommandContext {
     message: string;
     badges: string[];
     raw?: any;
-    platform?: "twitch" | "kick" | "unknown";
+    /** Explicit origin; replies must never be routed by guessing from raw data. */
+    platform: "twitch" | "kick";
 }
 
 /**
@@ -33,6 +34,44 @@ export interface Command {
         args: string[],
         commandManager?: CommandManager
     ) => Promise<void>;
+}
+
+interface SavedCommandConfig {
+    enabled?: boolean;
+    aliases?: string[];
+}
+
+/**
+ * Persistent command config can be corrupted by hand-editing. Accept only
+ * well-typed values so registration never throws or registers junk aliases.
+ */
+function loadSavedCommandConfig(
+    commandsConfig: unknown,
+    commandName: string
+): SavedCommandConfig {
+    if (
+        !commandsConfig ||
+        typeof commandsConfig !== "object" ||
+        Array.isArray(commandsConfig)
+    ) {
+        return {};
+    }
+    const entry = (commandsConfig as Record<string, unknown>)[commandName];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return {};
+    }
+    const record = entry as Record<string, unknown>;
+    const result: SavedCommandConfig = {};
+    if (typeof record.enabled === "boolean") {
+        result.enabled = record.enabled;
+    }
+    if (Array.isArray(record.aliases)) {
+        result.aliases = record.aliases
+            .filter((alias): alias is string => typeof alias === "string")
+            .map((alias) => alias.trim())
+            .filter((alias) => alias.length > 0);
+    }
+    return result;
 }
 
 /**
@@ -108,13 +147,15 @@ export class CommandManager {
 
         // Load enabled state and aliases from persistent configuration
         // This allows commands to retain their customized state across app restarts
-        const commandsConfig = Config.get("commands") || {};
-        const savedConfig = commandsConfig[command.name] || {};
+        const savedConfig = loadSavedCommandConfig(
+            Config.get("commands"),
+            command.name
+        );
         const enabled =
             savedConfig.enabled !== undefined
                 ? savedConfig.enabled
                 : command.enabled;
-        const savedAliases = savedConfig.aliases || command.aliases || [];
+        const savedAliases = savedConfig.aliases ?? command.aliases ?? [];
 
         // Update command with saved state
         command.enabled = enabled;
@@ -426,16 +467,21 @@ export class CommandManager {
      * Updates command aliases in memory to match saved configuration
      */
     reloadCommandAliasesFromConfig(): void {
-        const commandsConfig = Config.get("commands") || {};
+        const commandsConfig = Config.get("commands");
 
         for (const [commandName, command] of this.commands.entries()) {
-            const savedConfig = commandsConfig[commandName] || {};
-            const savedAliases = savedConfig.aliases || [];
+            const savedConfig = loadSavedCommandConfig(
+                commandsConfig,
+                commandName
+            );
+            const savedAliases = savedConfig.aliases;
+            if (savedAliases === undefined) continue;
 
-            // Only update if aliases have actually changed
+            // Only update if aliases have actually changed (compare copies so
+            // the live command state and config arrays are not mutated).
             if (
-                JSON.stringify(command.aliases?.sort()) !==
-                JSON.stringify(savedAliases.sort())
+                JSON.stringify([...(command.aliases ?? [])].sort()) !==
+                JSON.stringify([...savedAliases].sort())
             ) {
                 logDebug(
                     `Reloading aliases for command '${commandName}' from config: ${savedAliases.join(
@@ -664,13 +710,19 @@ export class CommandManager {
  * @param username - Username to check for custom moderator status
  * @returns True if user has moderation privileges
  */
-function isModerator(badges: string[], username: string) {
+export function isModerator(badges: string[], username: string) {
     // Check if user has moderator badges from the platform
-    if (badges.includes("broadcaster") || badges.includes("moderator")) {
+    if (Array.isArray(badges) && (badges.includes("broadcaster") || badges.includes("moderator"))) {
         return true;
     }
 
-    // Check if user is in custom moderators list (case-insensitive)
-    const customModerators = Config.get("customModerators") || [];
-    return customModerators.includes(username);
+    // Check if user is in custom moderators list (case-insensitive).
+    // Config can be corrupted by hand-editing; never throw on malformed values.
+    const configuredModerators = Config.get("customModerators");
+    const customModerators = Array.isArray(configuredModerators) ? configuredModerators : [];
+    const normalizedUsername = username.trim().toLowerCase();
+    return normalizedUsername.length > 0 && customModerators.some(
+        (moderator) => typeof moderator === "string" &&
+            moderator.trim().toLowerCase() === normalizedUsername
+    );
 }
