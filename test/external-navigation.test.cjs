@@ -18,6 +18,35 @@ try {
 }
 const { isSafeExternalUrl } = externalUrl;
 
+const fs = require("node:fs");
+const path = require("node:path");
+const { isLoopbackHost, loopbackHostForRedirect } = require("../src/shared/utils/loopbackHost");
+const {
+    KICK_REDIRECT_URI,
+    SPOTIFY_REDIRECT_URI,
+    TWITCH_REDIRECT_URI,
+} = require("../src/shared/constants");
+
+function collectOpenExternalLiterals() {
+    const found = new Set();
+    const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                walk(full);
+                continue;
+            }
+            if (!/\.(ts|tsx)$/.test(full)) continue;
+            const text = fs.readFileSync(full, "utf8");
+            for (const match of text.matchAll(/openExternal\(\s*"([^"]+)"/g)) {
+                found.add(match[1]);
+            }
+        }
+    };
+    walk(path.join(__dirname, "..", "src"));
+    return found;
+}
+
 function fakeContents(currentUrl = "http://localhost:3000/index.html") {
     const captured = { open: null, navigate: null, redirect: null, frameNavigate: null };
     return {
@@ -194,4 +223,85 @@ test("file-based windows do not treat arbitrary file paths as same-origin", () =
     contents.captured.navigate(escape);
     assert.equal(escape.defaultPrevented, true);
     assert.deepEqual(opened, []);
+});
+
+test("embedded credentials are rejected", () => {
+    for (const value of [
+        "https://user:secret@kick.com/dashboard",
+        "https://user@kick.com/dashboard",
+        "http://user:secret@localhost:3000/",
+        "https://user:secret@127.0.0.1:8888/callback",
+        "HTTPS://user:secret@kick.com/",
+    ]) {
+        assert.equal(isSafeExternalUrl(value), false, String(value));
+    }
+});
+
+test("plain HTTP is only accepted for loopback hosts", () => {
+    for (const value of [
+        "http://kick.com/settings/developer",
+        "http://dev.twitch.tv/console",
+        "http://example.com/",
+        "http://127.0.0.2:8888/callback",
+        "http://localhost.evil.com/",
+    ]) {
+        assert.equal(isSafeExternalUrl(value), false, String(value));
+    }
+
+    for (const value of [
+        "http://localhost:3000/index.html",
+        "http://localhost:8889/callback",
+        "http://127.0.0.1:8888/callback",
+        "http://[::1]:8890/callback",
+        "https://kick.com/dashboard",
+        "https://dev.twitch.tv/console",
+        "https://developer.spotify.com/dashboard",
+        "https://[::1]:8890/callback",
+    ]) {
+        assert.equal(isSafeExternalUrl(value), true, String(value));
+    }
+});
+
+test("loopback host detection stays strict", () => {
+    for (const host of ["localhost", "127.0.0.1", "::1", "[::1]", "LOCALHOST"]) {
+        assert.equal(isLoopbackHost(host), true, host);
+    }
+    for (const host of [
+        "localhost.evil.com",
+        "evil-localhost",
+        "127.0.0.2",
+        "::2",
+        "example.com",
+        "",
+        "   ",
+        42,
+        null,
+        undefined,
+    ]) {
+        assert.equal(isLoopbackHost(host), false, String(host));
+    }
+
+    assert.equal(loopbackHostForRedirect("http://127.0.0.1:8888/callback"), "127.0.0.1");
+    assert.equal(loopbackHostForRedirect("http://localhost:8889/callback"), "localhost");
+    assert.equal(loopbackHostForRedirect("https://[::1]:8890/callback"), "::1");
+    assert.equal(loopbackHostForRedirect("https://evil.example.com/callback"), "localhost");
+    assert.equal(loopbackHostForRedirect("not a url"), "localhost");
+});
+
+test("the app's own loopback redirect URIs remain acceptable", () => {
+    for (const uri of [KICK_REDIRECT_URI, SPOTIFY_REDIRECT_URI, TWITCH_REDIRECT_URI]) {
+        assert.equal(isSafeExternalUrl(uri), true, uri);
+    }
+});
+
+test("every external link shipped in the app satisfies the tightened policy", () => {
+    const literals = collectOpenExternalLiterals();
+    assert.deepEqual([...literals].sort(), [
+        "https://dev.twitch.tv/console",
+        "https://developer.spotify.com/dashboard",
+        "https://kick.com/settings/developer",
+    ]);
+    for (const url of literals) {
+        assert.equal(isSafeExternalUrl(url), true, url);
+    }
 });
