@@ -21,21 +21,13 @@ declare global {
             minimize: () => void;
             close: () => void;
             openUITestWindow: () => Promise<void>;
-            restart: () => void;
-            onUpdateStatus: (callback: (event: any, data: any) => void) => void;
             checkForUpdates: () => void;
             getAppVersion: () => Promise<string>;
             selectSongFilePath: () => Promise<string | null>;
-            updateTranslatedDefaults: () => Promise<{
-                success: boolean;
-                error?: string;
-            }>;
             getStartupStatus: () => Promise<boolean>;
             setStartupStatus: (enabled: boolean) => void;
             getAutoUpdate: () => Promise<boolean>;
             setAutoUpdate: (enabled: boolean) => void;
-            downloadUpdate: (manifest: any) => void;
-            installUpdate: () => void;
         };
     }
 }

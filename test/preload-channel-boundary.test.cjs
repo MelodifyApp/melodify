@@ -219,11 +219,8 @@ test("explicit preload methods keep working on their fixed channels", () => {
     api.setStartupStatus(true);
     api.setAutoUpdate(false);
     api.checkForUpdates();
-    api.installUpdate();
-    api.restart();
     api.openUITestWindow();
     api.selectSongFilePath();
-    api.updateTranslatedDefaults();
     api.getAppVersion();
     api.getStartupStatus();
     api.getAutoUpdate();
@@ -235,20 +232,47 @@ test("explicit preload methods keep working on their fixed channels", () => {
         ["startup:setStatus", true],
         ["update:setAuto", false],
         ["update:check", undefined],
-        ["update:install", undefined],
-        ["app:restart", undefined],
     ]);
     assert.deepEqual(
         calls.invoke.map(([channel]) => channel),
         [
             "open-ui-test-window",
             "file:selectSongFilePath",
-            "config:updateTranslatedDefaults",
             "app:getVersion",
             "startup:getStatus",
             "update:getAuto",
         ]
     );
+});
+
+test("retired update and config wrappers are not exposed", () => {
+    const { api } = loadPreload();
+
+    // The renderer drives these through the generic send/invoke paths and the
+    // guarded on/removeListener pair, so the duplicate wrappers were removed.
+    assert.equal(api.downloadUpdate, undefined);
+    assert.equal(api.installUpdate, undefined);
+    assert.equal(api.restart, undefined);
+    assert.equal(api.onUpdateStatus, undefined);
+    assert.equal(api.updateTranslatedDefaults, undefined);
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "src/main/preload.ts"),
+        "utf8"
+    );
+    for (const name of [
+        "downloadUpdate",
+        "installUpdate",
+        "restart",
+        "onUpdateStatus",
+        "updateTranslatedDefaults",
+    ]) {
+        assert.doesNotMatch(
+            source,
+            new RegExp(`\\b${name}:`, "g"),
+            `${name} wrapper must stay removed`
+        );
+    }
 });
 
 test("preload exposes no retired secret-setter wrappers or reset method", () => {

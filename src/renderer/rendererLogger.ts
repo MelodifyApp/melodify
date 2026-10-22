@@ -49,9 +49,15 @@ function logToMain(level: LogLevel, message: string, context?: string) {
         `[${level.toUpperCase()}] ${context ? `[${context}] ` : ""}${message}`
     );
 
-    // Secure IPC communication to main process for persistent storage
-    // Gracefully handles cases where electronAPI is not available
-    window.electronAPI?.send?.("log:renderer", { level, message, context });
+    // Secure IPC communication to main process for persistent storage.
+    // Reuses the approved renderer log channels (log:info|debug|warn|error);
+    // the previous "log:renderer" channel had no handler and was blocked by
+    // the preload allowlist. Gracefully handles cases where electronAPI is
+    // not available.
+    window.electronAPI?.send?.(`log:${level}`, {
+        message,
+        meta: context ? { context } : undefined,
+    });
 }
 
 /**

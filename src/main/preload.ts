@@ -134,24 +134,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     // File system operations
     selectSongFilePath: () => ipcRenderer.invoke("file:selectSongFilePath"),
 
-    // Configuration management
-    updateTranslatedDefaults: () =>
-        ipcRenderer.invoke("config:updateTranslatedDefaults"),
-
     // Startup management
     getStartupStatus: () => ipcRenderer.invoke("startup:getStatus"),
     setStartupStatus: (enabled: boolean) =>
         ipcRenderer.send("startup:setStatus", enabled),
 
-    // Update management
+    // Update management (download/install go through the guarded send bridge)
     checkForUpdates: () => ipcRenderer.send("update:check"),
     setAutoUpdate: (enabled: boolean) =>
         ipcRenderer.send("update:setAuto", enabled),
     getAutoUpdate: () => ipcRenderer.invoke("update:getAuto"),
-    onUpdateStatus: (callback: (event: any, ...args: any[]) => void) =>
-        ipcRenderer.on("update:status", callback),
-    downloadUpdate: (manifest: any) =>
-        ipcRenderer.send("update:download", manifest),
-    installUpdate: () => ipcRenderer.send("update:install"),
-    restart: () => ipcRenderer.send("app:restart"),
 });
