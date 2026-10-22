@@ -54,26 +54,42 @@ function presenceFlag(key: string): string {
     return `has${key.charAt(0).toUpperCase()}${key.slice(1)}`;
 }
 
-function projectValue(value: unknown, depth = 0): unknown {
-    if (
-        depth > 4 ||
-        !value ||
-        typeof value !== "object" ||
-        Array.isArray(value)
-    ) {
+function projectValue(value: unknown, ancestors: Set<object>): unknown {
+    if (!value || typeof value !== "object") {
         return value;
     }
-    const projected: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-        if (isCredentialKey(key)) continue;
-        projected[key] = projectValue(item, depth + 1);
+
+    const container = value as object;
+    // Defensive cycle guard: config is JSON-like, but a malformed store must
+    // not hang the projection. Repeated (non-circular) references still work
+    // because entries are removed on the way out.
+    if (ancestors.has(container)) {
+        return undefined;
     }
-    return projected;
+    ancestors.add(container);
+
+    try {
+        if (Array.isArray(value)) {
+            return value.map((item) => projectValue(item, ancestors));
+        }
+
+        const projected: Record<string, unknown> = {};
+        for (const [key, item] of Object.entries(
+            value as Record<string, unknown>
+        )) {
+            if (isCredentialKey(key)) continue;
+            projected[key] = projectValue(item, ancestors);
+        }
+        return projected;
+    } finally {
+        ancestors.delete(container);
+    }
 }
 
 /**
  * Returns a copy of the config that is safe to send to the renderer. The input
- * is never mutated; unknown preferences pass through unchanged.
+ * is never mutated; unknown preferences pass through unchanged, while
+ * credential keys are dropped at any depth (objects and arrays alike).
  */
 export function sanitizeConfigForRenderer(
     config: unknown
@@ -83,10 +99,11 @@ export function sanitizeConfigForRenderer(
             ? (config as Record<string, unknown>)
             : {};
 
+    const ancestors = new Set<object>();
     const safe: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(source)) {
         if (isCredentialKey(key)) continue;
-        safe[key] = projectValue(value);
+        safe[key] = projectValue(value, ancestors);
     }
 
     for (const key of CREDENTIAL_KEYS) {

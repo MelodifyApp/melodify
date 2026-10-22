@@ -128,10 +128,70 @@ test("renderer projection tolerates malformed config values and nested credentia
     assert.deepEqual(nested.nested, { safe: 1 });
 });
 
+test("renderer projection strips credentials inside arrays and nested arrays", () => {
+    const result = sanitizeConfigForRenderer({
+        languages: ["en", "tr"],
+        sessions: [{ accessToken: "array-access-secret", safe: 1 }],
+        matrix: [[{ clientSecret: "nested-array-secret", ok: true }]],
+    });
+
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /array-access-secret/);
+    assert.doesNotMatch(serialized, /nested-array-secret/);
+    assert.deepEqual(result.languages, ["en", "tr"]);
+    assert.equal(result.sessions[0].accessToken, undefined);
+    assert.equal(result.sessions[0].safe, 1);
+    assert.equal(result.matrix[0][0].clientSecret, undefined);
+    assert.equal(result.matrix[0][0].ok, true);
+});
+
+test("renderer projection strips credentials at any object depth", () => {
+    const deep = {
+        level1: {
+            level2: {
+                level3: {
+                    level4: {
+                        level5: {
+                            level6: {
+                                codeVerifier: "deep-verifier-secret",
+                                safe: "kept",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    };
+
+    const result = sanitizeConfigForRenderer(deep);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /deep-verifier-secret/);
+    assert.equal(
+        result.level1.level2.level3.level4.level5.level6.codeVerifier,
+        undefined
+    );
+    assert.equal(result.level1.level2.level3.level4.level5.level6.safe, "kept");
+});
+
+test("renderer projection survives circular references without leaking", () => {
+    const node = { safe: 1, kickRefreshToken: "cycle-secret" };
+    node.self = node;
+
+    const result = sanitizeConfigForRenderer({ node });
+    assert.equal(result.node.kickRefreshToken, undefined);
+    assert.equal(result.node.safe, 1);
+    assert.doesNotThrow(() => JSON.stringify(result));
+    assert.doesNotMatch(JSON.stringify(result), /cycle-secret/);
+});
+
 test("config:get IPC handler returns the sanitized projection", () => {
     const handlers = new Map();
     const stored = {
         ...SECRET_VALUES,
+        nestedList: [{ twitchClientSecret: "twitch-array-secret" }],
+        deep: {
+            a: { b: { c: { d: { e: { spotifyRefreshToken: "deep-refresh-secret" } } } } },
+        },
         language: "en",
         prefix: "!",
         kickClientId: "kick-client-id",
@@ -194,6 +254,7 @@ test("config:get IPC handler returns the sanitized projection", () => {
     for (const value of Object.values(SECRET_VALUES)) {
         assert.doesNotMatch(serialized, new RegExp(value), `${value} leaked`);
     }
+    assert.doesNotMatch(serialized, /twitch-array-secret|deep-refresh-secret/);
     assert.equal(result.hasKickAccessToken, true);
     assert.equal(result.hasSpotifyClientSecret, true);
     assert.equal(result.language, "en");
