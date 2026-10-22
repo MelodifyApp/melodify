@@ -113,3 +113,73 @@ export function sanitizeConfigForRenderer(
 
     return safe;
 }
+
+/**
+ * Fields the renderer may persist through `config:set`. Credentials (tokens,
+ * client secrets, PKCE verifier), identity fields and internal timestamps are
+ * intentionally absent: they are written only by their dedicated IPC/OAuth
+ * paths. Anything else in a renderer payload — including `has<Key>` presence
+ * flags, unknown keys and prototype-sensitive keys — is discarded.
+ */
+const RENDERER_SETTABLE_KEYS = new Set([
+    "language",
+    "defaultsLanguage",
+    "autoFollowLanguageDefaults",
+    "prefix",
+    "commands",
+    "allowedBadges",
+    "customModerators",
+    "canAnyonePlaySong",
+    "rewardTitle",
+    "twitchRewardTitle",
+    "replyOnSongRequest",
+    "songRequestReplyTemplate",
+    "replyOnSongRequestError",
+    "songRequestErrorTemplate",
+    "replyOnVolumeChange",
+    "volumeChangeReplyTemplate",
+    "replyOnVolumeError",
+    "volumeErrorTemplate",
+    "replyOnVolumeGet",
+    "volumeGetReplyTemplate",
+    "globalCooldownEnabled",
+    "globalCooldownSeconds",
+    "perUserCooldownEnabled",
+    "perUserCooldownSeconds",
+    "replyOnCooldown",
+    "cooldownMessageTemplate",
+    "currentSongFormat",
+    "saveCurrentSongToFile",
+    "currentSongFilePath",
+    "autoUpdateEnabled",
+    "startOnStartup",
+    "minimizeToTray",
+    "kickRedirectUri",
+    "spotifyRedirectUri",
+    "kickClientId",
+    "spotifyClientId",
+    "twitchClientId",
+]);
+
+/**
+ * Projects a renderer `config:set` payload onto the settable allowlist.
+ * Non-object payloads and unknown/credential/flag keys are dropped, so a
+ * malicious renderer cannot persist credentials or prototype-sensitive keys.
+ */
+export function sanitizeConfigUpdate(
+    payload: unknown
+): Record<string, unknown> {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return {};
+    }
+
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(
+        payload as Record<string, unknown>
+    )) {
+        if (!RENDERER_SETTABLE_KEYS.has(key)) continue;
+        if (value === undefined) continue;
+        patch[key] = value;
+    }
+    return patch;
+}

@@ -111,6 +111,20 @@ export default function Settings({ onClose }: SettingsProps) {
     const handleConfigChange = (key: string, value: any) => {
         const newConfig = { ...config, [key]: value };
         setConfig(newConfig);
+
+        // Credentials are stored through their dedicated IPC paths; the
+        // config:set allowlist intentionally refuses credential fields.
+        if (key.endsWith("ClientSecret")) {
+            const prefix = key.slice(0, -"ClientSecret".length);
+            window.electronAPI.send(`${prefix}:setSecrets`, {
+                [`${prefix}ClientId`]: newConfig[`${prefix}ClientId`],
+                [key]: value,
+            });
+            setSaveStatus("saved");
+            setUnsavedChanges(false);
+            return;
+        }
+
         autoSave(newConfig);
     };
 

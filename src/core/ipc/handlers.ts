@@ -31,7 +31,7 @@ import { redactSecrets } from "@/core/logging/utils";
 import { CommandManager } from "@/core/commands/manager";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { isSafeExternalUrl } from "@/shared/utils/externalUrl";
-import { sanitizeConfigForRenderer } from "@/core/config/rendererConfig";
+import { sanitizeConfigForRenderer, sanitizeConfigUpdate } from "@/core/config/rendererConfig";
 import {
     startSongFileSaving,
     stopSongFileSaving,
@@ -81,13 +81,23 @@ ipcMain.handle("config:get", () => {
  * @param newConfig - Complete configuration object from renderer
  */
 ipcMain.on("config:set", (event, newConfig) => {
+    const patch = sanitizeConfigUpdate(newConfig);
+    if (Object.keys(patch).length === 0) {
+        logDebug(
+            "config:set ignored a payload without settable fields",
+            "config:set"
+        );
+        return;
+    }
+
     const oldConfig = Config.get();
-    Config.set(newConfig);
+    Config.set(patch);
+    const effectiveConfig = Config.get();
 
     // Detect and handle song file saving state changes
     // This feature requires main process coordination for file system access
     const oldSaveToFile = oldConfig.saveCurrentSongToFile;
-    const newSaveToFile = newConfig.saveCurrentSongToFile;
+    const newSaveToFile = effectiveConfig.saveCurrentSongToFile;
 
     if (oldSaveToFile !== newSaveToFile) {
         if (newSaveToFile) {
@@ -99,7 +109,7 @@ ipcMain.on("config:set", (event, newConfig) => {
 
     // Handle startup setting changes
     const oldStartOnStartup = oldConfig.startOnStartup;
-    const newStartOnStartup = newConfig.startOnStartup;
+    const newStartOnStartup = effectiveConfig.startOnStartup;
 
     if (oldStartOnStartup !== newStartOnStartup) {
         if (newStartOnStartup) {
@@ -118,7 +128,7 @@ ipcMain.on("config:set", (event, newConfig) => {
 
     // Handle command alias updates
     const oldCommandsConfig = oldConfig.commands || {};
-    const newCommandsConfig = newConfig.commands || {};
+    const newCommandsConfig = effectiveConfig.commands || {};
 
     // Check for changes in command aliases and update CommandManager
     for (const [commandName, newCmdConfig] of Object.entries(
