@@ -35,6 +35,9 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
         try {
             const filePath = await window.electronAPI.selectSongFilePath();
             if (filePath) {
+                // The main process already persisted the dialog selection;
+                // this only mirrors it locally for display (config:set drops
+                // currentSongFilePath).
                 onConfigChange("currentSongFilePath", filePath);
             }
         } catch (error) {

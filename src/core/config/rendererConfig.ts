@@ -150,7 +150,6 @@ const RENDERER_SETTABLE_KEYS = new Set([
     "cooldownMessageTemplate",
     "currentSongFormat",
     "saveCurrentSongToFile",
-    "currentSongFilePath",
     "autoUpdateEnabled",
     "startOnStartup",
     "minimizeToTray",

@@ -359,6 +359,13 @@ ipcMain.handle("file:selectSongFilePath", async () => {
         });
 
         if (!result.canceled && result.filePath) {
+            // The main process owns the write target: persist the path the
+            // user picked here so a renderer payload can never set it.
+            Config.set({ currentSongFilePath: result.filePath });
+            logInfo(
+                "Song file path updated from the save dialog",
+                "file:selectSongFilePath"
+            );
             return result.filePath;
         }
         return null;

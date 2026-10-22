@@ -39,7 +39,6 @@ const VALID_SETTINGS = {
     cooldownMessageTemplate: "Wait {time}",
     currentSongFormat: "{title}",
     saveCurrentSongToFile: true,
-    currentSongFilePath: "C:\\songs\\now.txt",
     autoUpdateEnabled: false,
     startOnStartup: true,
     minimizeToTray: true,
@@ -65,6 +64,7 @@ test("config update keeps settable fields and drops credentials, flags and unkno
         prototype: "nope",
         username: "someone",
         userId: "42",
+        currentSongFilePath: "C:\\attacker\\target.txt",
     });
 
     for (const [key, value] of Object.entries(VALID_SETTINGS)) {
@@ -83,6 +83,7 @@ test("config update keeps settable fields and drops credentials, flags and unkno
         "unknownKey",
         "username",
         "userId",
+        "currentSongFilePath",
     ]) {
         assert.equal(
             Object.prototype.hasOwnProperty.call(patch, key),
