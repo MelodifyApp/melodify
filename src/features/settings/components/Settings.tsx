@@ -126,14 +126,6 @@ export default function Settings({ onClose }: SettingsProps) {
         );
     };
 
-    const handleReset = () => {
-        if (confirm("Reset all settings to defaults? This cannot be undone.")) {
-            window.electronAPI.invoke("config:reset").then(() => {
-                window.electronAPI.invoke("config:get").then(setConfig);
-            });
-        }
-    };
-
     const getStatusIndicator = () => {
         switch (saveStatus) {
             // case "saving":

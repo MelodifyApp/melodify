@@ -12,6 +12,8 @@ const {
     LISTEN_CHANNELS,
 } = require("../src/shared/ipcChannels");
 
+const { SECRET_SERVICES } = require("../src/features/settings/secretsSave");
+
 function load(stubs, relativePath) {
     const originalLoad = Module._load;
     try {
@@ -246,5 +248,78 @@ test("explicit preload methods keep working on their fixed channels", () => {
             "startup:getStatus",
             "update:getAuto",
         ]
+    );
+});
+
+test("preload exposes no retired secret-setter wrappers or reset method", () => {
+    const { api } = loadPreload();
+
+    assert.equal(api.setSpotifySecrets, undefined);
+    assert.equal(api.setKickSecrets, undefined);
+    assert.equal(api.reset, undefined);
+    assert.equal(
+        Object.keys(api).some((key) => /secrets$/i.test(key)),
+        false,
+        "credential wrappers must not come back; the Secrets section owns saves"
+    );
+
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "src/main/preload.ts"),
+        "utf8"
+    );
+    assert.doesNotMatch(source, /setSpotifySecrets|setKickSecrets/);
+});
+
+test("the retired config:reset channel is neither registered nor forwardable", async () => {
+    for (const list of [SEND_CHANNELS, INVOKE_CHANNELS, LISTEN_CHANNELS]) {
+        assert.equal(list.includes("config:reset"), false);
+    }
+
+    const registered = new Set([
+        ...collectSource(/ipcMain\.on\(\s*"([^"]+)"/g),
+        ...collectSource(/ipcMain\.handle\(\s*"([^"]+)"/g),
+    ]);
+    assert.equal(
+        registered.has("config:reset"),
+        false,
+        "config:reset must not be registered without an allowlist entry"
+    );
+
+    const { api, calls } = loadPreload();
+    api.send("config:reset");
+    await assert.rejects(() => api.invoke("config:reset"));
+
+    assert.deepEqual(calls.send, []);
+    assert.deepEqual(calls.invoke, []);
+});
+
+test("the supported credential save flow crosses the bridge on approved channels", async () => {
+    const { api, calls } = loadPreload();
+
+    for (const service of SECRET_SERVICES) {
+        if (service.transport === "invoke") {
+            assert.ok(
+                INVOKE_CHANNELS.includes(service.channel),
+                `${service.channel} must be an invoke channel`
+            );
+            assert.equal(SEND_CHANNELS.includes(service.channel), false);
+            await api.invoke(service.channel, { probe: true });
+        } else {
+            assert.ok(
+                SEND_CHANNELS.includes(service.channel),
+                `${service.channel} must be a send channel`
+            );
+            assert.equal(INVOKE_CHANNELS.includes(service.channel), false);
+            api.send(service.channel, { probe: true });
+        }
+    }
+
+    assert.deepEqual(
+        calls.invoke.map(([channel]) => channel),
+        ["spotify:setSecrets"]
+    );
+    assert.deepEqual(
+        calls.send.map(([channel]) => channel),
+        ["kick:setSecrets"]
     );
 });

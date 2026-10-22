@@ -18,8 +18,6 @@ declare global {
             ) => void;
             removeAllListeners: (channel: string) => void;
             openExternal: (url: string) => void;
-            setSpotifySecrets: (secrets: Record<string, string>) => void;
-            setKickSecrets: (secrets: Record<string, string>) => void;
             minimize: () => void;
             close: () => void;
             openUITestWindow: () => Promise<void>;

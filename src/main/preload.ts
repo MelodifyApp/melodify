@@ -153,9 +153,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     downloadUpdate: (manifest: any) =>
         ipcRenderer.send("update:download", manifest),
     installUpdate: () => ipcRenderer.send("update:install"),
-    setSpotifySecrets: (secrets: Record<string, string>) =>
-        ipcRenderer.send("spotify:setSecrets", secrets),
-    setKickSecrets: (secrets: Record<string, string>) =>
-        ipcRenderer.send("kick:setSecrets", secrets),
     restart: () => ipcRenderer.send("app:restart"),
 });

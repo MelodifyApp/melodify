@@ -676,11 +676,13 @@ test("secret-returning IPC channels are not registered", () => {
     }
 });
 
-test("preload exposes no secret-returning helpers while keeping set-only credential APIs", () => {
+test("preload exposes no secret-returning helpers and no retired secret-setter wrappers", () => {
     const api = loadPreloadApi();
-    assert.equal(typeof api.setSpotifySecrets, "function");
-    assert.equal(typeof api.setKickSecrets, "function");
     assert.equal(api.getSpotifySecrets, undefined);
     assert.equal(api.getKickSecrets, undefined);
     assert.equal(api.getTwitchSecrets, undefined);
+    // Credentials are saved through the Secrets section draft/save model over
+    // the approved send/invoke channels, not through explicit preload wrappers.
+    assert.equal(api.setSpotifySecrets, undefined);
+    assert.equal(api.setKickSecrets, undefined);
 });
