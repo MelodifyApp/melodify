@@ -65,6 +65,14 @@ export interface UpdateArtifactInput {
     tempDir: string;
     exists: boolean;
     size: number;
+    /** lstat-based facts: a symlink must never be trusted. */
+    isSymlink?: boolean;
+    /** Hardlinks (`nlink > 1`) let the write/exec redirect to another file. */
+    linkCount?: number;
+    /** Real (link-resolved) path of the artifact, when it could be computed. */
+    realPath?: string;
+    /** Real path of the trusted temp root, when the caller can provide it. */
+    realTempDir?: string;
 }
 
 export interface UpdateArtifactCheck {
@@ -104,14 +112,103 @@ export function validateUpdateArtifact(
             reason: `unexpected update artifact type: ${name}`,
         };
     }
+    if (input.isSymlink === true) {
+        return { ok: false, reason: "update artifact is a symbolic link" };
+    }
+    if (typeof input.linkCount === "number" && input.linkCount > 1) {
+        return { ok: false, reason: "update artifact has multiple hard links" };
+    }
     if (!input.exists) {
         return { ok: false, reason: "downloaded artifact is missing" };
     }
     if (!Number.isFinite(input.size) || input.size <= 0) {
         return { ok: false, reason: "downloaded artifact is empty" };
     }
+    if (typeof input.realTempDir === "string") {
+        if (typeof input.realPath !== "string" || input.realPath.length === 0) {
+            return {
+                ok: false,
+                reason: "could not resolve the update artifact's real path",
+            };
+        }
+        if (
+            !isPathInsideDirectory(
+                input.realPath,
+                input.realTempDir,
+                input.platform
+            )
+        ) {
+            return {
+                ok: false,
+                reason: "update artifact's real path is outside the update temp directory",
+            };
+        }
+    }
 
     return { ok: true, path: resolved };
+}
+
+export interface UpdateArtifactFsLike {
+    lstatSync(filePath: string): {
+        isFile(): boolean;
+        isSymbolicLink(): boolean;
+        size: number;
+        nlink: number;
+    };
+    realpathSync(filePath: string): string;
+}
+
+export interface UpdateArtifactStat {
+    exists: boolean;
+    size: number;
+    isSymlink: boolean;
+    linkCount: number;
+    realPath?: string;
+}
+
+/**
+ * Reads the artifact facts without following links: `lstat` reveals symlinks
+ * and hardlink counts, and `realpath` resolves any link in the path so the
+ * caller can prove the real file still lives inside the temp root.
+ */
+export function statUpdateArtifact(
+    filePath: string,
+    fsLike: UpdateArtifactFsLike
+): UpdateArtifactStat {
+    try {
+        const stats = fsLike.lstatSync(filePath);
+        if (stats.isSymbolicLink()) {
+            return {
+                exists: true,
+                size: 0,
+                isSymlink: true,
+                linkCount: stats.nlink,
+            };
+        }
+        if (!stats.isFile()) {
+            return {
+                exists: false,
+                size: 0,
+                isSymlink: false,
+                linkCount: stats.nlink,
+            };
+        }
+        let realPath: string | undefined;
+        try {
+            realPath = fsLike.realpathSync(filePath);
+        } catch {
+            realPath = undefined;
+        }
+        return {
+            exists: true,
+            size: stats.size,
+            isSymlink: false,
+            linkCount: stats.nlink,
+            realPath,
+        };
+    } catch {
+        return { exists: false, size: 0, isSymlink: false, linkCount: 0 };
+    }
 }
 
 export interface UpdateUpdaterLike {
@@ -124,7 +221,9 @@ export interface UpdateControllerDeps {
     updater: UpdateUpdaterLike | null;
     platform: string;
     tempDir: string;
-    statFile(filePath: string): { exists: boolean; size: number };
+    /** Real (link-resolved) temp root; used to prove the artifact's real path. */
+    realTempDir: string;
+    statFile(filePath: string): UpdateArtifactStat;
     broadcast(channel: string, ...args: unknown[]): void;
     log: {
         info(message: string): void;
@@ -165,13 +264,22 @@ export function createUpdateController(
         const stat =
             typeof filePath === "string"
                 ? deps.statFile(filePath)
-                : { exists: false, size: 0 };
+                : {
+                      exists: false,
+                      size: 0,
+                      isSymlink: false,
+                      linkCount: 0,
+                  };
         return validateUpdateArtifact({
             filePath,
             platform: deps.platform,
             tempDir: deps.tempDir,
             exists: stat.exists,
             size: stat.size,
+            isSymlink: stat.isSymlink,
+            linkCount: stat.linkCount,
+            realPath: stat.realPath,
+            realTempDir: deps.realTempDir,
         });
     };
 

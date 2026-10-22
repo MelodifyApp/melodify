@@ -9,6 +9,7 @@ const {
     isPathInsideDirectory,
     validateUpdateArtifact,
     createUpdateController,
+    statUpdateArtifact,
     INSTALLER_EXTENSIONS,
 } = require("../src/main/updateController");
 
@@ -168,7 +169,13 @@ function harness(overrides = {}) {
     const broadcasts = [];
     const logs = [];
     const calls = { check: 0, download: 0, apply: 0 };
-    const stat = overrides.stat ?? { exists: true, size: 4096 };
+    const stat = overrides.stat ?? {
+        exists: true,
+        size: 4096,
+        isSymlink: false,
+        linkCount: 1,
+        realPath: path.resolve(TEMP_EXE),
+    };
     const updater =
         overrides.updater === undefined
             ? {
@@ -189,6 +196,7 @@ function harness(overrides = {}) {
         updater,
         platform: "win32",
         tempDir: TEMP_DIR,
+        realTempDir: TEMP_DIR,
         statFile: () => stat,
         broadcast: (channel, ...args) => broadcasts.push([channel, ...args]),
         log: {
@@ -349,4 +357,183 @@ test("main process wires the controller and never applies a path directly", () =
     // The library's own "downloaded" event fires before validation, so the UI
     // status must come from the controller instead.
     assert.doesNotMatch(source, /updater\.on\("downloaded"/);
+    // The stat boundary must not follow links into the artifact.
+    assert.match(source, /statUpdateArtifact\(/);
+});
+
+test("validateUpdateArtifact rejects symlinks, hardlinks and out-of-root real paths", () => {
+    const base = {
+        filePath: TEMP_EXE,
+        platform: "win32",
+        tempDir: TEMP_DIR,
+        exists: true,
+        size: 4096,
+        realTempDir: TEMP_DIR,
+    };
+
+    const symlink = validateUpdateArtifact({
+        ...base,
+        isSymlink: true,
+        linkCount: 1,
+        realPath: TEMP_EXE,
+    });
+    assert.equal(symlink.ok, false);
+    assert.match(symlink.reason, /symbolic link/i);
+
+    const hardlink = validateUpdateArtifact({
+        ...base,
+        isSymlink: false,
+        linkCount: 2,
+        realPath: TEMP_EXE,
+    });
+    assert.equal(hardlink.ok, false);
+    assert.match(hardlink.reason, /hard link/i);
+
+    const escaped = validateUpdateArtifact({
+        ...base,
+        isSymlink: false,
+        linkCount: 1,
+        realPath: "C:\\Users\\tester\\evil.exe",
+    });
+    assert.equal(escaped.ok, false);
+    assert.match(escaped.reason, /real path/i);
+
+    // A resolved path that could not be computed must not be trusted either.
+    const unresolved = validateUpdateArtifact({
+        ...base,
+        isSymlink: false,
+        linkCount: 1,
+        realPath: undefined,
+    });
+    assert.equal(unresolved.ok, false);
+
+    const accepted = validateUpdateArtifact({
+        ...base,
+        isSymlink: false,
+        linkCount: 1,
+        realPath: path.resolve(TEMP_EXE),
+    });
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.path, path.resolve(TEMP_EXE));
+});
+
+test("controller keeps install blocked when the artifact is a link", async () => {
+    const linkedStats = [
+        {
+            exists: true,
+            size: 4096,
+            isSymlink: true,
+            linkCount: 1,
+            realPath: path.resolve(TEMP_EXE),
+        },
+        {
+            exists: true,
+            size: 4096,
+            isSymlink: false,
+            linkCount: 2,
+            realPath: path.resolve(TEMP_EXE),
+        },
+        {
+            exists: true,
+            size: 4096,
+            isSymlink: false,
+            linkCount: 1,
+            realPath: "C:\\Users\\tester\\evil.exe",
+        },
+    ];
+
+    for (const stat of linkedStats) {
+        const h = harness({ stat });
+        await h.controller.downloadUpdate();
+
+        assert.deepEqual(statuses(h.broadcasts), ["error"]);
+        assert.equal(h.controller.getValidatedArtifactPath(), null);
+
+        h.controller.installUpdate();
+        assert.equal(h.calls.apply, 0);
+    }
+});
+
+test("statUpdateArtifact detects a real hardlink on disk", (t) => {
+    const os = require("node:os");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "melodify-update-test-"));
+    const realTempDir = fs.realpathSync(root);
+    try {
+        const target = path.join(root, "target.exe");
+        const link = path.join(root, "Melodify.Setup.exe");
+        fs.writeFileSync(target, "payload");
+
+        // A normal file is accepted.
+        const plain = statUpdateArtifact(target, fs, realTempDir);
+        assert.equal(plain.exists, true);
+        assert.equal(plain.isSymlink, false);
+        assert.equal(plain.linkCount, 1);
+        assert.equal(
+            validateUpdateArtifact({
+                filePath: target,
+                platform: "win32",
+                tempDir: root,
+                exists: plain.exists,
+                size: plain.size,
+                isSymlink: plain.isSymlink,
+                linkCount: plain.linkCount,
+                realPath: plain.realPath,
+                realTempDir,
+            }).ok,
+            true
+        );
+
+        // A hardlink reports more than one link and is rejected.
+        fs.linkSync(target, link);
+        const hardlinked = statUpdateArtifact(link, fs, realTempDir);
+        assert.equal(hardlinked.exists, true);
+        assert.equal(hardlinked.linkCount, 2);
+        const check = validateUpdateArtifact({
+            filePath: link,
+            platform: "win32",
+            tempDir: root,
+            exists: hardlinked.exists,
+            size: hardlinked.size,
+            isSymlink: hardlinked.isSymlink,
+            linkCount: hardlinked.linkCount,
+            realPath: hardlinked.realPath,
+            realTempDir,
+        });
+        assert.equal(check.ok, false);
+        assert.match(check.reason, /hard link/i);
+
+        // A symlink is reported as such when the platform allows creating one.
+        const symlinkPath = path.join(root, "Symlink.Setup.exe");
+        let symlinkCreated = false;
+        try {
+            fs.symlinkSync(target, symlinkPath);
+            symlinkCreated = true;
+        } catch {
+            // Windows without Developer Mode/admin cannot create symlinks.
+        }
+        if (symlinkCreated) {
+            const linked = statUpdateArtifact(symlinkPath, fs, realTempDir);
+            assert.equal(linked.isSymlink, true);
+            const symlinkCheck = validateUpdateArtifact({
+                filePath: symlinkPath,
+                platform: "win32",
+                tempDir: root,
+                exists: linked.exists,
+                size: linked.size,
+                isSymlink: linked.isSymlink,
+                linkCount: linked.linkCount,
+                realPath: linked.realPath,
+                realTempDir,
+            });
+            assert.equal(symlinkCheck.ok, false);
+            assert.match(symlinkCheck.reason, /symbolic link/i);
+        } else {
+            t.diagnostic(
+                "symlink creation not permitted on this host; the pure symlink test still covers the rule"
+            );
+        }
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+        assert.equal(fs.existsSync(root), false);
+    }
 });

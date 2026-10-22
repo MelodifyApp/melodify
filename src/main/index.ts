@@ -7,7 +7,7 @@ import { logInfo, logDebug, logError, logWarn } from "@/core/logging";
 import { applyNavigationGuards } from "./navigationGuard";
 import Config from "@/core/config";
 import Updater from "basic-electron-updater";
-import { createUpdateController } from "./updateController";
+import { createUpdateController, statUpdateArtifact } from "./updateController";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -78,18 +78,20 @@ if (isIsolatedPreview) {
     }
 }
 
+const realTempDir = (() => {
+    try {
+        return fs.realpathSync(os.tmpdir());
+    } catch {
+        return os.tmpdir();
+    }
+})();
+
 const updateController = createUpdateController({
     updater,
     platform: process.platform,
     tempDir: os.tmpdir(),
-    statFile: (filePath: string) => {
-        try {
-            const stats = fs.statSync(filePath);
-            return { exists: stats.isFile(), size: stats.size };
-        } catch {
-            return { exists: false, size: 0 };
-        }
-    },
+    realTempDir,
+    statFile: (filePath: string) => statUpdateArtifact(filePath, fs),
     broadcast: (channel, ...args) => broadcast(channel, ...args),
     log: {
         info: (message) => logInfo(message, "updater"),
