@@ -30,6 +30,7 @@ import {
 import { redactSecrets } from "@/core/logging/utils";
 import { CommandManager } from "@/core/commands/manager";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { isSafeExternalUrl } from "@/shared/utils/externalUrl";
 import {
     startSongFileSaving,
     stopSongFileSaving,
@@ -48,8 +49,12 @@ export { commandManager };
  * Opens URLs in the user's default browser with security validation
  * Prevents opening of unsafe protocols or malicious links
  */
-ipcMain.on("open-external", (_, url: string) => {
-    shell.openExternal(url);
+ipcMain.on("open-external", (_, url: unknown) => {
+    if (!isSafeExternalUrl(url)) {
+        logWarn("Blocked open-external for an unsupported URL", "open-external");
+        return;
+    }
+    void shell.openExternal(url);
 });
 
 /**

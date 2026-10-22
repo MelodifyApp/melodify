@@ -2,8 +2,9 @@
 // Main process entry point for the Electron application.
 // Handles app lifecycle, window management, tray creation, and IPC setup.
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } from "electron";
 import { logInfo, logDebug, logError, logWarn } from "@/core/logging";
+import { applyNavigationGuards } from "./navigationGuard";
 import Config from "@/core/config";
 import Updater from "basic-electron-updater";
 import path from "path";
@@ -324,6 +325,11 @@ const createTestWindow = (): void => {
         // Load the same entry point but with a query parameter to identify it as test window
         testWindow.loadURL(`${MAIN_WINDOW_WEBPACK_ENTRY}?testmode=true`);
         testWindow.setMenu(null);
+        applyNavigationGuards(testWindow.webContents, {
+            openExternal: (url) => {
+                void shell.openExternal(url);
+            },
+        });
 
         // Open DevTools for the test window
         testWindow.webContents.openDevTools({ mode: "detach" });
@@ -392,6 +398,11 @@ const createMainWindow = (): void => {
         // Load the app and remove default menu
         mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
         mainWindow.setMenu(null);
+        applyNavigationGuards(mainWindow.webContents, {
+            openExternal: (url) => {
+                void shell.openExternal(url);
+            },
+        });
 
         // Open DevTools in development mode
         if (process.env.NODE_ENV === "development") {
