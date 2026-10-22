@@ -19,7 +19,7 @@ try {
 const { isSafeExternalUrl } = externalUrl;
 
 function fakeContents(currentUrl = "http://localhost:3000/index.html") {
-    const captured = { open: null, navigate: null };
+    const captured = { open: null, navigate: null, redirect: null, frameNavigate: null };
     return {
         captured,
         getURL: () => currentUrl,
@@ -28,12 +28,25 @@ function fakeContents(currentUrl = "http://localhost:3000/index.html") {
         },
         on(event, listener) {
             if (event === "will-navigate") captured.navigate = listener;
+            if (event === "will-redirect") captured.redirect = listener;
+            if (event === "will-frame-navigate") captured.frameNavigate = listener;
         },
     };
 }
 
 function navigateEvent() {
     return {
+        defaultPrevented: false,
+        preventDefault() {
+            this.defaultPrevented = true;
+        },
+    };
+}
+
+function navigationDetails(url, extra = {}) {
+    return {
+        url,
+        ...extra,
         defaultPrevented: false,
         preventDefault() {
             this.defaultPrevented = true;
@@ -116,4 +129,69 @@ test("in-app navigation is allowed while external navigation opens externally", 
     contents.captured.navigate(malformed, undefined);
     assert.equal(malformed.defaultPrevented, true);
     assert.deepEqual(opened, ["https://kick.com/"]);
+});
+
+test("server redirects are subject to the same navigation policy", () => {
+    const contents = fakeContents();
+    const opened = [];
+    applyNavigationGuards(contents, { openExternal: (url) => opened.push(url) });
+    assert.equal(typeof contents.captured.redirect, "function");
+
+    const allowed = navigationDetails("http://localhost:3000/callback");
+    contents.captured.redirect(allowed);
+    assert.equal(allowed.defaultPrevented, false);
+
+    const external = navigationDetails("https://kick.com/redirected");
+    contents.captured.redirect(external);
+    assert.equal(external.defaultPrevented, true);
+    assert.deepEqual(opened, ["https://kick.com/redirected"]);
+
+    const unsafe = navigationDetails("javascript:alert(1)");
+    contents.captured.redirect(unsafe);
+    assert.equal(unsafe.defaultPrevented, true);
+    assert.deepEqual(opened, ["https://kick.com/redirected"]);
+});
+
+test("subframe navigation is denied outside the app origin without opening a browser", () => {
+    const contents = fakeContents();
+    const opened = [];
+    applyNavigationGuards(contents, { openExternal: (url) => opened.push(url) });
+    assert.equal(typeof contents.captured.frameNavigate, "function");
+
+    const subframeExternal = navigationDetails("https://evil.example.com/frame", {
+        isMainFrame: false,
+    });
+    contents.captured.frameNavigate(subframeExternal);
+    assert.equal(subframeExternal.defaultPrevented, true);
+    assert.deepEqual(opened, []);
+
+    const subframeSameOrigin = navigationDetails("http://localhost:3000/frame", {
+        isMainFrame: false,
+    });
+    contents.captured.frameNavigate(subframeSameOrigin);
+    assert.equal(subframeSameOrigin.defaultPrevented, false);
+
+    const mainFrame = navigationDetails("https://kick.com/", { isMainFrame: true });
+    contents.captured.frameNavigate(mainFrame);
+    assert.equal(mainFrame.defaultPrevented, false);
+    assert.deepEqual(opened, []);
+});
+
+test("file-based windows do not treat arbitrary file paths as same-origin", () => {
+    const appUrl =
+        "file:///C:/app/resources/app.asar/.webpack/renderer/main_window/index.html";
+    const contents = fakeContents(appUrl);
+    const opened = [];
+    applyNavigationGuards(contents, { openExternal: (url) => opened.push(url) });
+
+    const sibling = navigationDetails(
+        "file:///C:/app/resources/app.asar/.webpack/renderer/main_window/other.html"
+    );
+    contents.captured.navigate(sibling);
+    assert.equal(sibling.defaultPrevented, false);
+
+    const escape = navigationDetails("file:///C:/Windows/System32/cmd.exe");
+    contents.captured.navigate(escape);
+    assert.equal(escape.defaultPrevented, true);
+    assert.deepEqual(opened, []);
 });
