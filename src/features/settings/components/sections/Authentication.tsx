@@ -85,6 +85,10 @@ export default function Authentication({
             }[color] || "border-zinc-700/50 bg-zinc-800/30";
 
         const authState = authStates[platform] || "idle";
+        const hasClientSecret =
+            platform === "kick"
+                ? config.hasKickClientSecret === true
+                : config.hasSpotifyClientSecret === true;
 
         return (
             <div className={`rounded-xl border p-6 ${colorClasses}`}>
@@ -224,7 +228,7 @@ export default function Authentication({
                         onClick={() => handleAuth(platform)}
                         disabled={
                             !config[`${platform}ClientId`] ||
-                            !config[`${platform}ClientSecret`] ||
+                            !hasClientSecret ||
                             authState === "connecting"
                         }
                         className={`w-full py-3 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -266,7 +270,7 @@ export default function Authentication({
                     title="Kick.com"
                     description="Connect to your Kick channel to read chat and send messages"
                     color="green"
-                    isConnected={!!config.kickAccessToken}
+                    isConnected={config.hasKickAccessToken === true}
                     connectionInfo={
                         config.username
                             ? `Connected as ${config.username}`
@@ -292,7 +296,7 @@ export default function Authentication({
                     title="Spotify"
                     description="Connect to Spotify to control music playback and add songs to queue"
                     color="purple"
-                    isConnected={!!config.spotifyAccessToken}
+                    isConnected={config.hasSpotifyAccessToken === true}
                     fields={[
                         {
                             key: "spotifyClientId",

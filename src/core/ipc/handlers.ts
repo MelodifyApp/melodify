@@ -31,6 +31,7 @@ import { redactSecrets } from "@/core/logging/utils";
 import { CommandManager } from "@/core/commands/manager";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { isSafeExternalUrl } from "@/shared/utils/externalUrl";
+import { sanitizeConfigForRenderer } from "@/core/config/rendererConfig";
 import {
     startSongFileSaving,
     stopSongFileSaving,
@@ -63,7 +64,9 @@ ipcMain.on("open-external", (_, url: unknown) => {
  * Includes all user settings, defaults, and translated values
  */
 ipcMain.handle("config:get", () => {
-    return Config.get();
+    // Credentials never leave the main process; the renderer receives a
+    // projected config with has<Key> presence flags instead.
+    return sanitizeConfigForRenderer(Config.get());
 });
 
 /**
