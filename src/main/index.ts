@@ -7,8 +7,10 @@ import { logInfo, logDebug, logError, logWarn } from "@/core/logging";
 import { applyNavigationGuards } from "./navigationGuard";
 import Config from "@/core/config";
 import Updater from "basic-electron-updater";
+import { createUpdateController } from "./updateController";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 // Import IPC handlers for different features
 import "@/core/ipc";
@@ -76,6 +78,26 @@ if (isIsolatedPreview) {
     }
 }
 
+const updateController = createUpdateController({
+    updater,
+    platform: process.platform,
+    tempDir: os.tmpdir(),
+    statFile: (filePath: string) => {
+        try {
+            const stats = fs.statSync(filePath);
+            return { exists: stats.isFile(), size: stats.size };
+        } catch {
+            return { exists: false, size: 0 };
+        }
+    },
+    broadcast: (channel, ...args) => broadcast(channel, ...args),
+    log: {
+        info: (message) => logInfo(message, "updater"),
+        warn: (message) => logWarn(message, "updater"),
+        error: (error, message) => logError(error, message ?? "updater"),
+    },
+});
+
 function broadcast(channel: string, ...args: any[]) {
     try {
         const windows = BrowserWindow.getAllWindows();
@@ -122,10 +144,8 @@ if (updater) {
         broadcast("update:status", "downloading", progress);
     });
 
-    updater.on("downloaded", () => {
-        logInfo("Update downloaded successfully", "updater");
-        broadcast("update:status", "downloaded");
-    });
+    // The library's own "downloaded" event fires before the artifact has been
+    // validated, so the UI status is emitted by updateController instead.
 
     updater.on("error", (error: any) => {
         logError(error, "updater");
@@ -143,70 +163,15 @@ if (updater) {
 }
 
 async function checkForUpdates() {
-    if (!updater) {
-        logWarn(
-            "Updater not available - cannot check for updates",
-            "updater:checkForUpdates"
-        );
-        broadcast("update:status", "error", "Updater not available");
-        return;
-    }
-
-    try {
-        await updater.checkForUpdates();
-    } catch (error: any) {
-        logError(error, "updater:checkForUpdates");
-        broadcast(
-            "update:status",
-            "error",
-            error?.message || "Failed to check for updates"
-        );
-    }
+    await updateController.checkForUpdates();
 }
 
 async function downloadUpdate() {
-    if (!updater) {
-        logWarn(
-            "Updater not available - cannot download update",
-            "updater:downloadUpdate"
-        );
-        broadcast("update:status", "error", "Updater not available");
-        return;
-    }
-
-    try {
-        await updater.downloadUpdate();
-    } catch (error: any) {
-        logError(error, "updater:downloadUpdate");
-        broadcast(
-            "update:status",
-            "error",
-            error?.message || "Failed to download update"
-        );
-    }
+    await updateController.downloadUpdate();
 }
 
 function installUpdate() {
-    if (!updater) {
-        logWarn(
-            "Updater not available - cannot install update",
-            "updater:installUpdate"
-        );
-        broadcast("update:status", "error", "Updater not available");
-        return;
-    }
-
-    try {
-        updater.applyUpdate();
-        // The updater will handle app quit automatically
-    } catch (error: any) {
-        logError(error, "updater:installUpdate");
-        broadcast(
-            "update:status",
-            "error",
-            error?.message || "Failed to install update"
-        );
-    }
+    updateController.installUpdate();
 }
 
 // Embedded tray icon as base64
