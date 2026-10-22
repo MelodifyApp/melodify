@@ -3,6 +3,53 @@
 // Exposes safe APIs to the renderer process through contextBridge.
 
 import { contextBridge, ipcRenderer } from "electron";
+import {
+    INVOKE_CHANNELS,
+    LISTEN_CHANNELS,
+    SEND_CHANNELS,
+} from "../shared/ipcChannels";
+
+const sendChannels = new Set(SEND_CHANNELS);
+const invokeChannels = new Set(INVOKE_CHANNELS);
+const listenChannels = new Set(LISTEN_CHANNELS);
+
+function blockChannel(kind: string, channel: unknown): void {
+    console.error(`Blocked ${kind} on unapproved IPC channel:`, channel);
+}
+
+function isApprovedChannel(
+    kind: string,
+    channel: unknown,
+    allowed: Set<string>
+): channel is string {
+    if (typeof channel !== "string" || !allowed.has(channel)) {
+        blockChannel(kind, channel);
+        return false;
+    }
+    return true;
+}
+
+/**
+ * The bridge wraps listeners so a throwing handler cannot break other
+ * subscribers. `removeListener` must be able to find that wrapper again, so
+ * remember which wrapper belongs to which (listener, channel) pair.
+ */
+const listenerWrappers = new WeakMap<
+    (...args: any[]) => void,
+    Map<string, (event: unknown, ...args: any[]) => void>
+>();
+
+function removeListenerWrapper(
+    channel: string,
+    func: (...args: any[]) => void
+): ((event: unknown, ...args: any[]) => void) | undefined {
+    const byChannel = listenerWrappers.get(func);
+    const wrapper = byChannel?.get(channel);
+    if (byChannel && wrapper) {
+        byChannel.delete(channel);
+    }
+    return wrapper;
+}
 
 /**
  * Exposes Electron APIs to the renderer process through contextBridge.
@@ -19,9 +66,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     // App information
     getAppVersion: () => ipcRenderer.invoke("app:getVersion"),
 
-    // IPC communication
-    send: (channel: string, data?: any) => ipcRenderer.send(channel, data),
+    // IPC communication - only channels approved in shared/ipcChannels.ts may
+    // cross the bridge.
+    send: (channel: string, data?: any) => {
+        if (!isApprovedChannel("send", channel, sendChannels)) return;
+        ipcRenderer.send(channel, data);
+    },
     on: (channel: string, func: (...args: any[]) => void) => {
+        if (!isApprovedChannel("listener", channel, listenChannels)) return;
         if (typeof func !== "function") {
             console.error(
                 "Invalid function provided to electronAPI.on for channel:",
@@ -29,7 +81,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
             );
             return;
         }
-        return ipcRenderer.on(channel, (_event, ...args) => {
+        const wrapper = (_event: unknown, ...args: any[]) => {
             try {
                 func(...args);
             } catch (error) {
@@ -39,14 +91,42 @@ contextBridge.exposeInMainWorld("electronAPI", {
                     error
                 );
             }
-        });
+        };
+        let byChannel = listenerWrappers.get(func);
+        if (!byChannel) {
+            byChannel = new Map();
+            listenerWrappers.set(func, byChannel);
+        }
+        byChannel.set(channel, wrapper);
+        return ipcRenderer.on(channel, wrapper);
     },
-    removeListener: (channel: string, func: (...args: any[]) => void) =>
-        ipcRenderer.removeListener(channel, func),
-    invoke: (channel: string, ...args: any[]) =>
-        ipcRenderer.invoke(channel, ...args),
-    removeAllListeners: (channel: string) =>
-        ipcRenderer.removeAllListeners(channel),
+    removeListener: (channel: string, func: (...args: any[]) => void) => {
+        if (!isApprovedChannel("removeListener", channel, listenChannels)) {
+            return;
+        }
+        if (typeof func !== "function") return;
+        const wrapper = removeListenerWrapper(channel, func);
+        if (!wrapper) return;
+        ipcRenderer.removeListener(channel, wrapper);
+    },
+    invoke: (channel: string, ...args: any[]) => {
+        if (!isApprovedChannel("invoke", channel, invokeChannels)) {
+            return Promise.reject(
+                new Error(
+                    `Blocked invoke on unapproved IPC channel: ${String(
+                        channel
+                    )}`
+                )
+            );
+        }
+        return ipcRenderer.invoke(channel, ...args);
+    },
+    removeAllListeners: (channel: string) => {
+        if (!isApprovedChannel("removeAllListeners", channel, listenChannels)) {
+            return;
+        }
+        ipcRenderer.removeAllListeners(channel);
+    },
 
     // External link handling
     openExternal: (url: string) => ipcRenderer.send("open-external", url),
