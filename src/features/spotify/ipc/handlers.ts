@@ -130,13 +130,6 @@ ipcMain.handle("spotify:hasSecrets", () => {
     return !!spotifyClientId && !!spotifyClientSecret;
 });
 
-ipcMain.handle("spotify:getSecrets", () => {
-    return {
-        spotifyClientId: Config.get("spotifyClientId"),
-        spotifyClientSecret: Config.get("spotifyClientSecret"),
-    };
-});
-
 ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
     const record =
         secrets && typeof secrets === "object" && !Array.isArray(secrets)

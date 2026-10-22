@@ -239,14 +239,6 @@ ipcMain.handle("kick:hasSecrets", async () => {
     return !!kickClientId && !!kickClientSecret;
 });
 
-ipcMain.handle("kick:getSecrets", async () => {
-    logDebug("kick:getSecrets called");
-    return {
-        kickClientId: Config.get("kickClientId"),
-        kickClientSecret: Config.get("kickClientSecret"),
-    };
-});
-
 ipcMain.on("kick:setSecrets", (event, secrets) => {
     const record =
         secrets && typeof secrets === "object" && !Array.isArray(secrets)

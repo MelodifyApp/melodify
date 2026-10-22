@@ -641,3 +641,46 @@ test("logout stops any pending OAuth callback server", async () => {
         spotify.restoreFetch();
     }
 });
+
+function loadPreloadApi() {
+    const exposed = {};
+    const stubs = {
+        electron: {
+            contextBridge: {
+                exposeInMainWorld: (name, api) => {
+                    exposed[name] = api;
+                },
+            },
+            ipcRenderer: {
+                send() {},
+                invoke: async () => undefined,
+                on() {},
+                removeListener() {},
+                removeAllListeners() {},
+            },
+        },
+    };
+    load(stubs, "src/main/preload.ts");
+    return exposed.electronAPI;
+}
+
+test("secret-returning IPC channels are not registered", () => {
+    assert.equal(kickIpcHarness().handlers.has("kick:getSecrets"), false);
+    assert.equal(twitchIpcHarness().handlers.has("twitch:getSecrets"), false);
+
+    const spotify = spotifyIpcHarness();
+    try {
+        assert.equal(spotify.handlers.has("spotify:getSecrets"), false);
+    } finally {
+        spotify.restoreFetch();
+    }
+});
+
+test("preload exposes no secret-returning helpers while keeping set-only credential APIs", () => {
+    const api = loadPreloadApi();
+    assert.equal(typeof api.setSpotifySecrets, "function");
+    assert.equal(typeof api.setKickSecrets, "function");
+    assert.equal(api.getSpotifySecrets, undefined);
+    assert.equal(api.getKickSecrets, undefined);
+    assert.equal(api.getTwitchSecrets, undefined);
+});

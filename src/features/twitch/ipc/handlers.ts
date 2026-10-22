@@ -140,14 +140,6 @@ ipcMain.handle("twitch:hasSecrets", async () => {
     return !!twitchClientId && !!twitchClientSecret;
 });
 
-ipcMain.handle("twitch:getSecrets", async () => {
-    logDebug("twitch:getSecrets called");
-    return {
-        twitchClientId: Config.get("twitchClientId"),
-        twitchClientSecret: Config.get("twitchClientSecret"),
-    };
-});
-
 ipcMain.on("twitch:setSecrets", (event, secrets) => {
     const record =
         secrets && typeof secrets === "object" && !Array.isArray(secrets)
