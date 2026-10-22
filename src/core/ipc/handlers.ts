@@ -33,6 +33,13 @@ import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { isSafeExternalUrl } from "@/shared/utils/externalUrl";
 import { sanitizeConfigForRenderer, sanitizeConfigUpdate } from "@/core/config/rendererConfig";
 import {
+    isPlainObject,
+    readBoolean,
+    readCommandAliases,
+    readCommandName,
+    readRendererLogPayload,
+} from "./payloadValidation";
+import {
     startSongFileSaving,
     stopSongFileSaving,
 } from "@/features/spotify/playback/player";
@@ -178,9 +185,14 @@ ipcMain.handle("config:updateTranslatedDefaults", () => {
  * Control automatic update preferences for the application
  * Enables users to toggle auto-update behavior while maintaining current settings
  */
-ipcMain.on("update:setAuto", (_event, enabled: boolean) => {
-    Config.set({ autoUpdateEnabled: enabled });
-    logDebug(`Auto-update preference set to: ${enabled}`, "ipc:update:setAuto");
+ipcMain.on("update:setAuto", (_event, enabled: unknown) => {
+    const value = readBoolean(enabled);
+    if (value === undefined) {
+        logWarn("Ignored malformed update:setAuto payload", "update:setAuto");
+        return;
+    }
+    Config.set({ autoUpdateEnabled: value });
+    logDebug(`Auto-update preference set to: ${value}`, "ipc:update:setAuto");
 });
 
 /**
@@ -216,8 +228,13 @@ ipcMain.handle("startup:getStatus", () => {
  *
  * @param enabled - Whether app should start with system startup
  */
-ipcMain.on("startup:setStatus", (_event, enabled: boolean) => {
-    if (enabled) {
+ipcMain.on("startup:setStatus", (_event, enabled: unknown) => {
+    const value = readBoolean(enabled);
+    if (value === undefined) {
+        logWarn("Ignored malformed startup:setStatus payload", "startup:setStatus");
+        return;
+    }
+    if (value) {
         app.setLoginItemSettings({
             openAtLogin: true,
             openAsHidden: true, // Prevents intrusive startup behavior
@@ -229,7 +246,7 @@ ipcMain.on("startup:setStatus", (_event, enabled: boolean) => {
         });
         logInfo("App configured to not start on startup", "startup:setStatus");
     }
-    Config.set({ startOnStartup: enabled });
+    Config.set({ startOnStartup: value });
 });
 
 /**
@@ -258,17 +275,25 @@ app.on("ready", () => {
  * Logging Handlers
  * Forward renderer process logs to the main logging system
  */
-ipcMain.on("log:info", (_event, { message, meta }) => {
-    logInfo(`[renderer] ${message}`, redactSecrets(meta));
+ipcMain.on("log:info", (_event, payload: unknown) => {
+    const entry = readRendererLogPayload(payload);
+    if (!entry) return;
+    logInfo(`[renderer] ${entry.message}`, redactSecrets(entry.meta));
 });
-ipcMain.on("log:warn", (_event, { message, meta }) => {
-    logWarn(`[renderer] ${message}`, redactSecrets(meta));
+ipcMain.on("log:warn", (_event, payload: unknown) => {
+    const entry = readRendererLogPayload(payload);
+    if (!entry) return;
+    logWarn(`[renderer] ${entry.message}`, redactSecrets(entry.meta));
 });
-ipcMain.on("log:error", (_event, { message }) => {
-    logError(`[renderer] ${message}`);
+ipcMain.on("log:error", (_event, payload: unknown) => {
+    const entry = readRendererLogPayload(payload);
+    if (!entry) return;
+    logError(`[renderer] ${entry.message}`);
 });
-ipcMain.on("log:debug", (_event, { message, meta }) => {
-    logDebug(`[renderer] ${message}`, redactSecrets(meta));
+ipcMain.on("log:debug", (_event, payload: unknown) => {
+    const entry = readRendererLogPayload(payload);
+    if (!entry) return;
+    logDebug(`[renderer] ${entry.message}`, redactSecrets(entry.meta));
 });
 
 /**
@@ -278,7 +303,14 @@ ipcMain.on("log:debug", (_event, { message, meta }) => {
 ipcMain.handle("commands:getAll", () => {
     return commandManager.getAllSerializable();
 });
-ipcMain.on("commands:setEnabled", (_event, { name, enabled }) => {
+ipcMain.on("commands:setEnabled", (_event, payload: unknown) => {
+    const data = isPlainObject(payload) ? payload : undefined;
+    const name = readCommandName(data?.name);
+    const enabled = readBoolean(data?.enabled);
+    if (!name || enabled === undefined) {
+        logWarn("Ignored malformed commands:setEnabled payload", "commands:setEnabled");
+        return;
+    }
     commandManager.setEnabled(name, enabled);
 });
 
@@ -287,27 +319,37 @@ ipcMain.on("commands:setEnabled", (_event, { name, enabled }) => {
  * Updates command aliases for a specific command
  * Persists changes to the configuration
  */
-ipcMain.on("commands:updateAliases", (_event, { name, aliases }) => {
+ipcMain.on("commands:updateAliases", (_event, payload: unknown) => {
+    const data = isPlainObject(payload) ? payload : undefined;
+    const name = readCommandName(data?.name);
+    const aliases = readCommandAliases(data?.aliases);
+    if (!name || !aliases) {
+        logWarn(
+            "Ignored malformed commands:updateAliases payload",
+            "commands:updateAliases"
+        );
+        return;
+    }
+
     const success = commandManager.updateCommandAliases(name, aliases);
     if (success) {
-        // Update the config to persist the changes
-        const commandsConfig = Config.get("commands") || {};
-        if (!commandsConfig[name]) {
-            commandsConfig[name] = {};
-        }
-        commandsConfig[name].aliases = aliases;
+        // Update the config to persist the changes. Copy first so the cached
+        // config object is never mutated in place.
+        const stored = Config.get("commands");
+        const commandsConfig = isPlainObject(stored) ? { ...stored } : {};
+        const existing = commandsConfig[name];
+        commandsConfig[name] = {
+            ...(isPlainObject(existing) ? existing : {}),
+            aliases,
+        };
         Config.set({ commands: commandsConfig });
         logInfo(
-            `Updated aliases for command '${name}' via IPC: ${aliases.join(
-                ", "
-            )}`,
+            `Updated aliases for command '${name}' via IPC: ${aliases.join(", ")}`,
             "commands:updateAliases"
         );
     } else {
         logError(
-            `Failed to update aliases for command '${name}': ${aliases.join(
-                ", "
-            )}`,
+            `Failed to update aliases for command '${name}'`,
             "commands:updateAliases"
         );
     }
@@ -323,8 +365,10 @@ ipcMain.handle("commands:getPerformanceStats", () => {
 
 ipcMain.handle(
     "commands:getCommandPerformanceStats",
-    (_event, commandName: string) => {
-        return commandManager.getCommandPerformanceStats(commandName);
+    (_event, commandName: unknown) => {
+        const name = readCommandName(commandName);
+        if (!name) return null;
+        return commandManager.getCommandPerformanceStats(name);
     }
 );
 
@@ -334,8 +378,16 @@ ipcMain.on("commands:resetPerformanceStats", () => {
 
 ipcMain.on(
     "commands:resetCommandPerformanceStats",
-    (_event, commandName: string) => {
-        commandManager.resetCommandPerformanceStats(commandName);
+    (_event, commandName: unknown) => {
+        const name = readCommandName(commandName);
+        if (!name) {
+            logWarn(
+                "Ignored malformed commands:resetCommandPerformanceStats payload",
+                "commands:resetCommandPerformanceStats"
+            );
+            return;
+        }
+        commandManager.resetCommandPerformanceStats(name);
     }
 );
 

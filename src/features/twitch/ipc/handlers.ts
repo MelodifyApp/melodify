@@ -15,6 +15,7 @@ import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { twitchClient } from "@/features/twitch/api/client";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { readChatMessage } from "../../../core/ipc/payloadValidation";
 
 let authInProgress = false;
 
@@ -71,10 +72,15 @@ ipcMain.handle("twitch:getUserData", async (event) => {
     };
 });
 
-ipcMain.on("twitch:sendMessage", async (event, message) => {
-    logDebug("IPC twitch:sendMessage called", redactSecrets({ message }));
+ipcMain.on("twitch:sendMessage", async (event, message: unknown) => {
+    const text = readChatMessage(message);
+    if (!text) {
+        logWarn("Ignored malformed twitch:sendMessage payload", "twitch:sendMessage");
+        return;
+    }
+    logDebug("IPC twitch:sendMessage called", redactSecrets({ message: text }));
     try {
-        await sendTwitchMessage(message);
+        await sendTwitchMessage(text);
     } catch (error) {
         logError(error, "twitch:sendMessage:ipcHandler");
         const window = BrowserWindow.fromWebContents(event.sender);

@@ -17,6 +17,11 @@ import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { kickClient } from "@/features/kick/api/client";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import {
+    isPlainObject,
+    readBoundedString,
+    readChatMessage,
+} from "../../../core/ipc/payloadValidation";
 
 let authInProgress = false;
 
@@ -82,9 +87,17 @@ ipcMain.handle("kick:getUserData", async (event) => {
     };
 });
 
-ipcMain.handle("kick:findChatroom", async (event, data) => {
+ipcMain.handle("kick:findChatroom", async (event, data: unknown) => {
     logDebug("IPC kick:findChatroom called", redactSecrets(data));
-    const { username } = data;
+    const payload = isPlainObject(data) ? data : undefined;
+    const username = readBoundedString(payload?.username, 50);
+    if (!username) {
+        logWarn(
+            "Ignored malformed kick:findChatroom payload",
+            "kick:findChatroom"
+        );
+        return null;
+    }
 
     const chatroomResult = await kickClient.findChatroom(username);
     const userProfileResult = await kickClient.getUserProfile(username);
@@ -109,9 +122,20 @@ ipcMain.handle("kick:findChatroom", async (event, data) => {
     return chatroomId;
 });
 
-ipcMain.on("kick:sendMessage", async (event, message) => {
-    logDebug("IPC kick:sendMessage called", redactSecrets({ message }));
-    await sendKickMessage(message);
+ipcMain.on("kick:sendMessage", async (event, message: unknown) => {
+    const text = readChatMessage(message);
+    if (!text) {
+        logWarn("Ignored malformed kick:sendMessage payload", "kick:sendMessage");
+        return;
+    }
+    logDebug("IPC kick:sendMessage called", redactSecrets({ message: text }));
+    try {
+        await sendKickMessage(text);
+    } catch (error) {
+        // Without this the async IPC handler would reject unhandled when the
+        // Kick client has no session or the request fails.
+        logError(error, "kick:sendMessage:ipcHandler");
+    }
 });
 
 ipcMain.handle("kick:checkAuth", async (event) => {
