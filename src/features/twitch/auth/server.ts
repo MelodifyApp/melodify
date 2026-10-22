@@ -13,12 +13,14 @@ import { redactSecrets } from "@/core/logging/utils";
 import { twitchClient } from "@/features/twitch/api/client";
 import { TWITCH_REDIRECT_URI } from "@/shared/constants";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { loopbackHostForRedirect } from "@/shared/utils/loopbackHost";
 
 const port = 8890;
 
 let serverInstance: Server | null = null;
 let serverStarting = false;
 let expectedOAuthState: string | null = null;
+let authGeneration = 0;
 
 export async function startTwitchAuthServer(
     window: BrowserWindow
@@ -35,6 +37,7 @@ export async function startTwitchAuthServer(
     }
 
     serverStarting = true;
+    authGeneration += 1;
 
     const app = express();
 
@@ -61,6 +64,7 @@ export async function startTwitchAuthServer(
             }
 
             const code = req.query.code as string | undefined;
+            const generation = authGeneration;
             const scope = req.query.scope as string | undefined;
             logDebug(
                 "Twitch auth callback hit",
@@ -137,12 +141,10 @@ export async function startTwitchAuthServer(
 
                 const expiresAt = Date.now() + expiresIn * 1000;
 
-                // Update tokens
-                twitchClient.updateTokens({
-                    accessToken,
-                    refreshToken: refreshToken || null,
-                    expiresAt,
-                });
+                if (generation !== authGeneration) {
+                    res.status(409).send("Authentication cancelled");
+                    return;
+                }
 
                 logInfo("Twitch tokens obtained successfully");
 
@@ -165,6 +167,19 @@ export async function startTwitchAuthServer(
                 if (!userData.data || userData.data.length === 0) {
                     throw new Error("No user data returned from Twitch API");
                 }
+
+                if (generation !== authGeneration) {
+                    res.status(409).send("Authentication cancelled");
+                    return;
+                }
+
+                // Persist only after the user fetch; a logout during either
+                // request must not restore the session.
+                twitchClient.updateTokens({
+                    accessToken,
+                    refreshToken: refreshToken || null,
+                    expiresAt,
+                });
 
                 const user = userData.data[0];
                 const botUserId = user.id;
@@ -233,7 +248,7 @@ export async function startTwitchAuthServer(
         });
 
         try {
-            serverInstance = app.listen(port, () => {
+            serverInstance = app.listen(port, loopbackHostForRedirect(TWITCH_REDIRECT_URI), () => {
                 logInfo(
                     `Twitch Auth server running at http://localhost:${port}`
                 );
@@ -283,6 +298,7 @@ export function openTwitchAuthUrl() {
 
 export function stopTwitchAuthServer(): void {
     expectedOAuthState = null;
+    authGeneration += 1;
     if (serverInstance) {
         logInfo("Stopping Twitch auth server");
         serverInstance.close();

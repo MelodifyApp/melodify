@@ -37,13 +37,27 @@ function response() {
     };
 }
 
+function deferred() {
+    let resolve;
+    const promise = new Promise((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
 function expressStub(capture, { invokeListenCallback = true } = {}) {
     return () => ({
         get(route, handler) {
             capture.handler = handler;
         },
-        listen(port, callback) {
+        listen(port, host, callback) {
+            if (typeof host === "function") {
+                callback = host;
+                host = undefined;
+            }
             capture.listenCalls = (capture.listenCalls || 0) + 1;
+            capture.hosts = capture.hosts || [];
+            capture.hosts.push(host);
             const server = {
                 close() {
                     capture.closes += 1;
@@ -81,6 +95,15 @@ function kickAuthHarness() {
         servers: [],
         listenCalls: 0,
     };
+    const writes = [];
+    const client = {
+        exchangeCodeForTokens: async (...args) => {
+            capture.exchange.push(args);
+            return true;
+        },
+        getChannels: async () => [{ slug: "sample", broadcaster_user_id: 1 }],
+        findChatroom: async () => ({ chatroomId: "123" }),
+    };
     const stubs = {
         express: expressStub(capture),
         electron: {
@@ -88,24 +111,16 @@ function kickAuthHarness() {
             shell: { openExternal: (url) => { capture.url = url; } },
             ipcMain: { emit() {} },
         },
-        "@/core/config": { __esModule: true, default: configStub(values) },
+        "@/core/config": { __esModule: true, default: configStub(values, writes) },
         "@/core/logging": { logInfo() {}, logError() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
         "@/shared/utils/pkce": {
             generateCodeVerifier: () => "verifier",
             generateCodeChallenge: () => "challenge",
         },
+        "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/kick/chat/listener": { listenToChat() {} },
-        "@/features/kick/api/client": {
-            kickClient: {
-                exchangeCodeForTokens: async (...args) => {
-                    capture.exchange.push(args);
-                    return true;
-                },
-                getChannels: async () => [{ slug: "sample", broadcaster_user_id: 1 }],
-                findChatroom: async () => ({ chatroomId: "123" }),
-            },
-        },
+        "@/features/kick/api/client": { kickClient: client },
         "@/shared/utils/windowSend": {
             sendToWindowIfAlive: (...args) => {
                 capture.sends.push(args);
@@ -113,10 +128,10 @@ function kickAuthHarness() {
             },
         },
     };
-    return { ...load(stubs, "src/features/kick/auth/server.ts"), capture, values };
+    return { ...load(stubs, "src/features/kick/auth/server.ts"), capture, values, writes, client };
 }
 
-function twitchAuthHarness() {
+function twitchAuthHarness(options = {}) {
     const values = {
         twitchClientId: "client-id",
         twitchClientSecret: "client-secret",
@@ -135,6 +150,7 @@ function twitchAuthHarness() {
     global.fetch = async (url, init) => {
         capture.fetchCalls.push(String(url));
         if (String(url).includes("oauth2/token")) {
+            if (options.tokenGate) await options.tokenGate.promise;
             return {
                 ok: true,
                 json: async () => ({
@@ -164,6 +180,7 @@ function twitchAuthHarness() {
             generateCodeChallenge: () => "challenge",
         },
         "@/shared/constants": { TWITCH_REDIRECT_URI: "http://localhost:8890/callback" },
+        "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/twitch/chat/listener": { listenToChat() {} },
         "@/features/twitch/api/client": {
             twitchClient: {
@@ -183,7 +200,7 @@ function twitchAuthHarness() {
     return { ...loaded, capture, values, restoreFetch: () => { global.fetch = realFetch; } };
 }
 
-function spotifyAuthHarness() {
+function spotifyAuthHarness(options = {}) {
     const values = {
         spotifyClientId: "client-id",
         spotifyClientSecret: "client-secret",
@@ -191,6 +208,7 @@ function spotifyAuthHarness() {
     const capture = {
         grants: [],
         saves: 0,
+        sends: [],
         closes: 0,
         servers: [],
         listenCalls: 0,
@@ -198,6 +216,7 @@ function spotifyAuthHarness() {
     const api = {
         authorizationCodeGrant: async (code) => {
             capture.grants.push(code);
+            if (options.grantGate) await options.grantGate.promise;
             return {
                 body: { access_token: "access", refresh_token: "refresh", expires_in: 3600 },
             };
@@ -212,13 +231,20 @@ function spotifyAuthHarness() {
         "@/core/config": { __esModule: true, default: configStub(values) },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/constants": { SPOTIFY_REDIRECT_URI: "http://127.0.0.1:8888/callback" },
+        "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/spotify/playback/player": {
             getSpotifyApi: () => api,
             saveTokens() {
                 capture.saves += 1;
             },
         },
-        "@/shared/utils/windowSend": { sendToWindowIfAlive: () => true },
+        "@/shared/utils/windowSend": {
+            sendToWindowIfAlive: (...args) => {
+                capture.sends.push(args);
+                return true;
+            },
+        },
     };
     return { ...load(stubs, "src/features/spotify/auth/server.ts"), capture, values, api };
 }
@@ -307,6 +333,104 @@ test("Spotify auth start is idempotent while a server is already running", () =>
     harness.startSpotifyAuthServer({});
     harness.startSpotifyAuthServer({});
     assert.equal(harness.capture.listenCalls, 1);
+});
+
+test("callback servers bind to the loopback host from their redirect URI", async () => {
+    const kick = kickAuthHarness();
+    await kick.startKickAuthServer({});
+    assert.equal(kick.capture.hosts[0], "localhost");
+
+    const twitch = twitchAuthHarness();
+    try {
+        await twitch.startTwitchAuthServer({});
+        assert.equal(twitch.capture.hosts[0], "localhost");
+    } finally {
+        twitch.restoreFetch();
+    }
+
+    const spotify = spotifyAuthHarness();
+    spotify.startSpotifyAuthServer({});
+    assert.equal(spotify.capture.hosts[0], "127.0.0.1");
+});
+
+test("Kick callback completing after logout cannot announce authentication", async () => {
+    let releaseExchange;
+    const harness = kickAuthHarness();
+    harness.client.exchangeCodeForTokens = async () => {
+        await new Promise((resolve) => {
+            releaseExchange = resolve;
+        });
+        return true;
+    };
+
+    await harness.startKickAuthServer({});
+    harness.openKickAuthUrl();
+    const state = new URL(harness.capture.url).searchParams.get("state");
+
+    const res = response();
+    const callback = harness.capture.handler(
+        { query: { code: "code", state } },
+        res
+    );
+    harness.stopKickAuthServer();
+    releaseExchange();
+    await callback;
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(
+        harness.capture.sends.some((args) => args[1] === "kick:authenticated"),
+        false
+    );
+});
+
+test("Twitch callback completing after logout cannot save or announce authentication", async () => {
+    const gate = deferred();
+    const harness = twitchAuthHarness({ tokenGate: gate });
+    try {
+        await harness.startTwitchAuthServer({});
+        harness.openTwitchAuthUrl();
+        const state = new URL(harness.capture.url).searchParams.get("state");
+
+        const res = response();
+        const callback = harness.capture.handler(
+            { query: { code: "code", state } },
+            res
+        );
+        harness.stopTwitchAuthServer();
+        gate.resolve();
+        await callback;
+
+        assert.equal(res.statusCode, 409);
+        assert.equal(harness.capture.updates.length, 0);
+        assert.equal(
+            harness.capture.sends.some((args) => args[1] === "twitch:authenticated"),
+            false
+        );
+    } finally {
+        harness.restoreFetch();
+    }
+});
+
+test("Spotify callback completing after logout cannot save or announce authentication", async () => {
+    const gate = deferred();
+    const harness = spotifyAuthHarness({ grantGate: gate });
+    const state = harness.startSpotifyAuthServer({});
+
+    const res = response();
+    const callback = harness.capture.handler(
+        { query: { code: "code", state } },
+        res
+    );
+    harness.stopSpotifyAuthServer();
+    gate.resolve();
+    await callback;
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(harness.capture.saves, 0);
+    assert.equal(
+        harness.capture.sends.some((args) => args[1] === "spotify:authenticated"),
+        false
+    );
 });
 
 function kickIpcHarness() {

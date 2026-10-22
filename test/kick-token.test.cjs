@@ -139,3 +139,20 @@ test("a successful Kick refresh persists rotated tokens", async () => {
     assert.equal(values.kickRefreshToken, "rotated");
     assert.ok(values.kickExpiresAt >= before + 3600000);
 });
+
+test("logout during an authorization-code exchange cannot save tokens", async () => {
+    const client = loadClient();
+    const gate = deferred();
+    fetchImpl = async () => {
+        await gate.promise;
+        return tokenResponse("late-access", "late-refresh");
+    };
+
+    const pending = client.exchangeCodeForTokens("code", "verifier");
+    client.clearTokens();
+    gate.resolve();
+
+    assert.equal(await pending, false);
+    assert.equal(values.kickAccessToken, undefined);
+    assert.equal(values.kickRefreshToken, undefined);
+});

@@ -161,6 +161,7 @@ class KickClient {
         code: string,
         codeVerifier: string
     ): Promise<boolean> {
+        const generation = this.tokenGeneration;
         try {
             const clientId = Config.get("kickClientId");
             const clientSecret = Config.get("kickClientSecret");
@@ -203,6 +204,12 @@ class KickClient {
             }
 
             const data = (await response.json()) as KickTokenResponse;
+
+            // Logout during the exchange must not restore a session.
+            if (generation !== this.tokenGeneration) {
+                return false;
+            }
+
             const { access_token, refresh_token, expires_in } = data;
 
             // Store tokens with calculated expiration time. A fresh login

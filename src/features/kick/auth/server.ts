@@ -12,6 +12,7 @@ import { logInfo, logError, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { kickClient } from "@/features/kick/api/client";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { loopbackHostForRedirect } from "@/shared/utils/loopbackHost";
 
 const redirectUri =
     Config.get("kickRedirectUri") || "http://localhost:8889/callback";
@@ -20,6 +21,7 @@ const port = 8889;
 let serverInstance: Server | null = null;
 let serverStarting = false;
 let expectedOAuthState: string | null = null;
+let authGeneration = 0;
 
 export async function startKickAuthServer(
     window: BrowserWindow
@@ -33,6 +35,7 @@ export async function startKickAuthServer(
     }
 
     serverStarting = true;
+    authGeneration += 1;
 
     const app = express();
 
@@ -59,6 +62,7 @@ export async function startKickAuthServer(
             }
 
             const code = req.query.code as string | undefined;
+            const generation = authGeneration;
             logDebug("Kick auth callback hit", { hasCode: !!code });
 
             if (!code) {
@@ -94,6 +98,11 @@ export async function startKickAuthServer(
                 }
 
                 logInfo("Kick tokens obtained successfully");
+
+                if (generation !== authGeneration) {
+                    res.status(409).send("Authentication cancelled");
+                    return;
+                }
 
                 // Get user's channels using KickClient
                 const channels = await kickClient.getChannels();
@@ -140,6 +149,11 @@ export async function startKickAuthServer(
                     throw new Error(
                         `Failed to find chatroom for user '${username}' after ${maxRetries} attempts. Please ensure the channel exists and is accessible.`
                     );
+                }
+
+                if (generation !== authGeneration) {
+                    res.status(409).send("Authentication cancelled");
+                    return;
                 }
 
                 Config.set({
@@ -200,7 +214,7 @@ export async function startKickAuthServer(
         });
 
         try {
-            serverInstance = app.listen(port, () => {
+            serverInstance = app.listen(port, loopbackHostForRedirect(redirectUri), () => {
                 logInfo(`Kick Auth server running at http://localhost:${port}`);
                 serverStarting = false; // Server is now running
                 resolve(); // Resolve immediately when server starts, not when auth completes
@@ -247,6 +261,7 @@ export function openKickAuthUrl() {
 
 export function stopKickAuthServer(): void {
     expectedOAuthState = null;
+    authGeneration += 1;
     if (serverInstance) {
         logInfo("Stopping Kick auth server");
         serverInstance.close();

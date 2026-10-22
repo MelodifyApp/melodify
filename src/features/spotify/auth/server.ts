@@ -6,15 +6,19 @@ import { Server } from "http";
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { loopbackHostForRedirect } from "@/shared/utils/loopbackHost";
+import { SPOTIFY_REDIRECT_URI } from "@/shared/constants";
 
 const port = 8888;
 let authServer: Server | null = null;
 let authStarting = false;
 let expectedOAuthState: string | null = null;
+let authGeneration = 0;
 
 function closeSpotifyAuthServer(): void {
     expectedOAuthState = null;
     authStarting = false;
+    authGeneration += 1;
     const server = authServer;
     authServer = null;
     if (server) {
@@ -43,6 +47,7 @@ export function startSpotifyAuthServer(window: BrowserWindow): string | null {
     }
 
     authStarting = true;
+    authGeneration += 1;
     expectedOAuthState = randomUUID();
     const state = expectedOAuthState;
     const app = express();
@@ -61,6 +66,7 @@ export function startSpotifyAuthServer(window: BrowserWindow): string | null {
         }
 
         const code = req.query.code as string | undefined;
+        const generation = authGeneration;
         logDebug("Spotify auth callback hit", { hasCode: !!code });
         if (!code) {
             res.status(400).send("Missing code");
@@ -100,6 +106,16 @@ export function startSpotifyAuthServer(window: BrowserWindow): string | null {
                 throw new Error("Failed to get user information from Spotify");
             }
 
+            if (generation !== authGeneration) {
+                // Logout during the grant/getMe exchange wins: drop the
+                // in-memory token and never persist the stale session.
+                spotifyApi.setAccessToken("");
+                spotifyApi.setRefreshToken("");
+                res.status(409).send("Authentication cancelled");
+                closeSpotifyAuthServer();
+                return;
+            }
+
             saveTokens({
                 accessToken: access_token,
                 refreshToken: refresh_token,
@@ -134,7 +150,7 @@ export function startSpotifyAuthServer(window: BrowserWindow): string | null {
         }
     });
 
-    authServer = app.listen(port, () => {
+    authServer = app.listen(port, loopbackHostForRedirect(SPOTIFY_REDIRECT_URI), () => {
         authStarting = false;
         logInfo(`Spotify Auth server running at http://localhost:${port}`);
 
