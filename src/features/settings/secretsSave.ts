@@ -182,6 +182,18 @@ export type SecretSaveStatus =
     | "saved"
     | SecretSaveErrorCode;
 
+const SECRET_ERROR_STATUSES: ReadonlySet<SecretSaveStatus> = new Set([
+    "required",
+    "invalid",
+    "unavailable",
+    "failed",
+]);
+
+/** True for the statuses that must use the red in-app error treatment. */
+export function isSecretErrorStatus(status: SecretSaveStatus): boolean {
+    return SECRET_ERROR_STATUSES.has(status);
+}
+
 /** Translation key for a save status, or null when nothing should be shown. */
 export function secretStatusMessageKey(status: SecretSaveStatus): string | null {
     switch (status) {

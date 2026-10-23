@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { TWITCH_REDIRECT_URI } from "@/shared/constants";
 import { logDebug, logError } from "@/renderer/rendererLogger";
 import { RefreshCw } from "lucide-react";
+import CredentialSetupFeedback from "@/ui/components/CredentialSetupFeedback";
 
 export default function TwitchCard() {
     const { t } = useTranslation();
@@ -18,6 +19,7 @@ export default function TwitchCard() {
         useState<string>(TWITCH_REDIRECT_URI);
     const [authInProgress, setAuthInProgress] = useState(false);
     const [refreshInProgress, setRefreshInProgress] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         window.electronAPI
@@ -92,7 +94,7 @@ export default function TwitchCard() {
 
     const handleSecretsSubmit = async () => {
         if (!twitchClientId || !twitchClientSecret) {
-            alert(t("common.pleaseCompleteFields"));
+            setError(t("common.pleaseCompleteFields"));
             return;
         }
 
@@ -101,21 +103,23 @@ export default function TwitchCard() {
                 twitchClientId,
                 twitchClientSecret,
             });
+            setError(null);
             setHasSecrets(true);
             setTwitchClientId("");
             setTwitchClientSecret("");
             setShowSetup(false);
         } catch (error) {
             logError(error as Error, "Error saving Twitch secrets");
-            alert(t("common.secretsSaveError"));
+            setError(t("common.secretsSaveError"));
         }
     }
 
     const handleLogin = () => {
         if (!hasSecrets) {
-            alert(t("common.secretsRequired"));
+            setError(t("common.secretsRequired"));
             return;
         }
+        setError(null);
 
         if (authInProgress) {
             logDebug("Login already in progress, ignoring additional login attempt");
@@ -279,7 +283,10 @@ export default function TwitchCard() {
                     <button type="button" disabled className="w-full bg-zinc-700 text-zinc-300 font-medium py-2 px-4 rounded-md cursor-wait">{t("common.checking")}</button>
                 ) : hasSecrets === false ? (
                     <button
-                        onClick={() => setShowSetup(true)}
+                        onClick={() => {
+                            setError(null);
+                            setShowSetup(true);
+                        }}
                         className="w-full bg-twitch-purple hover:bg-twitch-purple-dark text-white font-semibold py-2 px-4 rounded-md transition-colors"
                     >
                         {t("common.configureCredentials")}
@@ -328,6 +335,11 @@ export default function TwitchCard() {
                         )}
                     </button>
                 )}
+                <CredentialSetupFeedback
+                    message={error}
+                    visible={!showSetup}
+                    className="mt-2"
+                />
             </div>
 
             {showSetup && (
@@ -355,9 +367,10 @@ export default function TwitchCard() {
                                     type="text"
                                     placeholder={t("setup.enterTwitchClientId")}
                                     value={twitchClientId}
-                                    onChange={(e) =>
-                                        setTwitchClientId(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setError(null);
+                                        setTwitchClientId(e.target.value);
+                                    }}
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-twitch-purple focus:ring-1 focus:ring-twitch-purple"
                                 />
                             </div>
@@ -371,9 +384,10 @@ export default function TwitchCard() {
                                         "setup.enterTwitchClientSecret"
                                     )}
                                     value={twitchClientSecret}
-                                    onChange={(e) =>
-                                        setTwitchClientSecret(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setError(null);
+                                        setTwitchClientSecret(e.target.value);
+                                    }}
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-twitch-purple focus:ring-1 focus:ring-twitch-purple"
                                 />
                             </div>
@@ -405,9 +419,17 @@ export default function TwitchCard() {
                     </div>
 
                     <div className="p-5 pt-2 flex-shrink-0">
+                        <CredentialSetupFeedback
+                            message={error}
+                            visible={showSetup}
+                            className="mb-2"
+                        />
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setShowSetup(false)}
+                                onClick={() => {
+                                    setError(null);
+                                    setShowSetup(false);
+                                }}
                                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white py-2 px-4 rounded-md transition-colors"
                             >
                                 {t("common.cancel")}

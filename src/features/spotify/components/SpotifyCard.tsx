@@ -4,22 +4,27 @@ import { SPOTIFY_REDIRECT_URI } from "@/shared/constants";
 import SpotifyIcon from "./SpotifyIcon";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
-import { spotifyCredentialMessageKey } from "./spotifyCredentialView";
+import { useSpotifyCredentialSetup } from "./useSpotifyCredentialSetup";
 import { isSpotifyAppAvailable } from "./spotifyStatusView";
+import CredentialSetupFeedback from "@/ui/components/CredentialSetupFeedback";
 
 export default function SpotifyCard() {
     const { t } = useTranslation();
     const [hasSecrets, setHasSecrets] = useState<boolean | null>(null);
-    const [spotifyClientId, setSpotifyClientId] = useState("");
-    const [spotifyClientSecret, setSpotifyClientSecret] = useState("");
     const [spotifyUsername, setSpotifyUsername] = useState<string | null>(null);
     const [authenticated, setAuthenticated] = useState<boolean | null>(null);
     const [spotifyRunning, setSpotifyRunning] = useState<boolean | null>(null);
     const [spotifyHasSession, setSpotifyHasSession] = useState<boolean | null>(null);
-    const [showSetup, setShowSetup] = useState(false);
     const [spotifyRedirectUri, setSpotifyRedirectUri] =
         useState<string>(SPOTIFY_REDIRECT_URI);
     const [refreshInProgress, setRefreshInProgress] = useState(false);
+
+    const setup = useSpotifyCredentialSetup({
+        translate: t,
+        hasSecrets,
+        requestAuth: () => window.electronAPI.send("spotify:auth"),
+        onSaved: () => setHasSecrets(true),
+    });
 
     useEffect(() => {
         window.electronAPI
@@ -130,37 +135,11 @@ export default function SpotifyCard() {
     }, []);
 
     const handleSecretsSubmit = async () => {
-        if (!spotifyClientId || !spotifyClientSecret) {
-            alert(t("common.pleaseCompleteFields"));
-            return;
-        }
-
-        const result = await window.electronAPI.invoke("spotify:setSecrets", {
-            spotifyClientId,
-            spotifyClientSecret,
-        });
-
-        if (result.success) {
-            setHasSecrets(true);
-            setSpotifyClientId("");
-            setSpotifyClientSecret("");
-            setShowSetup(false);
-        } else {
-            alert(
-                t(
-                    spotifyCredentialMessageKey(result) ??
-                        "common.secretsSaveError"
-                )
-            );
-        }
+        await setup.submit();
     };
 
     const handleLogin = () => {
-        if (!hasSecrets) {
-            alert(t("common.secretsRequired"));
-            return;
-        }
-        window.electronAPI.send("spotify:auth");
+        setup.login();
     };
 
     const handleLogout = () => {
@@ -316,7 +295,7 @@ export default function SpotifyCard() {
                     </button>
                 ) : hasSecrets === false ? (
                     <button
-                        onClick={() => setShowSetup(true)}
+                        onClick={() => setup.openSetup()}
                         className="w-full bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold py-2 px-4 rounded-md transition-colors"
                     >
                         {t("common.configureCredentials")}
@@ -352,9 +331,14 @@ export default function SpotifyCard() {
                         {t("authentication.connect")}
                     </button>
                 )}
+                <CredentialSetupFeedback
+                    message={setup.error}
+                    visible={!setup.showSetup}
+                    className="mt-2"
+                />
             </div>
 
-            {showSetup && (
+            {setup.showSetup && (
                 <div className="absolute inset-0 bg-zinc-900 flex flex-col overflow-hidden z-10">
                     <div className="p-5 pb-3 flex-shrink-0">
                         <div className="flex items-center gap-3 mb-3">
@@ -380,9 +364,9 @@ export default function SpotifyCard() {
                                     placeholder={t(
                                         "setup.enterSpotifyClientId"
                                     )}
-                                    value={spotifyClientId}
+                                    value={setup.clientId}
                                     onChange={(e) =>
-                                        setSpotifyClientId(e.target.value)
+                                        setup.changeClientId(e.target.value)
                                     }
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-spotify-green focus:ring-1 focus:ring-spotify-green"
                                 />
@@ -396,9 +380,9 @@ export default function SpotifyCard() {
                                     placeholder={t(
                                         "setup.enterSpotifyClientSecret"
                                     )}
-                                    value={spotifyClientSecret}
+                                    value={setup.clientSecret}
                                     onChange={(e) =>
-                                        setSpotifyClientSecret(e.target.value)
+                                        setup.changeClientSecret(e.target.value)
                                     }
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-spotify-green focus:ring-1 focus:ring-spotify-green"
                                 />
@@ -428,9 +412,14 @@ export default function SpotifyCard() {
                     </div>
 
                     <div className="p-5 pt-2 flex-shrink-0">
+                        <CredentialSetupFeedback
+                            message={setup.error}
+                            visible={setup.showSetup}
+                            className="mb-2"
+                        />
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setShowSetup(false)}
+                                onClick={() => setup.cancelSetup()}
                                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white py-2 px-4 rounded-md transition-colors"
                             >
                                 {t("common.cancel")}

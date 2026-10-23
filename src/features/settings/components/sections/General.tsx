@@ -11,6 +11,7 @@ import Toggle from "@/ui/components/Toggle";
 import { Button } from "@/ui/components/Button";
 import { useUpdateStatus } from "@/ui/hooks/useUpdateStatus";
 import LanguageSelector from "@/ui/components/LanguageSelector";
+import InlineError from "@/ui/components/InlineError";
 import { useTranslation } from "react-i18next";
 import { supportedLanguages } from "@/core/i18n/translations";
 
@@ -306,11 +307,9 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                                 </div>
                             )}
                             {status === "error" && (
-                                <div className="flex items-center gap-2 text-red-400">
-                                    <span className="text-sm">
-                                        {t("general.errorDownloading")}
-                                    </span>
-                                </div>
+                                <InlineError
+                                    message={t("general.errorDownloading")}
+                                />
                             )}
                             {status === "not-available" && (
                                 <span className="text-sm text-zinc-400 flex items-center gap-1">

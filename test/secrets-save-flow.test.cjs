@@ -357,22 +357,24 @@ test("Secrets section keeps secrets in local drafts and only saves on demand", (
     const source = readSource(
         "src/features/settings/components/sections/Secrets.tsx"
     );
+    const hook = readSource("src/features/settings/useSecretsSection.ts");
 
-    // Uses the tested save model instead of ad-hoc IPC.
+    // Uses the tested save model and hook instead of ad-hoc IPC.
     assert.match(source, /saveServiceSecrets/);
-    assert.match(source, /updateSecretDraft/);
     assert.match(source, /SECRET_SERVICES/);
+    assert.match(source, /useSecretsSection/);
 
     // No credential channel literals and no generic config:set for secrets.
     assert.doesNotMatch(source, /["'`]setSecrets["'`]/);
     assert.doesNotMatch(source, /["'`]config:set["'`]/);
     assert.doesNotMatch(source, /onConfigChange\(\s*[^)]*Secret/);
 
-    // Ordinary client-ID edits still flow through the settings callback, and
-    // secret edits are drafted locally before that path is reached.
-    assert.match(source, /onConfigChange\(key, value\)/);
-    const secretBranch = source.indexOf("updateSecretDraft(prev, key, value)");
-    const configCall = source.indexOf("onConfigChange(key, value)");
+    // Secret drafts are local; client IDs still flow through the settings
+    // callback. Both live in the hook so the component stays presentational.
+    assert.match(hook, /updateSecretDraft\(prev, key, value\)/);
+    assert.match(hook, /onClientIdChange\(key, value\)/);
+    const secretBranch = hook.indexOf("updateSecretDraft(prev, key, value)");
+    const configCall = hook.indexOf("onClientIdChange(key, value)");
     assert.ok(secretBranch > -1, "secret edits must use the draft helper");
     assert.ok(configCall > -1, "client IDs must still use onConfigChange");
     assert.ok(
@@ -380,10 +382,12 @@ test("Secrets section keeps secrets in local drafts and only saves on demand", (
         "secret edits must be handled before the generic config path"
     );
 
-    // Accessible status region and an explicit save action.
+    // Accessible status region, red error treatment and an explicit save action.
     assert.match(source, /role="status"/);
     assert.match(source, /aria-live="polite"/);
     assert.match(source, /t\("common\.save"\)/);
+    assert.match(source, /InlineError/);
+    assert.match(source, /isSecretErrorStatus/);
 });
 
 test("Settings no longer routes secret edits through the generic save path", () => {

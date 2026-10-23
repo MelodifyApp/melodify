@@ -1,18 +1,18 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Input from "@/ui/components/Input";
 import { Button } from "@/ui/components/Button";
+import InlineError from "@/ui/components/InlineError";
 import KickIcon from "@/features/kick/components/KickIcon";
 import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
 import { useTranslation } from "react-i18next";
 import { validateField } from "../validation";
+import { useSecretsSection } from "../../useSecretsSection";
 import {
     SECRET_SERVICES,
-    type SecretDrafts,
-    type SecretSaveStatus,
+    isSecretErrorStatus,
     type SecretServiceId,
     saveServiceSecrets,
     secretStatusMessageKey,
-    updateSecretDraft,
 } from "../../secretsSave";
 
 interface SecretsProps {
@@ -60,50 +60,14 @@ const secretFields: Record<SecretServiceId, SecretFieldDefinition[]> = {
 
 export default function Secrets({ config, onConfigChange }: SecretsProps) {
     const { t } = useTranslation();
-    const [validationErrors, setValidationErrors] = useState<
-        Record<string, string | null>
-    >({});
-    // Secrets live only here until the user presses Save; they never go
-    // through config:set.
-    const [drafts, setDrafts] = useState<SecretDrafts>({});
-    const [statuses, setStatuses] = useState<
-        Record<string, SecretSaveStatus>
-    >({});
-
-    const handleInputChange = (
-        serviceId: SecretServiceId,
-        key: string,
-        value: string,
-        isSecret: boolean
-    ) => {
-        const error = validateField(key, value);
-        setValidationErrors((prev) => ({ ...prev, [key]: error }));
-
-        if (isSecret) {
-            setDrafts((prev) => updateSecretDraft(prev, key, value));
-            setStatuses((prev) => ({ ...prev, [serviceId]: "idle" }));
-            return;
-        }
-
-        onConfigChange(key, value);
-    };
-
-    const handleSaveSecrets = async (serviceId: SecretServiceId) => {
-        setStatuses((prev) => ({ ...prev, [serviceId]: "saving" }));
-
-        const result = await saveServiceSecrets(
-            serviceId,
-            config,
-            drafts,
-            window.electronAPI
-        );
-
-        setDrafts(result.drafts);
-        setStatuses((prev) => ({
-            ...prev,
-            [serviceId]: result.ok ? "saved" : (result.error ?? "failed"),
-        }));
-    };
+    // Secrets live only in local drafts until the user presses Save; they never
+    // go through config:set. Editing either field clears the stale error.
+    const section = useSecretsSection({
+        save: (serviceId, drafts) =>
+            saveServiceSecrets(serviceId, config, drafts, window.electronAPI),
+        validate: validateField,
+        onClientIdChange: onConfigChange,
+    });
 
     const renderService = (
         serviceId: SecretServiceId,
@@ -114,7 +78,7 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
             (candidate) => candidate.id === serviceId
         );
         if (!service) return null;
-        const status = statuses[serviceId] ?? "idle";
+        const status = section.statuses[serviceId] ?? "idle";
         const statusKey = secretStatusMessageKey(status);
         const fields = secretFields[serviceId];
 
@@ -140,14 +104,14 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
                                     type="password"
                                     value={
                                         field.isSecret
-                                            ? drafts[field.key] || ""
+                                            ? section.drafts[field.key] || ""
                                             : typeof config[field.key] ===
                                                 "string"
                                               ? (config[field.key] as string)
                                               : ""
                                     }
                                     onChange={(e) =>
-                                        handleInputChange(
+                                        section.editField(
                                             serviceId,
                                             field.key,
                                             e.target.value,
@@ -156,9 +120,10 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
                                     }
                                     placeholder={field.placeholder}
                                     className="text-sm"
-                                    error={!!validationErrors[field.key]}
+                                    error={!!section.validationErrors[field.key]}
                                     helperText={
-                                        validationErrors[field.key] || undefined
+                                        section.validationErrors[field.key] ||
+                                        undefined
                                     }
                                 />
                             </div>
@@ -172,23 +137,26 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
                 <div className="mt-3 flex items-center gap-3">
                     <Button
                         type="button"
-                        onClick={() => handleSaveSecrets(serviceId)}
+                        onClick={() => section.saveService(serviceId)}
                         disabled={status === "saving"}
                         aria-label={`${t("common.save")} ${service.label}`}
                     >
                         {t("common.save")}
                     </Button>
-                    <p
-                        role="status"
-                        aria-live="polite"
-                        className={`text-xs ${
-                            status === "failed" || status === "required"
-                                ? "text-red-400"
-                                : "text-zinc-400"
-                        }`}
-                    >
-                        {statusKey ? t(statusKey) : ""}
-                    </p>
+                    {isSecretErrorStatus(status) ? (
+                        <InlineError
+                            className="flex-1"
+                            message={statusKey ? t(statusKey) : undefined}
+                        />
+                    ) : (
+                        <p
+                            role="status"
+                            aria-live="polite"
+                            className="text-xs text-zinc-400"
+                        >
+                            {statusKey ? t(statusKey) : ""}
+                        </p>
+                    )}
                 </div>
             </div>
         );

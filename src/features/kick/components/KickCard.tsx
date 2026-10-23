@@ -5,6 +5,7 @@ import KickIcon from "./KickIcon";
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getKickCardView } from "./kickCardView";
+import CredentialSetupFeedback from "@/ui/components/CredentialSetupFeedback";
 
 export default function KickCard() {
     const { t } = useTranslation();
@@ -21,6 +22,7 @@ export default function KickCard() {
         useState<string>(KICK_REDIRECT_URI);
     const [authInProgress, setAuthInProgress] = useState(false);
     const [refreshInProgress, setRefreshInProgress] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         window.electronAPI
@@ -132,7 +134,7 @@ export default function KickCard() {
 
     const handleSecretsSubmit = async () => {
         if (!kickClientId || !kickClientSecret) {
-            alert(t("common.pleaseCompleteFields"));
+            setError(t("common.pleaseCompleteFields"));
             return;
         }
 
@@ -141,21 +143,23 @@ export default function KickCard() {
                 kickClientId: kickClientId,
                 kickClientSecret: kickClientSecret,
             });
+            setError(null);
             setHasSecrets(true);
             setKickClientId("");
             setKickClientSecret("");
             setShowSetup(false);
         } catch (error) {
             logError(error as Error, "Error setting Kick secrets");
-            alert(t("common.secretsSaveError"));
+            setError(t("common.secretsSaveError"));
         }
     };
 
     const handleLogin = () => {
         if (!hasSecrets) {
-            alert(t("common.secretsRequired"));
+            setError(t("common.secretsRequired"));
             return;
         }
+        setError(null);
 
         if (authInProgress) {
             logDebug("Authentication already in progress, ignoring click");
@@ -372,7 +376,10 @@ export default function KickCard() {
             <div className="p-4 pt-2">
                 {view.showConfigure ? (
                     <button
-                        onClick={() => setShowSetup(true)}
+                        onClick={() => {
+                            setError(null);
+                            setShowSetup(true);
+                        }}
                         className="w-full bg-kick-green hover:bg-kick-green-dark text-black font-semibold py-2 px-4 rounded-md transition-colors"
                     >
                         {t("common.configureCredentials")}
@@ -427,6 +434,11 @@ export default function KickCard() {
                         )}
                     </button>
                 )}
+                <CredentialSetupFeedback
+                    message={error}
+                    visible={!showSetup}
+                    className="mt-2"
+                />
             </div>
 
             {showSetup && (
@@ -454,9 +466,10 @@ export default function KickCard() {
                                     type="text"
                                     placeholder={t("setup.enterKickClientId")}
                                     value={kickClientId}
-                                    onChange={(e) =>
-                                        setKickClientId(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setError(null);
+                                        setKickClientId(e.target.value);
+                                    }}
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-kick-green focus:ring-1 focus:ring-kick-green"
                                 />
                             </div>
@@ -470,9 +483,10 @@ export default function KickCard() {
                                         "setup.enterKickClientSecret"
                                     )}
                                     value={kickClientSecret}
-                                    onChange={(e) =>
-                                        setKickClientSecret(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setError(null);
+                                        setKickClientSecret(e.target.value);
+                                    }}
                                     className="w-full bg-zinc-700 text-white rounded px-3 py-2 border border-zinc-600 focus:border-kick-green focus:ring-1 focus:ring-kick-green"
                                 />
                             </div>
@@ -507,9 +521,17 @@ export default function KickCard() {
                     </div>
 
                     <div className="p-5 pt-2 flex-shrink-0">
+                        <CredentialSetupFeedback
+                            message={error}
+                            visible={showSetup}
+                            className="mb-2"
+                        />
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setShowSetup(false)}
+                                onClick={() => {
+                                    setError(null);
+                                    setShowSetup(false);
+                                }}
                                 className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white py-2 px-4 rounded-md transition-colors"
                             >
                                 {t("common.cancel")}

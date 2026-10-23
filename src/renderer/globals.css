@@ -48,3 +48,34 @@ body {
     -moz-appearance: textfield;
     appearance: textfield;
 }
+
+/* In-app error feedback: one short entrance, no loop/flash/shake. */
+@keyframes inline-error-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.inline-error {
+    animation: inline-error-enter 160ms ease-out 1;
+}
+
+/* Motion-only variant for inline helper text that keeps its own layout. */
+.error-motion {
+    animation: inline-error-enter 160ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .inline-error {
+        animation: none;
+    }
+
+    .error-motion {
+        animation: none;
+    }
+}

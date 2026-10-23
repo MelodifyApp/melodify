@@ -46,6 +46,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 ? (props.value as string)?.length || 0
                 : null;
 
+        const describedById = React.useId();
+        const showError = !!error && typeof helperText === "string" && helperText.trim().length > 0;
+
         return (
             <div className="flex flex-col gap-1 w-full">
                 {label && (
@@ -57,6 +60,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 <input
                     ref={ref}
                     autoFocus={false}
+                    aria-invalid={showError ? true : undefined}
+                    aria-describedby={helperText ? describedById : undefined}
                     className={cn(
                         "px-3 py-2 bg-zinc-800 border rounded text-white placeholder-zinc-400 focus:outline-none focus:ring-2 transition-shadow duration-200",
                         error
@@ -69,7 +74,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                 />
 
                 <div className="flex justify-between items-center text-xs">
-                    <span className={error ? "text-red-400" : "text-zinc-400"}>
+                    <span
+                        id={describedById}
+                        role={showError ? "alert" : undefined}
+                        aria-live={showError ? "assertive" : undefined}
+                        aria-atomic={showError ? true : undefined}
+                        className={cn(
+                            error ? "text-red-400" : "text-zinc-400",
+                            showError && "error-motion"
+                        )}
+                    >
                         {helperText}
                     </span>
 
