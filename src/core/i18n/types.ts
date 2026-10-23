@@ -149,6 +149,8 @@ export interface TranslationKeys {
         pleaseCompleteFields: string;
         secretsSaveError: string;
         secretsRequired: string;
+        invalidCredentials: string;
+        verificationUnavailable: string;
         setupRequired: string;
         readyToConnect: string;
         listeningToChat: string;

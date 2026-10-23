@@ -2,21 +2,39 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { spotifyCredentialErrorMessage } = require("../src/features/spotify/components/spotifyCredentialView");
+const {
+    spotifyCredentialMessageKey,
+} = require("../src/features/spotify/components/spotifyCredentialView");
 
-test("shows the server credential error instead of an undefined message", () => {
+test("maps stable failure codes to translated message keys", () => {
     assert.equal(
-        spotifyCredentialErrorMessage(
-            { success: false, error: "Invalid client ID or secret." },
-            "Could not save credentials."
-        ),
-        "Invalid client ID or secret."
+        spotifyCredentialMessageKey({ success: false, code: "invalid_credentials" }),
+        "common.invalidCredentials"
+    );
+    assert.equal(
+        spotifyCredentialMessageKey({
+            success: false,
+            code: "verification_unavailable",
+        }),
+        "common.verificationUnavailable"
+    );
+    assert.equal(
+        spotifyCredentialMessageKey({ success: false, code: "missing_credentials" }),
+        "common.secretsRequired"
     );
 });
 
-test("uses the fallback when a credential error response has no message", () => {
+test("never surfaces raw service text or unknown payloads", () => {
     assert.equal(
-        spotifyCredentialErrorMessage({ success: false }, "Could not save credentials."),
-        "Could not save credentials."
+        spotifyCredentialMessageKey({
+            success: false,
+            error: "Invalid client ID or secret.",
+            message: "raw detail",
+        }),
+        null
     );
+    assert.equal(spotifyCredentialMessageKey({ success: false }), null);
+    assert.equal(spotifyCredentialMessageKey({ success: false, code: "unknown" }), null);
+    assert.equal(spotifyCredentialMessageKey(null), null);
+    assert.equal(spotifyCredentialMessageKey(undefined), null);
 });

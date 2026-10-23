@@ -101,11 +101,7 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
         setDrafts(result.drafts);
         setStatuses((prev) => ({
             ...prev,
-            [serviceId]: result.ok
-                ? "saved"
-                : result.error === "required"
-                  ? "required"
-                  : "failed",
+            [serviceId]: result.ok ? "saved" : (result.error ?? "failed"),
         }));
     };
 

@@ -4,7 +4,7 @@ import { SPOTIFY_REDIRECT_URI } from "@/shared/constants";
 import SpotifyIcon from "./SpotifyIcon";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
-import { spotifyCredentialErrorMessage } from "./spotifyCredentialView";
+import { spotifyCredentialMessageKey } from "./spotifyCredentialView";
 import { isSpotifyAppAvailable } from "./spotifyStatusView";
 
 export default function SpotifyCard() {
@@ -147,9 +147,9 @@ export default function SpotifyCard() {
             setShowSetup(false);
         } else {
             alert(
-                spotifyCredentialErrorMessage(
-                    result,
-                    t("common.secretsSaveError")
+                t(
+                    spotifyCredentialMessageKey(result) ??
+                        "common.secretsSaveError"
                 )
             );
         }

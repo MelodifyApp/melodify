@@ -106,6 +106,8 @@ test("status messages map to translation keys present in every locale", () => {
         saving: "common.saving",
         saved: "common.saved",
         required: "common.secretsRequired",
+        invalid: "common.invalidCredentials",
+        unavailable: "common.verificationUnavailable",
         failed: "common.secretsSaveError",
     };
     for (const [status, key] of Object.entries(expected)) {
@@ -114,6 +116,19 @@ test("status messages map to translation keys present in every locale", () => {
         assert.equal(typeof lookup(tr, key), "string", `tr missing ${key}`);
     }
     assert.equal(secretStatusMessageKey("idle"), null);
+});
+
+test("credential failure copy tells the user what to do", () => {
+    assert.equal(
+        lookup(en, "common.invalidCredentials"),
+        "Please enter a valid Client ID and Client Secret."
+    );
+    assert.equal(
+        lookup(tr, "common.invalidCredentials"),
+        "Lütfen geçerli bir Client ID ve Client Secret girin."
+    );
+    assert.match(lookup(en, "common.verificationUnavailable"), /connection/i);
+    assert.match(lookup(tr, "common.verificationUnavailable"), /[Bb]ağlantı/);
 });
 
 test("saving Spotify secrets uses invoke exactly once and clears the draft", async () => {
@@ -207,7 +222,7 @@ test("incomplete credentials are rejected before any IPC call", async () => {
     }
 });
 
-test("failed saves retain the draft", async () => {
+test("failed saves retain the draft and report the failure cause", async () => {
     const rejecting = {
         calls: [],
         invoke: async (channel, data) => {
@@ -225,14 +240,18 @@ test("failed saves retain the draft", async () => {
         rejecting
     );
     assert.equal(rejected.ok, false);
-    assert.equal(rejected.error, "failed");
+    assert.equal(rejected.error, "unavailable");
     assert.deepEqual(rejected.drafts, SPOTIFY_DRAFTS);
 
     const invalid = {
         calls: [],
         invoke: async (channel, data) => {
             invalid.calls.push(["invoke", channel, data]);
-            return { success: false, error: "Invalid client ID or secret." };
+            return {
+                success: false,
+                code: "invalid_credentials",
+                error: "Invalid client ID or secret.",
+            };
         },
         send: () => {},
     };
@@ -243,8 +262,56 @@ test("failed saves retain the draft", async () => {
         invalid
     );
     assert.equal(invalidResult.ok, false);
-    assert.equal(invalidResult.error, "failed");
+    assert.equal(invalidResult.error, "invalid");
     assert.deepEqual(invalidResult.drafts, SPOTIFY_DRAFTS);
+
+    const unavailable = {
+        calls: [],
+        invoke: async () => ({
+            success: false,
+            code: "verification_unavailable",
+        }),
+        send: () => {},
+    };
+    const unavailableResult = await saveServiceSecrets(
+        "spotify",
+        SPOTIFY_CONFIG,
+        SPOTIFY_DRAFTS,
+        unavailable
+    );
+    assert.equal(unavailableResult.ok, false);
+    assert.equal(unavailableResult.error, "unavailable");
+    assert.deepEqual(unavailableResult.drafts, SPOTIFY_DRAFTS);
+
+    const missing = {
+        calls: [],
+        invoke: async () => ({ success: false, code: "missing_credentials" }),
+        send: () => {},
+    };
+    const missingResult = await saveServiceSecrets(
+        "spotify",
+        SPOTIFY_CONFIG,
+        SPOTIFY_DRAFTS,
+        missing
+    );
+    assert.equal(missingResult.ok, false);
+    assert.equal(missingResult.error, "required");
+    assert.deepEqual(missingResult.drafts, SPOTIFY_DRAFTS);
+
+    const unknown = {
+        calls: [],
+        invoke: async () => ({ success: false }),
+        send: () => {},
+    };
+    const unknownResult = await saveServiceSecrets(
+        "spotify",
+        SPOTIFY_CONFIG,
+        SPOTIFY_DRAFTS,
+        unknown
+    );
+    assert.equal(unknownResult.ok, false);
+    assert.equal(unknownResult.error, "failed");
+    assert.deepEqual(unknownResult.drafts, SPOTIFY_DRAFTS);
 
     const throwing = {
         calls: [],
@@ -261,7 +328,7 @@ test("failed saves retain the draft", async () => {
         throwing
     );
     assert.equal(sendResult.ok, false);
-    assert.equal(sendResult.error, "failed");
+    assert.equal(sendResult.error, "unavailable");
     assert.deepEqual(sendResult.drafts, KICK_DRAFTS);
 });
 

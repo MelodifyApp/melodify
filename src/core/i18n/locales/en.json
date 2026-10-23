@@ -155,6 +155,8 @@
         "pleaseCompleteFields": "Please fill in both fields.",
         "secretsSaveError": "Failed to save secrets. Please try again.",
         "secretsRequired": "Please set your API secrets first.",
+        "invalidCredentials": "Please enter a valid Client ID and Client Secret.",
+        "verificationUnavailable": "Could not verify the credentials. Check your connection and try again.",
         "setupRequired": "Setup required",
         "readyToConnect": "Ready to connect",
         "listeningToChat": "Listening to chat messages",

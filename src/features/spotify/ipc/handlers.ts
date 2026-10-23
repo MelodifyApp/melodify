@@ -144,9 +144,11 @@ ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
             ? record.spotifyClientSecret.trim()
             : "";
     if (!spotifyClientId || !spotifyClientSecret) {
-        return { success: false, error: "Missing client ID or secret." };
+        return { success: false, code: "missing_credentials" };
     }
-    // Try to get a token using Client Credentials Flow to validate the credentials
+    // Try to get a token using Client Credentials Flow to validate the credentials.
+    // Only stable failure codes are returned: never the service response, a
+    // token, or the supplied credentials.
     const tokenUrl = "https://accounts.spotify.com/api/token";
     const params = new URLSearchParams();
     params.append("grant_type", "client_credentials");
@@ -163,17 +165,25 @@ ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
             },
             body: params.toString(),
         });
-        const data = await response.json();
         if (!response.ok) {
-            return { success: false, error: "Invalid client ID or secret." };
+            const rejectedCredentials =
+                response.status === 400 ||
+                response.status === 401 ||
+                response.status === 403;
+            return {
+                success: false,
+                code: rejectedCredentials
+                    ? "invalid_credentials"
+                    : "verification_unavailable",
+            };
         }
         // Save secrets if valid
         // Persist credentials and discard the singleton that may still hold
         // the previous client ID/secret before OAuth starts.
         updateSpotifyClientCredentials(spotifyClientId, spotifyClientSecret);
         return { success: true };
-    } catch (err) {
-        return { success: false, error: "Failed to validate credentials." };
+    } catch {
+        return { success: false, code: "verification_unavailable" };
     }
 });
 

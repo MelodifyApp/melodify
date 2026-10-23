@@ -1,3 +1,5 @@
+import type { CredentialFailureCode } from "../../shared/utils/credentialFailure";
+
 /**
  * Save flow for the Settings > Secrets section.
  *
@@ -80,7 +82,11 @@ export interface SecretsBridge {
     invoke(channel: string, data?: unknown): Promise<unknown>;
 }
 
-export type SecretSaveErrorCode = "required" | "failed";
+export type SecretSaveErrorCode =
+    | "required"
+    | "invalid"
+    | "unavailable"
+    | "failed";
 
 export interface SecretSaveResult {
     readonly ok: boolean;
@@ -103,6 +109,27 @@ function invokeSucceeded(result: unknown): boolean {
         typeof result === "object" &&
         (result as { success?: unknown }).success === true
     );
+}
+
+/**
+ * Maps a handler's stable failure code to the save-flow status. Unknown or
+ * missing codes fall back to the generic failure so no raw text is shown.
+ */
+function failureStatusFor(result: unknown): SecretSaveErrorCode {
+    const code =
+        result && typeof result === "object"
+            ? (result as { code?: unknown }).code
+            : undefined;
+    switch (code as CredentialFailureCode | undefined) {
+        case "invalid_credentials":
+            return "invalid";
+        case "verification_unavailable":
+            return "unavailable";
+        case "missing_credentials":
+            return "required";
+        default:
+            return "failed";
+    }
 }
 
 /**
@@ -133,18 +160,27 @@ export async function saveServiceSecrets(
         if (service.transport === "invoke") {
             const result = await bridge.invoke(service.channel, payload);
             if (!invokeSucceeded(result)) {
-                return { ok: false, error: "failed", drafts };
+                return {
+                    ok: false,
+                    error: failureStatusFor(result),
+                    drafts,
+                };
             }
         } else {
             bridge.send(service.channel, payload);
         }
         return { ok: true, drafts: clearSecretDrafts(drafts, id) };
     } catch {
-        return { ok: false, error: "failed", drafts };
+        // The bridge or the network failed before verification could happen.
+        return { ok: false, error: "unavailable", drafts };
     }
 }
 
-export type SecretSaveStatus = "idle" | "saving" | "saved" | "required" | "failed";
+export type SecretSaveStatus =
+    | "idle"
+    | "saving"
+    | "saved"
+    | SecretSaveErrorCode;
 
 /** Translation key for a save status, or null when nothing should be shown. */
 export function secretStatusMessageKey(status: SecretSaveStatus): string | null {
@@ -155,6 +191,10 @@ export function secretStatusMessageKey(status: SecretSaveStatus): string | null 
             return "common.saved";
         case "required":
             return "common.secretsRequired";
+        case "invalid":
+            return "common.invalidCredentials";
+        case "unavailable":
+            return "common.verificationUnavailable";
         case "failed":
             return "common.secretsSaveError";
         default:

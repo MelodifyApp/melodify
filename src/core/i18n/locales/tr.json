@@ -156,6 +156,8 @@
         "pleaseCompleteFields": "Tüm alanları doldurun.",
         "secretsSaveError": "Kaydetme hatası.",
         "secretsRequired": "Önce API anahtarlarını ayarlayın.",
+        "invalidCredentials": "Lütfen geçerli bir Client ID ve Client Secret girin.",
+        "verificationUnavailable": "Kimlik bilgileri doğrulanamadı. Bağlantınızı kontrol edip yeniden deneyin.",
         "setupRequired": "Kurulum gerekli",
         "readyToConnect": "Bağlanmaya hazır",
         "listeningToChat": "Sohbet dinleniyor",

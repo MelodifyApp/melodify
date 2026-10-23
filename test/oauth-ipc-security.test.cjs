@@ -609,7 +609,7 @@ test("spotify:setSecrets rejects malformed payloads without throwing", async () 
         const malformed = await handler({}, null);
         assert.deepEqual(malformed, {
             success: false,
-            error: "Missing client ID or secret.",
+            code: "missing_credentials",
         });
         assert.equal(harness.fetchCalls.length, 0);
 
@@ -619,6 +619,66 @@ test("spotify:setSecrets rejects malformed payloads without throwing", async () 
         );
         assert.deepEqual(valid, { success: true });
         assert.deepEqual(harness.credentials, [["id", "secret"]]);
+    } finally {
+        harness.restoreFetch();
+    }
+});
+
+test("spotify:setSecrets returns stable failure codes without echoing input or raw responses", async () => {
+    const harness = spotifyIpcHarness();
+    const handler = harness.handlers.get("spotify:setSecrets");
+    const credentials = {
+        spotifyClientId: "client-id-value",
+        spotifyClientSecret: "client-secret-value",
+    };
+    try {
+        const cases = [
+            [
+                { ok: false, status: 400, json: async () => ({ error: "invalid_client", error_description: "raw detail" }) },
+                "invalid_credentials",
+            ],
+            [
+                { ok: false, status: 401, json: async () => ({ error: "invalid_client" }) },
+                "invalid_credentials",
+            ],
+            [
+                { ok: false, status: 500, json: async () => ({ error: "server_error" }) },
+                "verification_unavailable",
+            ],
+            [
+                { ok: false, status: 429, json: async () => ({ error: "rate_limited" }) },
+                "verification_unavailable",
+            ],
+        ];
+
+        const results = [];
+        for (const [response, expectedCode] of cases) {
+            global.fetch = async () => response;
+            const result = await handler({}, credentials);
+            assert.deepEqual(result, { success: false, code: expectedCode });
+            results.push(result);
+        }
+
+        global.fetch = async () => {
+            throw new Error("network down");
+        };
+        const networkResult = await handler({}, credentials);
+        assert.deepEqual(networkResult, {
+            success: false,
+            code: "verification_unavailable",
+        });
+        results.push(networkResult);
+
+        // No raw service text, token, credential or user input may leak back.
+        const serialized = JSON.stringify(results);
+        assert.doesNotMatch(
+            serialized,
+            /client-secret-value|client-id-value|invalid_client|server_error|rate_limited|raw detail/
+        );
+        for (const result of results) {
+            assert.deepEqual(Object.keys(result).sort(), ["code", "success"]);
+        }
+        assert.deepEqual(harness.credentials, []);
     } finally {
         harness.restoreFetch();
     }
