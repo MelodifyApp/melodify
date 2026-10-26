@@ -7,11 +7,11 @@ import type { CredentialFailureCode } from "../../shared/utils/credentialFailure
  * so the section keeps them in component-local drafts and only submits them
  * when the user presses the per-service Save button. Each service has its own
  * typed bridge direction: Spotify validates credentials through an
- * `ipcMain.handle` channel (invoke) while Kick stores them through an
- * `ipcMain.on` channel (send).
+ * `ipcMain.handle` channel (invoke) while Kick and Twitch store them through
+ * `ipcMain.on` channels (send).
  */
 
-export type SecretServiceId = "spotify" | "kick";
+export type SecretServiceId = "spotify" | "kick" | "twitch";
 
 export interface SecretServiceDefinition {
     readonly id: SecretServiceId;
@@ -41,6 +41,14 @@ export const SECRET_SERVICES: readonly SecretServiceDefinition[] = Object.freeze
         transport: "send" as const,
         clientIdKey: "kickClientId",
         clientSecretKey: "kickClientSecret",
+    }),
+    Object.freeze({
+        id: "twitch" as const,
+        label: "Twitch API",
+        channel: "twitch:setSecrets",
+        transport: "send" as const,
+        clientIdKey: "twitchClientId",
+        clientSecretKey: "twitchClientSecret",
     }),
 ]);
 

@@ -121,12 +121,14 @@ export const validateField = (key: string, value: any): string | null => {
             break;
         case "spotifyClientId":
         case "kickClientId":
+        case "twitchClientId":
             if (typeof value === "string" && value) {
                 return validateClientId(value);
             }
             break;
         case "spotifyClientSecret":
         case "kickClientSecret":
+        case "twitchClientSecret":
             if (typeof value === "string" && value) {
                 return validateClientSecret(value);
             }

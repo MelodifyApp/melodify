@@ -4,6 +4,7 @@ import { Button } from "@/ui/components/Button";
 import InlineError from "@/ui/components/InlineError";
 import KickIcon from "@/features/kick/components/KickIcon";
 import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
+import TwitchIcon from "@/features/twitch/components/TwitchIcon";
 import { useTranslation } from "react-i18next";
 import { validateField } from "../validation";
 import { useSecretsSection } from "../../useSecretsSection";
@@ -53,6 +54,20 @@ const secretFields: Record<SecretServiceId, SecretFieldDefinition[]> = {
             key: "kickClientSecret",
             label: "Client Secret",
             placeholder: "kick_client_secret_here",
+            isSecret: true,
+        },
+    ],
+    twitch: [
+        {
+            key: "twitchClientId",
+            label: "Client ID",
+            placeholder: "twitch_client_id_here",
+            isSecret: false,
+        },
+        {
+            key: "twitchClientSecret",
+            label: "Client Secret",
+            placeholder: "twitch_client_secret_here",
             isSecret: true,
         },
     ],
@@ -177,6 +192,11 @@ export default function Secrets({ config, onConfigChange }: SecretsProps) {
                 "kick",
                 <KickIcon className="w-5 h-5" />,
                 "bg-kick-green"
+            )}
+            {renderService(
+                "twitch",
+                <TwitchIcon className="w-5 h-5" />,
+                "bg-twitch-purple"
             )}
         </div>
     );

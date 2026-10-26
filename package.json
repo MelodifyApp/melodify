@@ -1,7 +1,7 @@
 {
     "name": "melodify",
     "productName": "melodify",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "description": "Melodify is a desktop app that allows your viewers to request songs in Kick chat, which are then played on your device using Spotify.",
     "main": ".webpack/main",
     "scripts": {

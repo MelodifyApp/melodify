@@ -344,6 +344,6 @@ test("the supported credential save flow crosses the bridge on approved channels
     );
     assert.deepEqual(
         calls.send.map(([channel]) => channel),
-        ["kick:setSecrets"]
+        ["kick:setSecrets", "twitch:setSecrets"]
     );
 });

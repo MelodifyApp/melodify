@@ -48,14 +48,16 @@ function fakeBridge() {
 
 const SPOTIFY_CONFIG = { spotifyClientId: "spotify-id-123" };
 const KICK_CONFIG = { kickClientId: "kick-id-123" };
+const TWITCH_CONFIG = { twitchClientId: "twitch-id-123" };
 const SPOTIFY_DRAFTS = { spotifyClientSecret: "spotify-secret-value" };
 const KICK_DRAFTS = { kickClientSecret: "kick-secret-value" };
+const TWITCH_DRAFTS = { twitchClientSecret: "twitch-secret-value" };
 
 test("secret services declare the correct transport direction", () => {
     assert.ok(Object.isFrozen(SECRET_SERVICES));
     assert.deepEqual(
         SECRET_SERVICES.map((service) => service.id).sort(),
-        ["kick", "spotify"]
+        ["kick", "spotify", "twitch"]
     );
 
     const spotify = getSecretService("spotify");
@@ -69,6 +71,12 @@ test("secret services declare the correct transport direction", () => {
     assert.equal(kick.transport, "send");
     assert.equal(kick.clientIdKey, "kickClientId");
     assert.equal(kick.clientSecretKey, "kickClientSecret");
+
+    const twitch = getSecretService("twitch");
+    assert.equal(twitch.channel, "twitch:setSecrets");
+    assert.equal(twitch.transport, "send");
+    assert.equal(twitch.clientIdKey, "twitchClientId");
+    assert.equal(twitch.clientSecretKey, "twitchClientSecret");
 
     for (const service of SECRET_SERVICES) {
         assert.ok(Object.isFrozen(service));
@@ -180,11 +188,36 @@ test("saving Kick secrets uses send exactly once and clears the draft", async ()
     ]);
 });
 
+test("saving Twitch secrets uses send exactly once and clears the draft", async () => {
+    const bridge = fakeBridge();
+
+    const result = await saveServiceSecrets(
+        "twitch",
+        TWITCH_CONFIG,
+        TWITCH_DRAFTS,
+        bridge
+    );
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.drafts, {});
+    assert.deepEqual(bridge.calls, [
+        [
+            "send",
+            "twitch:setSecrets",
+            {
+                twitchClientId: "twitch-id-123",
+                twitchClientSecret: "twitch-secret-value",
+            },
+        ],
+    ]);
+});
+
 test("credential saves never travel through config:set", async () => {
     const bridge = fakeBridge();
 
     await saveServiceSecrets("spotify", SPOTIFY_CONFIG, SPOTIFY_DRAFTS, bridge);
     await saveServiceSecrets("kick", KICK_CONFIG, KICK_DRAFTS, bridge);
+    await saveServiceSecrets("twitch", TWITCH_CONFIG, TWITCH_DRAFTS, bridge);
 
     assert.equal(
         bridge.calls.some(([, channel]) => channel === "config:set"),
@@ -195,6 +228,7 @@ test("credential saves never travel through config:set", async () => {
         [
             ["invoke", "spotify:setSecrets"],
             ["send", "kick:setSecrets"],
+            ["send", "twitch:setSecrets"],
         ]
     );
 });
@@ -206,6 +240,8 @@ test("incomplete credentials are rejected before any IPC call", async () => {
         ["spotify", SPOTIFY_CONFIG, { spotifyClientSecret: "   " }],
         ["kick", { kickClientId: "" }, KICK_DRAFTS],
         ["kick", KICK_CONFIG, {}],
+        ["twitch", { twitchClientId: "" }, TWITCH_DRAFTS],
+        ["twitch", TWITCH_CONFIG, {}],
     ]) {
         const bridge = fakeBridge();
         const result = await saveServiceSecrets(
@@ -388,6 +424,19 @@ test("Secrets section keeps secrets in local drafts and only saves on demand", (
     assert.match(source, /t\("common\.save"\)/);
     assert.match(source, /InlineError/);
     assert.match(source, /isSecretErrorStatus/);
+});
+
+test("Settings > Secrets exposes Twitch credentials", () => {
+    const source = readSource(
+        "src/features/settings/components/sections/Secrets.tsx"
+    );
+    const { validateField } = require("../src/features/settings/components/validation");
+
+    assert.match(source, /TwitchIcon/);
+    assert.match(source, /renderService\(\s*"twitch"/);
+    assert.match(source, /bg-twitch-purple/);
+    assert.match(validateField("twitchClientId", "short"), /too short/);
+    assert.match(validateField("twitchClientSecret", "short"), /too short/);
 });
 
 test("Settings no longer routes secret edits through the generic save path", () => {

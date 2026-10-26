@@ -47,3 +47,8 @@ test("every static translation key used by feature UI exists in the English loca
 
     assert.deepEqual([...missing].sort(), []);
 });
+
+test("English locale uses an English back-to-home label", () => {
+    const locale = JSON.parse(fs.readFileSync(LOCALE_PATH, "utf8"));
+    assert.equal(locale.navigation.homePage, "Home");
+});

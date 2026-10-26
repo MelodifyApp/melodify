@@ -2,8 +2,9 @@
 // Custom title bar component for the Electron app, including app name, version, update status, and window controls.
 
 import React from "react";
-import { SettingsIcon, XIcon, Music, TestTube } from "lucide-react";
+import { SettingsIcon, XIcon, TestTube } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import MelodifyMark from "./MelodifyMark";
 
 /**
  * Props for the Titlebar component.
@@ -42,9 +43,7 @@ export default function Titlebar({
         >
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-melodify-primary rounded-md flex items-center justify-center">
-                        <Music className="w-3.5 h-3.5 text-white" />
-                    </div>
+                    <MelodifyMark className="w-6 h-6" />
                     <div className="flex items-center font-bold text-white">
                         {t("app.name")}
                     </div>
