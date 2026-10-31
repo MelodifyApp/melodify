@@ -1,7 +1,12 @@
 import { ReactNode, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { InfoIcon } from "lucide-react";
 import ExternalLink from "@/ui/components/ExternalLink";
 import Input from "@/ui/components/Input";
+import {
+    validateClientId,
+    validateClientSecret,
+} from "../validation";
 
 interface SecretsSetupModalProps {
     service: "Kick" | "Spotify";
@@ -17,23 +22,6 @@ interface SecretsSetupModalProps {
     info?: ReactNode;
 }
 
-// Validation functions
-const validateClientId = (id: string): string | null => {
-    if (!id.trim()) return "Please enter a Client ID";
-    if (id.length < 10) return "Client ID appears to be too short";
-    if (id.length > 100) return "Client ID appears to be too long";
-    if (!/^[a-zA-Z0-9_-]+$/.test(id))
-        return "Client ID can only contain letters, numbers, hyphens, and underscores";
-    return null;
-};
-
-const validateClientSecret = (secret: string): string | null => {
-    if (!secret.trim()) return "Please enter a Client Secret";
-    if (secret.length < 20) return "Client Secret appears to be too short";
-    if (secret.length > 200) return "Client Secret appears to be too long";
-    return null;
-};
-
 export default function SecretsSetupModal({
     service,
     redirectUri,
@@ -47,6 +35,7 @@ export default function SecretsSetupModal({
     hasSecrets,
     info,
 }: SecretsSetupModalProps) {
+    const { t } = useTranslation();
     const [errors, setErrors] = useState<{
         clientId?: string;
         clientSecret?: string;
@@ -55,10 +44,10 @@ export default function SecretsSetupModal({
     const validateForm = (): boolean => {
         const newErrors: { clientId?: string; clientSecret?: string } = {};
 
-        const clientIdError = validateClientId(clientId);
+        const clientIdError = validateClientId(clientId, t);
         if (clientIdError) newErrors.clientId = clientIdError;
 
-        const clientSecretError = validateClientSecret(clientSecret);
+        const clientSecretError = validateClientSecret(clientSecret, t);
         if (clientSecretError) newErrors.clientSecret = clientSecretError;
 
         setErrors(newErrors);

@@ -155,7 +155,7 @@ export default function Secrets({
             if (result.ok) onServiceSaved?.(serviceId);
             return result;
         },
-        validate: validateField,
+        validate: (key, value) => validateField(key, value, t),
         onClientIdChange: onConfigChange,
         statuses: credentialStatuses.statuses,
         onStatusChange: setCredentialStatus,

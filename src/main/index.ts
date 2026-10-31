@@ -8,6 +8,7 @@ import { applyNavigationGuards } from "./navigationGuard";
 import Config from "@/core/config";
 import Updater from "basic-electron-updater";
 import { createUpdateController, statUpdateArtifact } from "./updateController";
+import { createAppLifecycle } from "./appLifecycle";
 import { createUpdateStatusSnapshot } from "./updateSnapshot";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import path from "path";
@@ -52,7 +53,26 @@ if (require("electron-squirrel-startup")) {
 let mainWindow: BrowserWindow | null = null;
 let testWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let isQuiting = false;
+
+// Acquire the process lock before updater/provider initialization or app-ready
+// background work. A duplicate launch quits here and focuses the owner through
+// the second-instance handler registered below.
+const appLifecycle = createAppLifecycle({
+    app,
+    getMainWindow: () => mainWindow,
+    getTray: () => tray,
+    createTray: () => createTray(),
+    getMinimizeToTray: () => Config.get("minimizeToTray") === true,
+    isMac: IS_MAC,
+    log: {
+        info: (message, context) => logInfo(message, context),
+        warn: (message, context) => logWarn(message, context),
+    },
+});
+const isPrimaryInstance = appLifecycle.acquireSingleInstanceLock();
+if (!isPrimaryInstance) {
+    logWarn("Duplicate Melodify launch exited", "main:singleInstance");
+}
 
 // Initialize the updater with configuration
 let updater: Updater | null = null;
@@ -99,6 +119,8 @@ const updateController = createUpdateController({
     realTempDir,
     statFile: (filePath: string) => statUpdateArtifact(filePath, fs),
     broadcast: (channel, ...args) => broadcast(channel, ...args),
+    beforeApplyUpdate: () => appLifecycle.beginInstallerQuit(),
+    onInstallFailure: () => appLifecycle.cancelInstallerQuit(),
     log: {
         info: (message) => logInfo(message, "updater"),
         warn: (message) => logWarn(message, "updater"),
@@ -247,8 +269,7 @@ const createTray = () => {
         {
             label: "Quit",
             click: () => {
-                isQuiting = true;
-                app.quit();
+                appLifecycle.requestQuit("tray-quit");
             },
         },
     ]);
@@ -407,16 +428,9 @@ const createMainWindow = (): void => {
             logDebug("DevTools opened in development mode");
         }
 
-        // Handle window close event (minimize to tray if enabled)
+        // Handle window close event through the one lifecycle owner.
         mainWindow.on("close", (event) => {
-            const minimizeToTray = Config.get("minimizeToTray");
-            if (minimizeToTray && !isQuiting) {
-                event.preventDefault();
-                mainWindow?.hide();
-                if (!tray) {
-                    createTray();
-                }
-            }
+            appLifecycle.handleWindowClose(event);
         });
 
         logInfo("Main window created");
@@ -426,6 +440,7 @@ const createMainWindow = (): void => {
 };
 
 app.on("ready", () => {
+    if (!appLifecycle.isPrimaryInstance()) return;
     logInfo("App ready event");
     createMainWindow();
 
@@ -477,12 +492,11 @@ app.on("window-all-closed", () => {
     if (testWindow && testWindow.isDestroyed()) {
         testWindow = null;
     }
-    if (!IS_MAC) {
-        app.quit();
-    }
+    appLifecycle.handleWindowAllClosed();
 });
 
 app.on("activate", () => {
+    if (!appLifecycle.isPrimaryInstance()) return;
     if (BrowserWindow.getAllWindows().length === 0) {
         createMainWindow();
     }
@@ -537,9 +551,8 @@ ipcMain.on("window:close", (event) => {
         return;
     }
 
-    // Handle main window close
-    isQuiting = true;
-    mainWindow?.close();
+    // Handle main window close through the explicit lifecycle intent.
+    appLifecycle.requestQuit("titlebar-close");
 });
 
 // Development IPC handlers
@@ -551,7 +564,7 @@ ipcMain.handle("open-ui-test-window", () => {
 // App control IPC handlers
 ipcMain.on("app:restart", () => {
     app.relaunch({ args: process.argv.slice(1).concat(["--relaunch"]) });
-    app.quit();
+    appLifecycle.requestQuit("restart");
 });
 
 // Updater IPC handlers - Note: These override any core IPC update handlers

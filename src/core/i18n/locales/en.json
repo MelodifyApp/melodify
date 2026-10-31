@@ -124,6 +124,7 @@
             "manage": "Manage connections",
             "setUp": "Set up connections",
             "checking": "Checking",
+            "announcement": "{{service}} status: {{status}}",
             "ready": "Ready",
             "listening": "Listening",
             "openSpotify": "No device",
@@ -149,6 +150,7 @@
         "logs": "Logs",
         "debug": "Debug",
         "sections": "Settings sections",
+        "loading": "Loading settings…",
         "saveFailed": "Settings were not saved. Please try again.",
         "saveRejected": "Settings were not saved. Rejected values: {{keys}}.",
         "saveWriteFailed": "Settings were not saved to disk. Your changes remain here; retry the save.",
@@ -271,7 +273,7 @@
         "warnings": "Warnings",
         "info": "Info",
         "debug": "Debug",
-        "logsRetentionNotice": "Logs are automatically cleaned after 30 days. Export to save a copy or clear to remove from storage."
+        "logsRetentionNotice": "Logs older than 30 days are removed when Melodify starts. Export to save a copy; there is no Clear action."
     },
     "common": {
         "save": "Save",
@@ -290,6 +292,7 @@
         "needsCredentials": "Needs credentials",
         "unverified": "Unverified",
         "verifying": "Verifying…",
+        "apiDraftPending": "API draft pending",
         "verified": "Verified",
         "verificationFailed": "Verification failed",
         "verificationUnavailableStatus": "Verification unavailable",
@@ -360,6 +363,50 @@
         "twitchAdditionalInfo1": "ℹ️ Make sure to select the category \"Chat Bot\" when creating your application.",
         "kickAdditionalInfo1": "ℹ️ After saving your app, edit it again and create a bot for that app.",
         "kickAdditionalInfo2": "✅ Required permissions: \"Write to chat feed\" and \"Read channel information\""
+    },
+    "saveDock": {
+        "apiActions": "API credential actions",
+        "credentialsSavePerService": "Credentials save per service",
+        "settingsActions": "Settings save actions",
+        "unsavedChanges": "Unsaved changes",
+        "saveSettings": "Save settings",
+        "discardTitle": "Discard unsaved settings and command edits.",
+        "discard": "Discard"
+    },
+    "errorBoundary": {
+        "title": "Something went wrong",
+        "description": "An error occurred in the application.",
+        "reload": "Reload app"
+    },
+    "validation": {
+        "urlRequired": "Please enter a URL",
+        "urlInvalid": "Please enter a valid URL (e.g., http://example.com)",
+        "clientIdRequired": "Please enter a Client ID",
+        "clientIdTooShort": "Client ID appears to be too short",
+        "clientIdTooLong": "Client ID appears to be too long",
+        "clientIdInvalid": "Client ID can only contain letters, numbers, hyphens, and underscores",
+        "clientSecretRequired": "Please enter a Client Secret",
+        "clientSecretTooShort": "Client Secret appears to be too short",
+        "clientSecretTooLong": "Client Secret appears to be too long",
+        "aliasRequired": "Please enter an alternative command name",
+        "aliasTooShort": "Alternative name must be at least 1 character",
+        "aliasTooLong": "Alternative name must be no more than 20 characters",
+        "aliasInvalid": "Alternative name can only contain letters, numbers, hyphens, and underscores",
+        "aliasSame": "Alternative name cannot be the same as the main command",
+        "aliasInUse": "This alternative name is already in use",
+        "messageRequired": "Please enter a message",
+        "messageTooLong": "Message must be no more than 500 characters",
+        "unknownVariable": "Unknown variable: {{variable}}. Available variables: {{available}}",
+        "prefixEmpty": "Prefix cannot be empty",
+        "prefixTooLong": "Prefix too long (max 10 characters)",
+        "prefixInvalid": "Prefix should be a special character (e.g., !, @, #, $)",
+        "moderatorInvalid": "All moderator usernames must be valid strings",
+        "moderatorEmpty": "Moderator usernames cannot be empty",
+        "moderatorTooLong": "Moderator usernames must be no more than 50 characters",
+        "moderatorInvalidChars": "Moderator usernames can only contain letters, numbers, hyphens, and underscores",
+        "moderatorDuplicate": "Duplicate moderator username: {{name}}",
+        "pathTooLong": "File path too long (max 500 characters)",
+        "pathInvalid": "File path contains invalid characters"
     },
     "multipleInput": {
         "placeholder": "Type and press Enter",

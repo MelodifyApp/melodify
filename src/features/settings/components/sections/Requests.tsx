@@ -176,7 +176,11 @@ function CustomModerators({
         const name = draft.trim();
         if (!name) return;
         const next = [...moderators, name];
-        const validationError = validateField("customModerators", next);
+        const validationError = validateField(
+            "customModerators",
+            next,
+            t
+        );
         if (validationError) {
             setError(validationError);
             return;
@@ -270,7 +274,7 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
     >({});
 
     const handleInputChange = (key: string, value: string) => {
-        const error = validateField(key, value);
+        const error = validateField(key, value, t);
         setValidationErrors((current) => ({ ...current, [key]: error }));
         onConfigChange(key, value);
     };

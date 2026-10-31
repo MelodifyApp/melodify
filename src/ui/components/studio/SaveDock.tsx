@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import type { HTMLAttributes, MouseEventHandler } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../../../shared/utils";
 import { Button } from "./Button";
 import { StatusChip } from "./StatusChip";
@@ -13,29 +14,35 @@ export type SaveDockProps = DockCommon & (
 
 /** Reserved flex sibling, not an overlay. This component never persists anything. */
 export const SaveDock = forwardRef<HTMLElement, SaveDockProps>((props, ref) => {
+    const { t } = useTranslation();
     const { mode = "settings", className, draftPending = false, dirty, onSave, onDiscard, saving = false, disabled, error, ...footerProps } = props;
     const errorMessage = error?.trim() || "";
     if (props.mode === "api") {
         return (
-            <footer {...footerProps} ref={ref} className={cn("studio-save-dock", className)} data-mode={mode} aria-label={props["aria-label"] || "API credential actions"}>
+            <footer {...footerProps} ref={ref} className={cn("studio-save-dock", className)} data-mode={mode} aria-label={props["aria-label"] || t("saveDock.apiActions", { defaultValue: "API credential actions" })}>
                 <span className="studio-save-status-slot" data-hidden={!draftPending} aria-hidden={!draftPending}>
-                    <StatusChip status="api-draft" />
+                    <StatusChip
+                        status="api-draft"
+                        label={t("common.apiDraftPending", {
+                            defaultValue: "API draft pending",
+                        })}
+                    />
                 </span>
-                <span className="studio-save-note">Credentials save per service</span>
+                <span className="studio-save-note">{t("saveDock.credentialsSavePerService", { defaultValue: "Credentials save per service" })}</span>
             </footer>
         );
     }
     return (
-        <footer {...footerProps} ref={ref} className={cn("studio-save-dock", className)} data-mode={mode} aria-label={props["aria-label"] || "Settings save actions"}>
+        <footer {...footerProps} ref={ref} className={cn("studio-save-dock", className)} data-mode={mode} aria-label={props["aria-label"] || t("saveDock.settingsActions", { defaultValue: "Settings save actions" })}>
             <span className="studio-save-status-slot">
                 <span className="studio-save-state" data-dirty={dirty || undefined} data-tone={errorMessage ? "error" : undefined} role={errorMessage ? "alert" : "status"} aria-live={errorMessage ? "assertive" : "polite"} aria-atomic="true">
                     <span className="studio-status-icon" aria-hidden="true">{dirty || errorMessage ? <span className="studio-status-dot" /> : <CheckIcon />}</span>
-                    {errorMessage || (dirty ? "Unsaved changes" : "Saved")}
+                    {errorMessage || (dirty ? t("saveDock.unsavedChanges", { defaultValue: "Unsaved changes" }) : t("common.saved", { defaultValue: "Saved" }))}
                 </span>
             </span>
             <div className="studio-save-actions">
-                <Button variant="primary" loading={saving} disabled={disabled} onClick={onSave} aria-label="Save settings">Save</Button>
-                <Button variant="ghost" disabled={disabled || saving} onClick={onDiscard} aria-label="Discard unsaved settings and command edits." title="Discard unsaved settings and command edits.">Discard</Button>
+                <Button variant="primary" loading={saving} disabled={disabled} onClick={onSave} aria-label={t("saveDock.saveSettings", { defaultValue: "Save settings" })}>{t("common.save", { defaultValue: "Save" })}</Button>
+                <Button variant="ghost" disabled={disabled || saving} onClick={onDiscard} aria-label={t("saveDock.discardTitle", { defaultValue: "Discard unsaved settings and command edits." })} title={t("saveDock.discardTitle", { defaultValue: "Discard unsaved settings and command edits." })}>{t("saveDock.discard", { defaultValue: "Discard" })}</Button>
             </div>
         </footer>
     );

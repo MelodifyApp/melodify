@@ -226,6 +226,10 @@ export interface UpdateControllerDeps {
     realTempDir: string;
     statFile(filePath: string): UpdateArtifactStat;
     broadcast(channel: string, ...args: unknown[]): void;
+    /** Marks an explicit installer quit before applyUpdate starts. */
+    beforeApplyUpdate?(): void;
+    /** Clears the installer intent if applyUpdate could not start. */
+    onInstallFailure?(): void;
     log: {
         info(message: string): void;
         warn(message: string, context?: string): void;
@@ -496,10 +500,12 @@ export function createUpdateController(
         installInFlight = true;
         deps.broadcast("update:status", "installing");
         try {
+            deps.beforeApplyUpdate?.();
             const result = deps.updater.applyUpdate();
             if (result && typeof (result as Promise<unknown>).then === "function") {
                 (result as Promise<unknown>).catch((error) => {
                     installInFlight = false;
+                    deps.onInstallFailure?.();
                     deps.log.error(error, "updater:installUpdate");
                     deps.broadcast(
                         "update:status",
@@ -510,6 +516,7 @@ export function createUpdateController(
             }
         } catch (error) {
             installInFlight = false;
+            deps.onInstallFailure?.();
             deps.log.error(error, "updater:installUpdate");
             deps.broadcast(
                 "update:status",

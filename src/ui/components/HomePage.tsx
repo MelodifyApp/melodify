@@ -1,7 +1,13 @@
 // Home is the quiet session overview: latest request, accepted empty queue and
 // the real connection actions behind one modal.
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
     AlertTriangle,
@@ -20,7 +26,11 @@ import TwitchIcon from "@/features/twitch/components/TwitchIcon";
 import HomeConnectionsDialog from "@/features/home/HomeConnectionsDialog";
 import { useHomeConnections } from "@/features/home/useHomeConnections";
 import {
+    buildHomeConnectionAnnouncement,
+    changedHomeConnectionIds,
     homeConnectionMessageKey,
+    homeConnectionStateMap,
+    type HomeConnectionStateMap,
     type HomeConnectionView,
 } from "@/features/home/homeConnections";
 import { timeAgoParts } from "@/features/home/homeTime";
@@ -80,6 +90,22 @@ export default function HomePage({
     const bridge =
         typeof window !== "undefined" ? window.electronAPI : undefined;
     const { views, refreshAll } = useHomeConnections(bridge);
+    const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
+    const previousConnectionStates =
+        useRef<HomeConnectionStateMap | null>(null);
+    const connectionSignature = `${views.spotify.state}:${views.kick.state}:${views.twitch.state}`;
+
+    useEffect(() => {
+        const current = homeConnectionStateMap(views);
+        const previous = previousConnectionStates.current;
+        previousConnectionStates.current = current;
+        if (!previous) return;
+        const changed = changedHomeConnectionIds(previous, views);
+        if (changed.length === 0) return;
+        setConnectionAnnouncement(
+            buildHomeConnectionAnnouncement(changed, views, t)
+        );
+    }, [connectionSignature, t, views]);
 
     const closeConnections = useCallback(() => {
         setConnectionsOpen(false);
@@ -210,6 +236,15 @@ export default function HomePage({
                     <h1 id="home-title" className="studio-home-visually-hidden">
                         {t("navigation.homePage")}
                     </h1>
+                    <p
+                        className="studio-home-visually-hidden"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        data-home-connection-announcement
+                    >
+                        {connectionAnnouncement}
+                    </p>
 
                     <section
                         className="studio-home-latest"

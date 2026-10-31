@@ -187,7 +187,11 @@ export default function Commands({
                 : ["error"];
         }
         if (allowedVars.length > 0) {
-            const validationError = validateTemplate(template, allowedVars);
+            const validationError = validateTemplate(
+                template,
+                allowedVars,
+                t
+            );
             if (validationError) {
                 console.warn(
                     `Template validation failed for ${key}: ${validationError}`
@@ -272,10 +276,11 @@ export default function Commands({
                     }
                     maxLength={50}
                     validate={(candidate, current) =>
-                        validateField("customModerators", [
-                            ...current,
-                            candidate,
-                        ])
+                        validateField(
+                            "customModerators",
+                            [...current, candidate],
+                            t
+                        )
                     }
                     addLabel={t("commands.addModerator")}
                     removeLabel={(name) =>
@@ -376,7 +381,8 @@ export default function Commands({
                                                 validateCommandAlias(
                                                     candidate,
                                                     current,
-                                                    command.name
+                                                    command.name,
+                                                    t
                                                 )
                                             }
                                             addLabel={t(

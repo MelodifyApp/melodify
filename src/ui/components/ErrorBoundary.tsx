@@ -27,6 +27,7 @@
 // React error boundary component to catch and handle JavaScript errors in the component tree.
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { logError } from "@/renderer/rendererLogger";
 
 /**
@@ -45,6 +46,28 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
     hasError: boolean;
     error?: Error;
+}
+
+function ErrorFallback() {
+    const { t } = useTranslation();
+    return (
+        <div className="flex items-center justify-center h-screen bg-zinc-900 text-white">
+            <div className="text-center">
+                <h1 className="text-2xl font-bold mb-4">
+                    {t("errorBoundary.title")}
+                </h1>
+                <p className="text-zinc-400 mb-4">
+                    {t("errorBoundary.description")}
+                </p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="bg-melodify-primary hover:bg-melodify-primary-dark px-4 py-2 rounded"
+                >
+                    {t("errorBoundary.reload")}
+                </button>
+            </div>
+        </div>
+    );
 }
 
 /**
@@ -90,25 +113,7 @@ export class ErrorBoundary extends React.Component<
 
     render() {
         if (this.state.hasError) {
-            // Fallback UI when an error occurs
-            return (
-                <div className="flex items-center justify-center h-screen bg-zinc-900 text-white">
-                    <div className="text-center">
-                        <h1 className="text-2xl font-bold mb-4">
-                            Something went wrong
-                        </h1>
-                        <p className="text-zinc-400 mb-4">
-                            An error occurred in the application.
-                        </p>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="bg-melodify-primary hover:bg-melodify-primary-dark px-4 py-2 rounded"
-                        >
-                            Reload App
-                        </button>
-                    </div>
-                </div>
-            );
+            return <ErrorFallback />;
         }
 
         return this.props.children;

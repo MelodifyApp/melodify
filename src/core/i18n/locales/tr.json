@@ -124,6 +124,7 @@
             "manage": "Bağlantıları yönet",
             "setUp": "Bağlantıları ayarla",
             "checking": "Kontrol ediliyor",
+            "announcement": "{{service}} durumu: {{status}}",
             "ready": "Hazır",
             "listening": "Dinliyor",
             "openSpotify": "Etkin cihaz yok",
@@ -149,6 +150,7 @@
         "logs": "Günlükler",
         "debug": "Hata Ayıklama",
         "sections": "Ayar bölümleri",
+        "loading": "Ayarlar yükleniyor…",
         "saveFailed": "Ayarlar kaydedilmedi. Lütfen tekrar deneyin.",
         "saveRejected": "Ayarlar kaydedilmedi. Reddedilen değerler: {{keys}}.",
         "saveWriteFailed": "Ayarlar diske kaydedilemedi. Değişiklikleriniz burada kaldı; kaydetmeyi yeniden deneyin.",
@@ -272,7 +274,7 @@
         "warnings": "Uyarılar",
         "info": "Bilgi",
         "debug": "Hata Ayıklama",
-        "logsRetentionNotice": "Günlükler 30 gün sonra silinir. Kaydetmek için dışa aktarın."
+        "logsRetentionNotice": "30 günden eski günlükler Melodify başlarken silinir. Bir kopya kaydetmek için dışa aktarın; Temizle işlemi yoktur."
     },
     "common": {
         "save": "Kaydet",
@@ -291,6 +293,7 @@
         "needsCredentials": "Kimlik bilgileri gerekli",
         "unverified": "Doğrulanmadı",
         "verifying": "Doğrulanıyor…",
+        "apiDraftPending": "API taslağı bekliyor",
         "verified": "Doğrulandı",
         "verificationFailed": "Doğrulama başarısız",
         "verificationUnavailableStatus": "Doğrulama kullanılamıyor",
@@ -361,6 +364,50 @@
         "twitchAdditionalInfo1": "ℹ️ Geliştirici Konsolunda yeni bir uygulama oluşturun ve \"Chat Bot\" kategorisini seçin.",
         "kickAdditionalInfo1": "ℹ️ Uygulamanızı kaydettikten sonra, tekrar düzenleyin ve o uygulama için bir bot oluşturun.",
         "kickAdditionalInfo2": "✅ Gerekli izinler: \"Sohbet akışına yazma\" ve \"Kanal bilgilerini okuma\""
+    },
+    "saveDock": {
+        "apiActions": "API kimlik bilgisi işlemleri",
+        "credentialsSavePerService": "Kimlik bilgileri her hizmet için kaydedilir",
+        "settingsActions": "Ayar kaydetme işlemleri",
+        "unsavedChanges": "Kaydedilmemiş değişiklikler",
+        "saveSettings": "Ayarları kaydet",
+        "discardTitle": "Kaydedilmemiş ayarları ve komut düzenlemelerini at.",
+        "discard": "Vazgeç"
+    },
+    "errorBoundary": {
+        "title": "Bir sorun oluştu",
+        "description": "Uygulamada bir hata oluştu.",
+        "reload": "Uygulamayı yeniden yükle"
+    },
+    "validation": {
+        "urlRequired": "Lütfen bir URL girin",
+        "urlInvalid": "Lütfen geçerli bir URL girin (ör. http://example.com)",
+        "clientIdRequired": "Lütfen bir Client ID girin",
+        "clientIdTooShort": "Client ID çok kısa görünüyor",
+        "clientIdTooLong": "Client ID çok uzun görünüyor",
+        "clientIdInvalid": "Client ID yalnızca harf, rakam, tire ve alt çizgi içerebilir",
+        "clientSecretRequired": "Lütfen bir Client Secret girin",
+        "clientSecretTooShort": "Client Secret çok kısa görünüyor",
+        "clientSecretTooLong": "Client Secret çok uzun görünüyor",
+        "aliasRequired": "Lütfen alternatif bir komut adı girin",
+        "aliasTooShort": "Alternatif ad en az 1 karakter olmalı",
+        "aliasTooLong": "Alternatif ad en fazla 20 karakter olmalı",
+        "aliasInvalid": "Alternatif ad yalnızca harf, rakam, tire ve alt çizgi içerebilir",
+        "aliasSame": "Alternatif ad ana komutla aynı olamaz",
+        "aliasInUse": "Bu alternatif ad zaten kullanılıyor",
+        "messageRequired": "Lütfen bir mesaj girin",
+        "messageTooLong": "Mesaj en fazla 500 karakter olmalı",
+        "unknownVariable": "Bilinmeyen değişken: {{variable}}. Kullanılabilir değişkenler: {{available}}",
+        "prefixEmpty": "Önek boş olamaz",
+        "prefixTooLong": "Önek çok uzun (en fazla 10 karakter)",
+        "prefixInvalid": "Önek özel bir karakter olmalı (ör. !, @, #, $)",
+        "moderatorInvalid": "Tüm moderatör kullanıcı adları geçerli metin olmalı",
+        "moderatorEmpty": "Moderatör kullanıcı adları boş olamaz",
+        "moderatorTooLong": "Moderatör kullanıcı adları en fazla 50 karakter olmalı",
+        "moderatorInvalidChars": "Moderatör kullanıcı adları yalnızca harf, rakam, tire ve alt çizgi içerebilir",
+        "moderatorDuplicate": "Yinelenen moderatör kullanıcı adı: {{name}}",
+        "pathTooLong": "Dosya yolu çok uzun (en fazla 500 karakter)",
+        "pathInvalid": "Dosya yolu geçersiz karakterler içeriyor"
     },
     "multipleInput": {
         "placeholder": "Yazın ve Enter'a basın",

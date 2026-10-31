@@ -201,6 +201,8 @@ function harness(overrides = {}) {
         realTempDir: TEMP_DIR,
         statFile: () => stat,
         broadcast: (channel, ...args) => broadcasts.push([channel, ...args]),
+        beforeApplyUpdate: overrides.beforeApplyUpdate,
+        onInstallFailure: overrides.onInstallFailure,
         log: {
             info: (message) => logs.push(["info", message]),
             warn: (message) => logs.push(["warn", message]),
@@ -262,6 +264,44 @@ test("install marks busy before apply and is single-flight", async () => {
     resolveApply();
     await flush();
     assert.deepEqual(statuses(h.broadcasts), ["downloaded", "installing"]);
+});
+
+test("installer lifecycle callbacks bracket apply and roll back on failure", async () => {
+    const order = [];
+    const failed = harness({
+        beforeApplyUpdate: () => order.push("intent"),
+        onInstallFailure: () => order.push("rollback"),
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async () => TEMP_EXE,
+            applyUpdate: () => {
+                order.push("apply");
+                return Promise.reject(new Error("installer refused"));
+            },
+        },
+    });
+    await failed.controller.downloadUpdate();
+    failed.controller.installUpdate();
+    await flush();
+    assert.deepEqual(order, ["intent", "apply", "rollback"]);
+
+    const succeeded = [];
+    const success = harness({
+        beforeApplyUpdate: () => succeeded.push("intent"),
+        onInstallFailure: () => succeeded.push("rollback"),
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async () => TEMP_EXE,
+            applyUpdate: () => {
+                succeeded.push("apply");
+                return Promise.resolve();
+            },
+        },
+    });
+    await success.controller.downloadUpdate();
+    success.controller.installUpdate();
+    await flush();
+    assert.deepEqual(succeeded, ["intent", "apply"]);
 });
 
 test("an explicit install failure stays retryable and does not disable installs", async () => {

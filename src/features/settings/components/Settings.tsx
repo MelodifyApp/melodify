@@ -238,7 +238,9 @@ export default function Settings({ onClose, theme = "graphite", active = true, r
     if (loading) {
         return (
             <StudioTheme theme={theme} className="studio-settings-shell">
-                <div className="studio-settings-loading">Loading settings…</div>
+                <div className="studio-settings-loading">
+                    {t("settings.loading")}
+                </div>
             </StudioTheme>
         );
     }

@@ -185,6 +185,52 @@ export function deriveHomeConnections(
 }
 
 /** Message key for the compact Home status chip. */
+export type HomeConnectionStateMap = Partial<
+    Record<HomeConnectionId, HomeConnectionState>
+>;
+
+export function homeConnectionStateMap(
+    views: Record<HomeConnectionId, HomeConnectionView>
+): HomeConnectionStateMap {
+    return {
+        spotify: views.spotify.state,
+        kick: views.kick.state,
+        twitch: views.twitch.state,
+    };
+}
+
+/** Only states that actually changed; a render with the same states is quiet. */
+export function changedHomeConnectionIds(
+    previous: HomeConnectionStateMap,
+    current: Record<HomeConnectionId, HomeConnectionView>
+): HomeConnectionId[] {
+    return (["spotify", "kick", "twitch"] as const).filter(
+        (id) => previous[id] !== current[id].state
+    );
+}
+
+const HOME_CONNECTION_NAMES: Record<HomeConnectionId, string> = {
+    spotify: "Spotify",
+    kick: "Kick",
+    twitch: "Twitch",
+};
+
+/** One polite announcement sentence per changed service. */
+export function buildHomeConnectionAnnouncement(
+    changed: HomeConnectionId[],
+    views: Record<HomeConnectionId, HomeConnectionView>,
+    t: (key: string, options?: Record<string, unknown>) => string
+): string {
+    return changed
+        .map((id) =>
+            t("home.connections.announcement", {
+                service: HOME_CONNECTION_NAMES[id],
+                status: t(homeConnectionMessageKey(views[id])),
+            })
+        )
+        .join(" ");
+}
+
 export function homeConnectionMessageKey(
     connection: HomeConnectionView
 ): string {
