@@ -18,7 +18,7 @@ Thank you for your interest in contributing!
     npm run validate-translations
     npm run test:config   # plus the other test:* suites that cover your change
     ```
-    There is no aggregate `npm test` script and no `npm run build` script. Focused suites are defined in `package.json`: `test:kick`, `test:spotify`, `test:config`, `test:ui-states`, `test:twitch`, `test:permissions`, `test:logging`, `test:i18n`, `test:security`, `test:routing`.
+    There is no aggregate `npm test` script and no `npm run build` script. Focused suites are defined in `package.json`: `test:kick`, `test:spotify`, `test:config`, `test:ui-states`, `test:twitch`, `test:permissions`, `test:logging`, `test:i18n`, `test:security`, `test:routing`, `test:release`.
     Full-repo lint still reports pre-existing `@/` path-alias resolution errors; treat lint on changed files as the practical gate and do not introduce new warnings.
 6. Commit and push your branch.
 7. Open a pull request with a clear description of your changes.

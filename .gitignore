@@ -94,5 +94,8 @@ typings/
 # Electron-Forge
 out/
 
+# Release staging/artifact output
+release-assets/
+
 # Local
 *.local.*

@@ -51,7 +51,9 @@ npm run validate-translations
 npm run test:config        # plus the other focused test:* scripts
 ```
 
-The focused suites are defined under `scripts` in `package.json`: `test:kick`, `test:spotify`, `test:config`, `test:ui-states`, `test:twitch`, `test:permissions`, `test:logging`, `test:i18n`, `test:security`, `test:routing`. There is no aggregate `npm test` script and no `npm run build` script.
+The focused suites are defined under `scripts` in `package.json`: `test:kick`, `test:spotify`, `test:config`, `test:ui-states`, `test:twitch`, `test:permissions`, `test:logging`, `test:i18n`, `test:security`, `test:routing`, `test:release`. There is no aggregate `npm test` script and no `npm run build` script.
+
+Release preparation and the local Windows Sandbox smoke-test boundary are documented in [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md).
 
 ## How it works
 

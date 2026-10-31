@@ -5,26 +5,151 @@ on:
         tags:
             - "v*.*.*"
 
+# Default to read-only. Only the publish job receives repository write access.
 permissions:
-    contents: write
+    contents: read
+
+concurrency:
+    group: release-${{ github.ref_name }}
+    cancel-in-progress: false
 
 jobs:
     build:
+        name: Build Windows release
         runs-on: windows-latest
+        permissions:
+            contents: read
+        timeout-minutes: 45
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false
 
             - name: Setup Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
               with:
                   node-version: 20
 
             - name: Install dependencies
-              run: npm install
+              run: npm ci
 
-            - name: Make Distributables and Publish to GitHub Releases
+            - name: Make Windows distributables
+              run: npm run make
+
+            - name: Prepare and verify release assets
+              shell: pwsh
+              run: node scripts/release-assets.cjs prepare --tag "$env:GITHUB_REF_NAME"
+
+            # The write-scoped job receives this verifier with the artifacts, so it
+            # never needs a checkout or dependency installation.
+            - name: Stage release verifier
+              shell: pwsh
+              run: Copy-Item -LiteralPath scripts/release-assets.cjs -Destination release-assets/release-assets.cjs
+
+            - name: Upload release assets
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: melodify-windows-${{ github.ref_name }}
+                  path: release-assets
+                  if-no-files-found: error
+                  retention-days: 7
+
+    publish:
+        name: Publish Windows release
+        needs: build
+        runs-on: windows-latest
+        environment: release
+        permissions:
+            contents: write
+        timeout-minutes: 20
+
+        steps:
+            - name: Download Windows release artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: melodify-windows-${{ github.ref_name }}
+                  path: release-assets
+
+            - name: Verify release assets
+              shell: pwsh
+              run: node release-assets/release-assets.cjs verify --tag "$env:GITHUB_REF_NAME" --dir release-assets
+
+            - name: Create or update draft release and upload assets
+              shell: pwsh
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: npm run publish
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  $PSNativeCommandUseErrorActionPreference = $false
+                  $tag = $env:GITHUB_REF_NAME
+                  $manifest = Get-Content -LiteralPath 'release-assets/release-manifest.json' -Raw | ConvertFrom-Json
+                  $assetNames = @($manifest.files | ForEach-Object { $_.name })
+
+                  $existing = gh release view $tag --json isDraft,assets 2>$null
+                  if ($LASTEXITCODE -eq 0) {
+                      $release = $existing | ConvertFrom-Json
+                      if (-not $release.isDraft) {
+                          throw "Release $tag is already published; refusing to modify it."
+                      }
+                      foreach ($asset in @($release.assets)) {
+                          if ($assetNames -notcontains $asset.name) {
+                              gh release delete-asset $tag $asset.name --yes
+                              if ($LASTEXITCODE -ne 0) { throw "Could not remove stale draft asset $($asset.name)." }
+                          }
+                      }
+                      gh release edit $tag --title "Melodify $tag" --notes-file "release-assets/release-notes.md"
+                      if ($LASTEXITCODE -ne 0) { throw "Could not update draft release $tag." }
+                  } else {
+                      gh release create $tag --draft --verify-tag --title "Melodify $tag" --notes-file "release-assets/release-notes.md"
+                      if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
+                  }
+
+                  $assets = @($assetNames | ForEach-Object { Join-Path 'release-assets' $_ })
+                  gh release upload $tag @assets --clobber
+                  if ($LASTEXITCODE -ne 0) { throw "Could not upload release assets." }
+
+            - name: Verify uploaded draft assets
+              shell: pwsh
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  $tag = $env:GITHUB_REF_NAME
+                  $manifest = Get-Content -LiteralPath 'release-assets/release-manifest.json' -Raw | ConvertFrom-Json
+                  $expectedNames = @($manifest.files | ForEach-Object { $_.name })
+                  $remote = gh release view $tag --json isDraft,assets | ConvertFrom-Json
+                  if ($LASTEXITCODE -ne 0) { throw "Could not read draft release $tag." }
+                  if (-not $remote.isDraft) { throw "Release $tag is no longer a draft; refusing to publish." }
+
+                  foreach ($asset in @($remote.assets)) {
+                      if ($expectedNames -notcontains $asset.name) {
+                          throw "Draft release contains an unexpected asset: $($asset.name)."
+                      }
+                  }
+                  foreach ($file in $manifest.files) {
+                      $asset = @($remote.assets | Where-Object { $_.name -eq $file.name })[0]
+                      if (-not $asset) { throw "Draft release is missing $($file.name)." }
+                      if ([int64]$asset.size -le 0) { throw "Draft asset $($file.name) is empty." }
+                      if ([int64]$asset.size -ne [int64]$file.size) { throw "Draft asset $($file.name) size mismatch." }
+                  }
+
+            - name: Publish release
+              shell: pwsh
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  $tag = $env:GITHUB_REF_NAME
+                  gh release edit $tag --draft=false
+                  if ($LASTEXITCODE -ne 0) { throw "Could not publish release $tag; the draft was left in place." }
+
+            - name: Leave draft unpublished on failure
+              if: failure()
+              shell: pwsh
+              run: |
+                  Write-Output "Release checks failed. Any draft release remains unpublished for inspection."
