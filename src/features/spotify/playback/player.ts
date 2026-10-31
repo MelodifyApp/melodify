@@ -26,15 +26,20 @@ import { logError, logInfo, logWarn, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import fs from "fs";
 import path from "path";
+import {
+    songRequestErrorMessage,
+    type PlaySongFailureReason,
+    type PlaySongOutcome,
+} from "../../../shared/songRequestOutcome";
 
 // Global state management for Spotify integration
 let spotifyApi: SpotifyWebApi | null = null;
 let refreshSpotifyTokenInterval: NodeJS.Timeout | null = null;
-let saveSongInterval: NodeJS.Timeout | null = null;
-let nextSaveTimeout: NodeJS.Timeout | null = null;
 const songFileSavingEnabled = true;
 let lastSavedSong: { title: string; artist: string } | null = null;
-let songFileSavingInterval: NodeJS.Timeout | null = null;
+let songOverlayTimer: NodeJS.Timeout | null = null;
+let songOverlayGeneration = 0;
+let songOverlayActive = false;
 let tokenGeneration = 0;
 let refreshInFlight: Promise<boolean> | null = null;
 
@@ -226,23 +231,65 @@ export async function checkSpotifyAccessToken(
 }
 
 /**
+ * Classifies provider errors without retaining or exposing response bodies.
+ */
+function playbackFailureReason(
+    error: unknown,
+    fallback: PlaySongFailureReason
+): PlaySongFailureReason {
+    if (error instanceof Error) {
+        if (
+            error.name === "AbortError" ||
+            /abort|cancel/i.test(error.message)
+        ) {
+            return "cancelled";
+        }
+    }
+    const statusCode =
+        typeof error === "object" && error !== null
+            ? Number(
+                  (error as { statusCode?: unknown }).statusCode ??
+                      (
+                          error as {
+                              body?: { error?: { status?: unknown } };
+                          }
+                      ).body?.error?.status
+              )
+            : NaN;
+    if (statusCode === 401 || statusCode === 403) return "auth-error";
+    if (statusCode === 404) return "not-found";
+    if (statusCode === 429 || statusCode >= 500) return "provider-error";
+    return fallback;
+}
+
+function failedPlayback(
+    reason: PlaySongFailureReason
+): PlaySongOutcome {
+    return {
+        status: "failure",
+        reason,
+        error: songRequestErrorMessage(reason),
+    };
+}
+
+/**
  * Song Playback and Queue Management
  * Searches for a song by query, retrieves its details, and adds it to the playback queue
  * Supports direct URI playback and search-based playback
  *
  * @param songQuery The song query or URI
  * @param username The username for playback context (required by Spotify API)
- * @returns The played song's title and artist, or null if not found
+ * @returns A sanitized typed outcome; success only after queue insertion is confirmed
  */
 export async function playSong(
     songQuery: string,
     username: string
-): Promise<{ title: string; artist: string } | null> {
+): Promise<PlaySongOutcome> {
     logDebug("playSong called", redactSecrets({ songQuery, username }));
     const spotifyApi = getSpotifyApi();
     if (!spotifyApi) {
         logError("Spotify API not configured", "spotify:playSong");
-        return null;
+        return failedPlayback("auth-error");
     }
     let trackUri: string | null = null;
     let track: any = null;
@@ -257,38 +304,58 @@ export async function playSong(
             track = trackData.body;
         } catch (err) {
             logError(err, "spotify:playSong:getTrack");
+            return failedPlayback(
+                playbackFailureReason(err, "provider-error")
+            );
         }
     } else {
-        const tracks = await spotifyApi.searchTracks(songQuery, {
-            limit: 1,
-        });
-        if (!tracks.body.tracks.total) {
-            logWarn(
-                "No tracks found for query: " + songQuery,
-                "spotify:playSong"
-            );
-            return null;
-        }
-        track = tracks.body.tracks.items[0];
-        trackUri = track.uri;
-    }
-    if (trackUri && track) {
-        logDebug("Adding to queue", redactSecrets({ trackUri, track }));
         try {
-            await spotifyApi.addToQueue(trackUri);
+            const tracks = await spotifyApi.searchTracks(songQuery, {
+                limit: 1,
+            });
+            if (!tracks.body.tracks.total || !tracks.body.tracks.items[0]) {
+                logWarn(
+                    "No tracks found for query: " + songQuery,
+                    "spotify:playSong"
+                );
+                return failedPlayback("not-found");
+            }
+            track = tracks.body.tracks.items[0];
+            trackUri = track.uri;
         } catch (err) {
-            logError(err, "spotify:playSong:addToQueue");
-            // A found track is not a successful request until Spotify accepts it.
-            return null;
+            logError(err, "spotify:playSong:searchTracks");
+            return failedPlayback(
+                playbackFailureReason(err, "provider-error")
+            );
         }
-
-        return {
-            title: track.name,
-            artist: track.artists.map((a: any) => a.name).join(", "),
-        };
+    }
+    if (!trackUri || !track) {
+        return failedPlayback("unplayable");
+    }
+    if (track.is_playable === false) {
+        return failedPlayback("unplayable");
     }
 
-    return null;
+    logDebug("Adding to queue", redactSecrets({ trackUri, track }));
+    try {
+        await spotifyApi.addToQueue(trackUri);
+    } catch (err) {
+        logError(err, "spotify:playSong:addToQueue");
+        // A found track is not a successful request until Spotify accepts it.
+        return failedPlayback(
+            playbackFailureReason(err, "queue-rejected")
+        );
+    }
+
+    return {
+        status: "success",
+        song: {
+            title: track.name,
+            artist: (track.artists || [])
+                .map((a: any) => a.name)
+                .join(", "),
+        },
+    };
 }
 
 /**
@@ -314,6 +381,7 @@ export async function startSpotifyTokenRefreshInterval(
                 );
                 clearInterval(refreshSpotifyTokenInterval!);
                 refreshSpotifyTokenInterval = null;
+                stopSongFileSaving();
             }
         } catch (err) {
             logError(err, "spotify:startSpotifyTokenRefreshInterval");
@@ -323,8 +391,7 @@ export async function startSpotifyTokenRefreshInterval(
 
 /**
  * Token and Playback System Shutdown
- * Stops all intervals and timeouts related to Spotify token refreshing and song saving
- * This should be called when the application is closing or Spotify integration is disabled
+ * Stops token refresh and every current-song overlay timer.
  */
 export function stopSpotifyTokenAutoRefresh() {
     if (refreshSpotifyTokenInterval) {
@@ -332,56 +399,74 @@ export function stopSpotifyTokenAutoRefresh() {
         refreshSpotifyTokenInterval = null;
     }
 
-    // Also stop song saving intervals
-    if (saveSongInterval) {
-        clearInterval(saveSongInterval);
-        saveSongInterval = null;
-    }
-
-    if (nextSaveTimeout) {
-        clearTimeout(nextSaveTimeout);
-        nextSaveTimeout = null;
-    }
-
-    if (songFileSavingInterval) {
-        clearTimeout(songFileSavingInterval);
-        songFileSavingInterval = null;
-    }
+    // The overlay scheduler owns every current-song timer; stopping it here
+    // also prevents fallback or duration timers from surviving auth failure.
+    stopSongFileSaving();
 
     logDebug("All Spotify intervals and timeouts cleared", "spotify:stop");
 }
 
+function scheduleCurrentSongPoll(generation: number, delay: number): void {
+    if (!songOverlayActive || generation !== songOverlayGeneration) {
+        return;
+    }
+    if (songOverlayTimer) {
+        clearTimeout(songOverlayTimer);
+    }
+    songOverlayTimer = setTimeout(() => {
+        songOverlayTimer = null;
+        void saveCurrentSongToFile(generation);
+    }, delay);
+}
+
 // Function to save current song to file
-async function saveCurrentSongToFile() {
-    if (!songFileSavingEnabled) {
+async function saveCurrentSongToFile(
+    generation = songOverlayGeneration
+): Promise<void> {
+    if (
+        !songFileSavingEnabled ||
+        !songOverlayActive ||
+        generation !== songOverlayGeneration
+    ) {
         return;
     }
 
     try {
         const spotifyApi = getSpotifyApi();
         if (!spotifyApi) {
+            stopSongFileSaving();
             return;
         }
 
         // Check and refresh access token if needed before making API call
         const tokenValid = await checkSpotifyAccessToken();
+        if (!songOverlayActive || generation !== songOverlayGeneration) {
+            return;
+        }
         if (!tokenValid) {
             logWarn(
-                "Spotify access token invalid, skipping song file save",
+                "Spotify access token invalid, stopping current-song overlay",
                 "saveCurrentSongToFile"
             );
+            stopSongFileSaving();
             return;
         }
 
         const playbackState = await spotifyApi.getMyCurrentPlaybackState();
+        if (!songOverlayActive || generation !== songOverlayGeneration) {
+            return;
+        }
 
         if (!playbackState.body.is_playing || !playbackState.body.item) {
+            scheduleCurrentSongPoll(generation, 30000);
             return;
         }
 
         const item = playbackState.body.item;
         if (item.type !== "track") {
-            return; // Only handle tracks, not episodes
+            // Only handle tracks, not episodes.
+            scheduleCurrentSongPoll(generation, 30000);
+            return;
         }
 
         const currentSong = {
@@ -389,35 +474,34 @@ async function saveCurrentSongToFile() {
             artist: item.artists[0]?.name || "Unknown Artist",
         };
 
-        // Check if song has changed
+        // Keep the existing behavior: only write when the track changes.
         if (
             lastSavedSong &&
             lastSavedSong.title === currentSong.title &&
             lastSavedSong.artist === currentSong.artist
         ) {
-            return; // Song hasn't changed, don't save
+            scheduleCurrentSongPoll(generation, 30000);
+            return;
         }
 
-        // Song has changed, save it
         await saveSongToFile(currentSong);
+        if (!songOverlayActive || generation !== songOverlayGeneration) {
+            return;
+        }
         lastSavedSong = currentSong;
 
-        // Schedule next check based on song duration
         const songDuration = item.duration_ms;
-        const nextCheckDelay = Math.min(songDuration + 5000, 300000); // Max 5 minutes
+        const nextCheckDelay = Math.min(songDuration + 5000, 300000);
         logDebug(
             `Song changed, next check in ${Math.round(nextCheckDelay / 1000)}s`,
             "saveCurrentSongToFile"
         );
-
-        if (songFileSavingInterval) {
-            clearTimeout(songFileSavingInterval);
-        }
-        songFileSavingInterval = setTimeout(
-            saveCurrentSongToFile,
-            nextCheckDelay
-        );
+        scheduleCurrentSongPoll(generation, nextCheckDelay);
     } catch (error) {
+        if (!songOverlayActive || generation !== songOverlayGeneration) {
+            return;
+        }
+
         // Handle token expiration specifically
         if (
             error instanceof Error &&
@@ -429,33 +513,58 @@ async function saveCurrentSongToFile() {
             );
             try {
                 const refreshed = await refreshSpotifyAccessToken();
+                if (!songOverlayActive || generation !== songOverlayGeneration) {
+                    return;
+                }
                 if (refreshed) {
-                    logDebug(
-                        "Token refreshed successfully, retrying song file save",
-                        "saveCurrentSongToFile"
-                    );
-                    // Retry the operation once after successful refresh
-                    setTimeout(saveCurrentSongToFile, 1000);
+                    scheduleCurrentSongPoll(generation, 1000);
                 } else {
                     logWarn(
                         "Failed to refresh Spotify token for song file saving",
                         "saveCurrentSongToFile"
                     );
+                    stopSongFileSaving();
                 }
             } catch (refreshError) {
                 logError(refreshError, "saveCurrentSongToFile:tokenRefresh");
+                stopSongFileSaving();
             }
             return;
         }
 
-        // Only log error if it's not a common "no playback" error
-        if (
-            error instanceof Error &&
-            !error.message.includes("NO_ACTIVE_DEVICE") &&
-            !error.message.includes("PREMIUM_REQUIRED")
-        ) {
-            logError(error, "saveCurrentSongToFile");
+        const statusCode =
+            typeof error === "object" && error !== null
+                ? Number(
+                      (error as { statusCode?: unknown }).statusCode ??
+                          (
+                              error as {
+                                  body?: {
+                                      error?: { status?: unknown };
+                                  };
+                              }
+                          ).body?.error?.status
+                  )
+                : NaN;
+        if (statusCode === 401 || statusCode === 403) {
+            logWarn(
+                "Spotify authentication failed; stopping current-song overlay",
+                "saveCurrentSongToFile"
+            );
+            stopSongFileSaving();
+            return;
         }
+
+        const message = error instanceof Error ? error.message : "";
+        if (
+            message.includes("NO_ACTIVE_DEVICE") ||
+            message.includes("PREMIUM_REQUIRED")
+        ) {
+            scheduleCurrentSongPoll(generation, 30000);
+            return;
+        }
+
+        logError(error, "saveCurrentSongToFile");
+        scheduleCurrentSongPoll(generation, 30000);
     }
 }
 
@@ -500,45 +609,36 @@ async function saveSongToFile(songInfo: { title: string; artist: string }) {
 
 /**
  * Song File Saving Control
- * Starts or stops the automatic saving of the currently playing song to a file
- * The saved information can be used for streaming overlays (e.g., OBS)
- *
- * - On start, clears any existing intervals or timeouts to avoid duplicates
- * - Immediately saves the current song information to file
- * - Sets up a periodic fallback save every 30 seconds
+ * Starts one generation-bound current-song scheduler. Starting again replaces
+ * the previous owner rather than layering another timer.
  */
 export function startSongFileSaving() {
-    // Clear any existing intervals and timeouts
-    if (saveSongInterval) {
-        clearInterval(saveSongInterval);
-    }
-    if (nextSaveTimeout) {
-        clearTimeout(nextSaveTimeout);
+    stopSongFileSaving();
+    if (
+        !songFileSavingEnabled ||
+        Config.get("saveCurrentSongToFile") !== true ||
+        !Config.get("currentSongFilePath")
+    ) {
+        logDebug("Song file saving is disabled or has no target path");
+        return;
     }
 
-    // Start the first check immediately
-    saveCurrentSongToFile();
+    songOverlayGeneration += 1;
+    const generation = songOverlayGeneration;
+    songOverlayActive = true;
     logInfo("Started saving current song to file");
-
-    // Also set up a periodic check every 30 seconds as a fallback
-    saveSongInterval = setInterval(() => {
-        saveCurrentSongToFile();
-    }, 30000);
+    void saveCurrentSongToFile(generation);
 }
 
 /**
- * Song File Saving Control
- * Stops the automatic saving of the currently playing song to a file
- * Clears any existing intervals or timeouts related to song saving
+ * Stops the single current-song owner and invalidates any in-flight poll.
  */
 export function stopSongFileSaving() {
-    if (saveSongInterval) {
-        clearInterval(saveSongInterval);
-        saveSongInterval = null;
-    }
-    if (nextSaveTimeout) {
-        clearTimeout(nextSaveTimeout);
-        nextSaveTimeout = null;
+    songOverlayGeneration += 1;
+    songOverlayActive = false;
+    if (songOverlayTimer) {
+        clearTimeout(songOverlayTimer);
+        songOverlayTimer = null;
     }
 
     logInfo("Stopped saving current song to file");

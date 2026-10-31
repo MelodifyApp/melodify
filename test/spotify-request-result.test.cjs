@@ -17,13 +17,22 @@ const effects = { count: 0, history: 0, globalCooldown: 0, userCooldown: 0, repl
 let rejectQueue = false;
 let resolveQueue;
 let pendingQueue = false;
+let searchError = null;
+let noResults = false;
+let queueError = null;
+let trackOverride = null;
 const track = { uri: "spotify:track:abc123", name: "Sample track", artists: [{ name: "Sample artist" }] };
 class FakeSpotifyWebApi {
-    async searchTracks() { return { body: { tracks: { total: 1, items: [track] } } }; }
-    async getTrack() { return { body: track }; }
+    async searchTracks() {
+        if (searchError) throw searchError;
+        if (noResults) return { body: { tracks: { total: 0, items: [] } } };
+        return { body: { tracks: { total: 1, items: [trackOverride || track] } } };
+    }
+    async getTrack() { return { body: trackOverride || track }; }
     async addToQueue(uri) {
         effects.queue.push(uri);
         if (pendingQueue) await new Promise((resolve) => { resolveQueue = resolve; });
+        if (queueError) throw queueError;
         if (rejectQueue) throw new Error("Spotify rejected queue insertion");
     }
 }
@@ -65,6 +74,10 @@ function reset() {
     effects.queue = [];
     rejectQueue = pendingQueue = false;
     resolveQueue = undefined;
+    searchError = null;
+    noResults = false;
+    queueError = null;
+    trackOverride = null;
     values.replyOnSongRequestError = true;
     values.replyOnCooldown = true;
     values.canAnyonePlaySong = true;
@@ -247,3 +260,226 @@ for (const platform of ["kick", "twitch"]) {
         assert.equal(await executeSongRequest({ ...context, platform }, "Sample track", manager, { skipPermissionCheck: true }), true);
     });
 }
+
+const history = require("../src/core/songRequestHistory");
+
+test("Spotify search failures produce a sanitized typed error reply", async () => {
+    reset();
+    values.songRequestErrorTemplate = "Could not add: {error}";
+    searchError = Object.assign(new Error("raw provider body token=secret"), {
+        statusCode: 503,
+    });
+    const success = await executeSongRequest(
+        context,
+        "Sample track",
+        manager,
+        { sendReply }
+    );
+    assert.equal(success, false);
+    assert.deepEqual(effects.queue, []);
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Could not add: Spotify is temporarily unavailable.",
+    ]);
+    assert.doesNotMatch(effects.replies[0], /raw provider body|token=secret/);
+});
+
+test("Spotify auth failure and no-result outcomes are distinguished", async () => {
+    reset();
+    values.songRequestErrorTemplate = "Failed: {error}";
+    searchError = Object.assign(new Error("raw auth detail"), {
+        statusCode: 401,
+    });
+    assert.equal(await executeSongRequest(context, "Sample track", manager, { sendReply }), false);
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Failed: Spotify authentication is unavailable.",
+    ]);
+
+    reset();
+    values.songRequestErrorTemplate = "Failed: {error}";
+    noResults = true;
+    assert.equal(await executeSongRequest(context, "Sample track", manager, { sendReply }), false);
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Failed: No matching track found.",
+    ]);
+});
+
+test("Spotify cancellation is reported without a false search failure", async () => {
+    reset();
+    values.songRequestErrorTemplate = "Cancelled: {error}";
+    searchError = Object.assign(new Error("request aborted"), {
+        name: "AbortError",
+    });
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            sendReply,
+        }),
+        false
+    );
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Cancelled: Spotify request was cancelled.",
+    ]);
+});
+
+test("unplayable and queue-rejected outcomes are distinct and sanitized", async () => {
+    reset();
+    values.songRequestErrorTemplate = "Failed: {error}";
+    trackOverride = { ...track, is_playable: false };
+    assert.equal(await executeSongRequest(context, "Sample track", manager, { sendReply }), false);
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Failed: Track is unavailable.",
+    ]);
+
+    reset();
+    values.songRequestErrorTemplate = "Failed: {error}";
+    queueError = Object.assign(new Error("raw queue body credential"), {
+        statusCode: 400,
+    });
+    assert.equal(await executeSongRequest(context, "Sample track", manager, { sendReply }), false);
+    assert.deepEqual(effects.replies, [
+        "@sample-viewer Failed: Spotify rejected the queue request.",
+    ]);
+    assert.doesNotMatch(effects.replies[0], /raw queue body|credential/);
+});
+
+test("reward outcomes use the existing history status for success, cooldown and queue failure", async () => {
+    reset();
+    effects.replies = [];
+    history.resetSongRequestOutcomeHistory();
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            sendReply,
+            skipPermissionCheck: true,
+        }),
+        true
+    );
+    assert.deepEqual(
+        {
+            status: history.getLastSongRequestOutcome().status,
+            source: history.getLastSongRequestOutcome().source,
+            reason: history.getLastSongRequestOutcome().reason,
+            manual: history.getLastSongRequestOutcome().manualReconciliationRequired,
+        },
+        {
+            status: "success",
+            source: "reward",
+            reason: undefined,
+            manual: false,
+        }
+    );
+
+    reset();
+    history.resetSongRequestOutcomeHistory();
+    const coolingManager = {
+        ...manager,
+        checkGlobalCooldown: () => true,
+        getGlobalCooldownEnd: () => 30,
+        getRemainingCooldownTime: () => 30,
+    };
+    assert.equal(
+        await executeSongRequest(context, "Sample track", coolingManager, {
+            sendReply,
+            skipPermissionCheck: true,
+        }),
+        false
+    );
+    assert.equal(history.getLastSongRequestOutcome().reason, "cooldown");
+    assert.equal(history.getLastSongRequestOutcome().source, "reward");
+    assert.equal(
+        history.getLastSongRequestOutcome().manualReconciliationRequired,
+        true
+    );
+    assert.deepEqual(effects.queue, []);
+
+    reset();
+    history.resetSongRequestOutcomeHistory();
+    rejectQueue = true;
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            sendReply,
+            skipPermissionCheck: true,
+        }),
+        false
+    );
+    assert.equal(
+        history.getLastSongRequestOutcome().reason,
+        "queue-rejected"
+    );
+    assert.equal(
+        history.getLastSongRequestOutcome().manualReconciliationRequired,
+        true
+    );
+    assert.equal(effects.count, 0);
+});
+
+test("no-sender reward outcomes are still recorded without a chat reply", async () => {
+    reset();
+    history.resetSongRequestOutcomeHistory();
+    rejectQueue = true;
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            skipPermissionCheck: true,
+        }),
+        false
+    );
+    assert.deepEqual(effects.replies, []);
+    assert.equal(history.getLastSongRequestOutcome().status, "rejected");
+    assert.equal(
+        history.getLastSongRequestOutcome().manualReconciliationRequired,
+        true
+    );
+
+    reset();
+    history.resetSongRequestOutcomeHistory();
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            skipPermissionCheck: true,
+        }),
+        true
+    );
+    assert.equal(history.getLastSongRequestOutcome().status, "success");
+});
+
+test("a failed chat reply does not erase the reward outcome", async () => {
+    reset();
+    history.resetSongRequestOutcomeHistory();
+    await assert.rejects(
+        executeSongRequest(context, "Sample track", manager, {
+            sendReply: async () => {
+                throw new Error("chat transport unavailable");
+            },
+            skipPermissionCheck: true,
+        }),
+        /chat transport unavailable/
+    );
+    assert.deepEqual(effects.queue, [track.uri]);
+    assert.equal(effects.count, 1);
+    assert.equal(history.getLastSongRequestOutcome().status, "success");
+    assert.equal(history.getLastSongRequestOutcome().source, "reward");
+});
+
+test("the existing song request status supports an unknown manual-reconciliation outcome", () => {
+    history.resetSongRequestOutcomeHistory();
+    const recorded = history.recordSongRequestOutcome({
+        status: "rejected",
+        source: "reward",
+        reason: "unknown",
+        message: "Request failed for an unknown reason.",
+        manualReconciliationRequired: true,
+        platform: "twitch",
+        requestedBy: "sample-viewer",
+    });
+    assert.equal(recorded.reason, "unknown");
+    assert.equal(recorded.manualReconciliationRequired, true);
+    assert.deepEqual(
+        history.getLastSongRequestOutcome().reason,
+        "unknown"
+    );
+});
+
+test("the existing song request status exposes the last reward outcome", () => {
+    const source = require("node:fs").readFileSync(
+        require("node:path").join(__dirname, "..", "src", "core", "ipc", "handlers.ts"),
+        "utf8"
+    );
+    assert.match(source, /lastOutcome:\s*getLastSongRequestOutcome\(\)/);
+});

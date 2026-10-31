@@ -1,7 +1,13 @@
 import Config from "@/core/config";
 import { playSong } from "@/features/spotify/playback/player";
 import { incrementSongRequestCount } from "@/core/ipc/handlers";
-import { logDebug, logError, logSongRequest } from "@/core/logging";
+import { recordSongRequestOutcome } from "../songRequestHistory";
+import { logDebug, logError, logWarn, logSongRequest } from "@/core/logging";
+import {
+    songRequestErrorMessage,
+    type SongRequestFailureReason,
+    type SongRequestOutcome,
+} from "../../shared/songRequestOutcome";
 import { type CommandContext, type CommandManager, isModerator } from "./manager";
 
 function formatTemplate(
@@ -18,6 +24,7 @@ type ReplySender = (message: string) => Promise<void>;
 interface ExecuteSongRequestOptions {
     sendReply?: ReplySender;
     skipPermissionCheck?: boolean;
+    onOutcome?: (outcome: SongRequestOutcome) => void;
 }
 
 export async function executeSongRequest(
@@ -26,8 +33,33 @@ export async function executeSongRequest(
     commandManager?: CommandManager,
     options: ExecuteSongRequestOptions = {}
 ): Promise<boolean> {
-    const { sendReply, skipPermissionCheck = false } = options;
+    const { sendReply, skipPermissionCheck = false, onOutcome } = options;
     const query = songQuery.trim();
+    const source = skipPermissionCheck ? "reward" : "command";
+    const finish = (outcome: SongRequestOutcome): boolean => {
+        recordSongRequestOutcome(outcome);
+        onOutcome?.(outcome);
+        if (outcome.status === "rejected") {
+            logWarn(
+                `Song request rejected (${outcome.reason}, ${outcome.source}): ${outcome.message}`,
+                "songRequest"
+            );
+        }
+        return outcome.status === "success";
+    };
+    const reject = (
+        reason: SongRequestFailureReason,
+        message = songRequestErrorMessage(reason)
+    ): boolean =>
+        finish({
+            status: "rejected",
+            source,
+            reason,
+            message,
+            manualReconciliationRequired: source === "reward",
+            platform: ctx.platform,
+            requestedBy: ctx.username,
+        });
 
     logDebug("executeSongRequest called", {
         username: ctx.username,
@@ -51,12 +83,13 @@ export async function executeSongRequest(
             !isModerator(badges, ctx.username) &&
             !badges.some((badge) => allowedRoles.includes(badge))
         ) {
+            const result = reject("permission");
             if (Config.get("replyOnSongRequestError") && sendReply) {
                 await sendReply(
                     `@${ctx.username} You don't have permission to request songs.`
                 );
             }
-            return false;
+            return result;
         }
     }
 
@@ -89,46 +122,62 @@ export async function executeSongRequest(
     }
 
     if (isOnCooldown) {
+        let cooldownMessage = songRequestErrorMessage("cooldown");
         if (Config.get("replyOnCooldown") && sendReply) {
-            const cooldownMessage = formatTemplate(
+            cooldownMessage = formatTemplate(
                 Config.get("cooldownMessageTemplate") ||
                     "Please wait {time} seconds before requesting another song.",
                 { time: longestRemainingTime }
             );
+        }
+        // Enforce and record the cooldown even when chat notifications are
+        // disabled/unavailable or the reply transport fails.
+        const result = reject("cooldown", cooldownMessage);
+        if (Config.get("replyOnCooldown") && sendReply) {
             await sendReply(`@${ctx.username} ${cooldownMessage}`);
         }
-        // Enforce the cooldown even when chat notifications are disabled/unavailable.
-        return false;
+        return result;
     }
 
     if (!query) {
+        const result = reject("empty-query");
         if (Config.get("replyOnSongRequestError") && sendReply) {
             await sendReply(
                 `@${ctx.username} Please provide a song name or Spotify URL.`
             );
         }
-        return false;
+        return result;
     }
 
-    let songInfo: { title: string; artist: string } | null = null;
+    let playbackOutcome;
     try {
-        songInfo = await playSong(query, ctx.username);
+        playbackOutcome = await playSong(query, ctx.username);
     } catch (error) {
         logError(error, "songRequest:playSong");
-        return false;
+        playbackOutcome = {
+            status: "failure" as const,
+            reason: "unknown" as const,
+            error: songRequestErrorMessage("unknown"),
+        };
     }
 
-    if (!songInfo) {
+    if (playbackOutcome.status === "failure") {
+        const result = reject(
+            playbackOutcome.reason,
+            playbackOutcome.error
+        );
         if (Config.get("replyOnSongRequestError") && sendReply) {
-            await sendReply(
-                `@${ctx.username} ${
-                    Config.get("songRequestErrorTemplate") ||
-                    "Song not found or unavailable"
-                }`
+            const errorReply = formatTemplate(
+                Config.get("songRequestErrorTemplate") ||
+                    "Song not found or unavailable",
+                { error: playbackOutcome.error }
             );
+            await sendReply(`@${ctx.username} ${errorReply}`);
         }
-        return false;
+        return result;
     }
+
+    const songInfo = playbackOutcome.song;
 
     if (commandManager) {
         commandManager.setGlobalCooldown();
@@ -137,6 +186,19 @@ export async function executeSongRequest(
 
     logSongRequest(songInfo.title, songInfo.artist, ctx.username);
     incrementSongRequestCount(songInfo);
+
+    // Queue insertion is confirmed at this point; record the success before a
+    // chat reply can fail, so status history remains truthful.
+    const result = finish({
+        status: "success",
+        source,
+        title: songInfo.title,
+        artist: songInfo.artist,
+        message: "Added to queue.",
+        manualReconciliationRequired: false,
+        platform: ctx.platform,
+        requestedBy: ctx.username,
+    });
 
     if (Config.get("replyOnSongRequest") && sendReply) {
         await sendReply(
@@ -149,5 +211,5 @@ export async function executeSongRequest(
         );
     }
 
-    return true;
+    return result;
 }

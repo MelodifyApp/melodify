@@ -247,6 +247,7 @@ function spotifyAuthHarness(options = {}) {
             saveTokens() {
                 capture.saves += 1;
             },
+            startSongFileSaving() {},
         },
         "@/shared/utils/windowSend": {
             sendToWindowIfAlive: (...args) => {

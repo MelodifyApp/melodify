@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { BrowserWindow } from "electron";
-import { saveTokens, getSpotifyApi } from "@/features/spotify/playback/player";
+import {
+    saveTokens,
+    getSpotifyApi,
+    startSongFileSaving,
+} from "@/features/spotify/playback/player";
 import express from "express";
 import { Server } from "http";
 import { logInfo, logError, logWarn, logDebug } from "@/core/logging";
@@ -201,6 +205,7 @@ export async function startSpotifyAuthServer(
                 refreshToken: refresh_token,
                 expiresIn: expires_in,
             });
+            startSongFileSaving();
 
             res.send(
                 "Spotify authentication successful! You can close this window."

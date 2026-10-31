@@ -7,6 +7,7 @@ import {
     checkSpotifyAccessToken,
     startSpotifyTokenRefreshInterval,
     stopSpotifyTokenAutoRefresh,
+    startSongFileSaving,
 } from "@/features/spotify/playback/player";
 import { startSpotifyAuthServer, stopSpotifyAuthServer } from "@/features/spotify/auth/server";
 import { exec } from "child_process";
@@ -87,6 +88,9 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
         const spotifyApi = getSpotifyApi();
         const me = await spotifyApi.getMe();
         startSpotifyTokenRefreshInterval(window);
+        if (Config.get("saveCurrentSongToFile")) {
+            startSongFileSaving();
+        }
         logDebug(
             "spotify:checkAuth success",
             redactSecrets({ username: me.body.display_name })

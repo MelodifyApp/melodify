@@ -49,6 +49,7 @@ import {
 } from "@/features/spotify/playback/player";
 import path from "path";
 import { registerAllCommands } from "@/core/commands/registry";
+import { getLastSongRequestOutcome } from "../songRequestHistory";
 
 // Initialize command management system with full registration
 const commandManager = new CommandManager();
@@ -523,6 +524,7 @@ ipcMain.handle("songRequest:getCount", () => {
         count: dailySongRequestCount,
         lastRequestTime: lastRequestTime?.toISOString() || null,
         lastSong: lastRequestedSong,
+        lastOutcome: getLastSongRequestOutcome(),
     };
 });
 
