@@ -1,24 +1,70 @@
-// HomePage.tsx
-// Main home page component displaying Kick and Spotify authentication cards.
+// Home is the quiet session overview: latest request, accepted empty queue and
+// the real connection actions behind one modal.
 
-import { useState, useEffect } from "react";
-import KickCard from "@/features/kick/components/KickCard";
-import SpotifyCard from "@/features/spotify/components/SpotifyCard";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
+    AlertTriangle,
+    Clock,
     Headphones,
     LoaderCircleIcon,
     RotateCcwIcon,
-    Clock,
 } from "lucide-react";
+import { Button, StudioTheme } from "@/ui/components/studio";
+import type { StudioThemeName } from "@/ui/components/studio";
 import { useUpdateStatus } from "@/ui/hooks/useUpdateStatus";
-import { useTranslation } from "react-i18next";
-import TwitchCard from "@/features/twitch/components/TwitchCard";
+import { homeUpdatePresentation } from "@/ui/homeUpdateStatus";
+import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
+import KickIcon from "@/features/kick/components/KickIcon";
+import TwitchIcon from "@/features/twitch/components/TwitchIcon";
+import HomeConnectionsDialog from "@/features/home/HomeConnectionsDialog";
+import { useHomeConnections } from "@/features/home/useHomeConnections";
+import {
+    homeConnectionMessageKey,
+    type HomeConnectionView,
+} from "@/features/home/homeConnections";
+import { timeAgoParts } from "@/features/home/homeTime";
+import "./homeStudio.css";
 
-/**
- * HomePage component displays the main interface with authentication cards.
- * Shows Kick and Spotify integration cards for user authentication.
- */
-export default function HomePage() {
+function ConnectionRow({
+    connection,
+    name,
+    role,
+    icon,
+}: {
+    connection: HomeConnectionView;
+    name: string;
+    role: string;
+    icon: ReactNode;
+}) {
+    const { t } = useTranslation();
+    return (
+        <li className="studio-home-connection">
+            <span
+                className="studio-service-tile"
+                data-service={connection.id}
+                aria-hidden="true"
+            >
+                {icon}
+            </span>
+            <span className="studio-home-connection-name">
+                <strong>{name}</strong>
+                <span>{role}</span>
+            </span>
+            <span className="studio-home-chip" data-tone={connection.tone}>
+                {t(homeConnectionMessageKey(connection))}
+            </span>
+        </li>
+    );
+}
+
+export default function HomePage({
+    theme = "graphite",
+    onOpenSettings,
+}: {
+    theme?: StudioThemeName;
+    onOpenSettings?: () => void;
+}) {
     const { t } = useTranslation();
     const [songRequestCount, setSongRequestCount] = useState(0);
     const [lastRequestTime, setLastRequestTime] = useState<Date | null>(null);
@@ -26,63 +72,53 @@ export default function HomePage() {
         title: string;
         artist: string;
     } | null>(null);
-    const [timeAgo, setTimeAgo] = useState<string>("");
-    const { status, progress } = useUpdateStatus();
-    const [version, setVersion] = useState<string>("");
+    const [now, setNow] = useState(() => Date.now());
+    const { status, progress, manifest } = useUpdateStatus();
+    const [version, setVersion] = useState("");
+    const [connectionsOpen, setConnectionsOpen] = useState(false);
 
-    // Function to format time ago
-    const formatTimeAgo = (date: Date) => {
-        const now = new Date();
-        const diffInMs = now.getTime() - date.getTime();
-        const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-        const diffInHours = Math.floor(diffInMinutes / 60);
-        const diffInDays = Math.floor(diffInHours / 24);
+    const bridge =
+        typeof window !== "undefined" ? window.electronAPI : undefined;
+    const { views, refreshAll } = useHomeConnections(bridge);
 
-        if (diffInDays > 0) {
-            return `${diffInDays}d`;
-        } else if (diffInHours > 0) {
-            return `${diffInHours}h`;
-        } else if (diffInMinutes > 0) {
-            return `${diffInMinutes}m`;
-        } else {
-            return "now";
-        }
-    };
+    const closeConnections = useCallback(() => {
+        setConnectionsOpen(false);
+        void refreshAll();
+    }, [refreshAll]);
+
+    const openSettingsFromConnections = useCallback(() => {
+        setConnectionsOpen(false);
+        onOpenSettings?.();
+    }, [onOpenSettings]);
 
     useEffect(() => {
-        // Update time ago every minute
-        const interval = setInterval(() => {
-            if (lastRequestTime) {
-                setTimeAgo(formatTimeAgo(lastRequestTime));
-            }
-        }, 60000); // Update every minute
-
+        const interval = setInterval(() => setNow(Date.now()), 60000);
         return () => clearInterval(interval);
-    }, [lastRequestTime]);
+    }, []);
 
     useEffect(() => {
-        // Fetch the app version from the main process
-        window.electronAPI.getAppVersion?.().then(setVersion);
+        if (!bridge) return;
+        bridge
+            .getAppVersion?.()
+            .then(setVersion)
+            .catch(() => setVersion(""));
 
-        // Listen for song request events to update the count
-        window.electronAPI.on(
-            "songRequest:completed",
-            (data: { title?: string; artist?: string } = {}) => {
-                setSongRequestCount((prev) => prev + 1);
-                const now = new Date();
-                setLastRequestTime(now);
-                setTimeAgo(formatTimeAgo(now));
-                if (data.title && data.artist) {
-                    setLastRequestedSong({
-                        title: data.title,
-                        artist: data.artist,
-                    });
-                }
+        const onSongRequestCompleted = (
+            data: { title?: string; artist?: string } = {}
+        ) => {
+            setSongRequestCount((previous) => previous + 1);
+            setNow(Date.now());
+            setLastRequestTime(new Date());
+            if (data?.title && data?.artist) {
+                setLastRequestedSong({
+                    title: data.title,
+                    artist: data.artist,
+                });
             }
-        );
+        };
+        bridge.on("songRequest:completed", onSongRequestCompleted);
 
-        // Get initial song request count if available
-        window.electronAPI
+        bridge
             .invoke("songRequest:getCount")
             .then(
                 (data: {
@@ -90,135 +126,257 @@ export default function HomePage() {
                     lastRequestTime: string | null;
                     lastSong?: { title: string; artist: string };
                 }) => {
-                    setSongRequestCount(data.count || 0);
-                    if (data.lastRequestTime) {
-                        const lastTime = new Date(data.lastRequestTime);
-                        setLastRequestTime(lastTime);
-                        setTimeAgo(formatTimeAgo(lastTime));
+                    setSongRequestCount(data?.count || 0);
+                    if (data?.lastRequestTime) {
+                        const parsed = new Date(data.lastRequestTime);
+                        if (!Number.isNaN(parsed.getTime())) {
+                            setLastRequestTime(parsed);
+                        }
                     }
-                    if (data.lastSong) {
+                    if (
+                        data?.lastSong &&
+                        typeof data.lastSong.title === "string" &&
+                        typeof data.lastSong.artist === "string"
+                    ) {
                         setLastRequestedSong(data.lastSong);
                     }
                 }
             )
             .catch(() => {
-                // If not implemented yet, start from 0
                 setSongRequestCount(0);
                 setLastRequestTime(null);
                 setLastRequestedSong(null);
             });
 
-        // Cleanup event listeners
         return () => {
-            window.electronAPI.removeAllListeners("songRequest:completed");
+            bridge.removeListener(
+                "songRequest:completed",
+                onSongRequestCompleted
+            );
         };
-    }, []);
+    }, [bridge]);
 
-    // Determine update status text and icon
-    let updateStatus = "";
-    let updateIcon = null;
-
-    if (status === "checking") {
-        updateStatus = t("home.checkingUpdates");
-        updateIcon = (
-            <LoaderCircleIcon className="w-4 h-4 text-blue-400 animate-spin" />
-        );
-    } else if (status === "downloading") {
-        updateStatus = t("home.downloadingUpdate", {
-            percent: progress?.percent ? Math.round(progress.percent) : 0,
-        });
-        updateIcon = (
-            <LoaderCircleIcon className="w-4 h-4 text-blue-400 animate-spin" />
-        );
-    } else if (status === "downloaded") {
-        updateStatus = t("home.updateReady");
-        updateIcon = <RotateCcwIcon className="w-4 h-4 text-green-400" />;
-    } else if (status === "error") {
-        updateStatus = t("home.updateError");
-        updateIcon = <RotateCcwIcon className="w-4 h-4 text-red-400" />;
-    } else {
-        updateStatus = t("home.upToDate");
+    const timeParts = lastRequestTime
+        ? timeAgoParts(lastRequestTime, new Date(now))
+        : null;
+    let timeAgoLabel = "";
+    if (timeParts?.unit === "now") {
+        timeAgoLabel = t("home.timeNow");
+    } else if (timeParts?.unit === "minutes") {
+        timeAgoLabel = t("home.timeMinutes", { count: timeParts.count });
+    } else if (timeParts?.unit === "hours") {
+        timeAgoLabel = t("home.timeHours", { count: timeParts.count });
+    } else if (timeParts?.unit === "days") {
+        timeAgoLabel = t("home.timeDays", { count: timeParts.count });
     }
 
-    return (
-        <div className="flex-1 flex flex-col bg-zinc-900 overflow-hidden">
-            <div className="px-6 py-3 border-b border-zinc-700/60">
-                <div className="bg-zinc-800/50 rounded-md p-3 border border-zinc-700/60 border-l-2 border-l-melodify-primary">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-melodify-primary/10 rounded-md flex items-center justify-center">
-                                <Headphones className="w-4 h-4 text-melodify-primary" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-white">
-                                    {t("home.songRequests")}
-                                </h3>
-                                <p className="text-xs text-zinc-400">
-                                    {t("home.totalToday")}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-2xl font-semibold text-melodify-primary">
-                                {songRequestCount}
-                            </div>
-                        </div>
-                    </div>
+    const requestCountLabel =
+        songRequestCount === 1
+            ? t("home.acceptedRequest")
+            : t("home.acceptedRequests", { count: songRequestCount });
 
-                    {lastRequestedSong && songRequestCount > 0 && (
-                        <div className="mt-2 pt-2 border-t border-zinc-700/60">
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-white font-medium truncate">
+    const needsSetup = Object.values(views).some(
+        (view) => view.state === "setup"
+    );
+
+    const presentation = homeUpdatePresentation(status, progress, manifest);
+    const updateStatus = presentation.version
+        ? `${t(presentation.key)} · v${presentation.version}`
+        : t(presentation.key, {
+              percent: presentation.percent,
+          });
+    let updateIcon = null;
+    if (presentation.icon === "spin") {
+        updateIcon = (
+            <LoaderCircleIcon
+                className="studio-home-spin"
+                aria-hidden="true"
+            />
+        );
+    } else if (presentation.icon === "available") {
+        updateIcon = <RotateCcwIcon aria-hidden="true" />;
+    } else if (presentation.icon === "error") {
+        updateIcon = <AlertTriangle aria-hidden="true" />;
+    }
+    const updateTone = presentation.tone;
+
+    return (
+        <StudioTheme className="studio-home" theme={theme}>
+            <div className="studio-home-body">
+                <main
+                    className="studio-home-main"
+                    aria-labelledby="home-title"
+                >
+                    <h1 id="home-title" className="studio-home-visually-hidden">
+                        {t("navigation.homePage")}
+                    </h1>
+
+                    <section
+                        className="studio-home-latest"
+                        aria-labelledby="home-latest-title"
+                    >
+                        <div
+                            className="studio-home-art"
+                            aria-hidden="true"
+                        >
+                            <Headphones />
+                        </div>
+                        <div className="studio-home-latest-body">
+                            <h2
+                                id="home-latest-title"
+                                className="studio-home-label"
+                            >
+                                {t("home.latestRequest")}
+                            </h2>
+                            {lastRequestedSong ? (
+                                <>
+                                    <p className="studio-home-request-title">
                                         {lastRequestedSong.title}
                                     </p>
-                                    <p className="text-xs text-zinc-400 truncate">
+                                    <p className="studio-home-request-artist">
                                         {t("home.byArtist", {
                                             artist: lastRequestedSong.artist,
                                         })}
                                     </p>
-                                </div>
-                                {lastRequestTime && (
-                                    <div className="flex items-center gap-1 text-zinc-400 ml-2">
-                                        <Clock className="w-3 h-3" />
-                                        <span className="text-xs">
-                                            {timeAgo}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
+                                    {timeAgoLabel && (
+                                        <p className="studio-home-request-time">
+                                            <Clock aria-hidden="true" />
+                                            {timeAgoLabel}
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <p className="studio-home-request-title">
+                                        {t("home.noRequestsYet")}
+                                    </p>
+                                    <p className="studio-home-empty-copy">
+                                        {t("home.noRequestsCopy")}
+                                    </p>
+                                </>
+                            )}
+                            <p className="studio-home-count">
+                                {requestCountLabel}
+                            </p>
                         </div>
-                    )}
-                </div>
+                    </section>
+
+                    <section
+                        className="studio-home-queue"
+                        aria-labelledby="home-queue-title"
+                    >
+                        <div className="studio-home-queue-head">
+                            <h2 id="home-queue-title">
+                                {t("home.queueTitle")}
+                            </h2>
+                            <span className="studio-home-queue-count">
+                                {t("home.queueCount", { count: 0 })}
+                            </span>
+                        </div>
+                        <p className="studio-home-queue-empty">
+                            {t("home.queueEmpty")}
+                        </p>
+                    </section>
+                </main>
+
+                <aside
+                    className="studio-home-rail"
+                    aria-labelledby="home-connections-title"
+                >
+                    <div className="studio-home-rail-head">
+                        <h2 id="home-connections-title">
+                            {t("home.connections.title")}
+                        </h2>
+                    </div>
+
+                    <div
+                        className="studio-home-rail-group"
+                        role="group"
+                        aria-labelledby="home-connections-music"
+                    >
+                        <h3
+                            className="studio-home-rail-label"
+                            id="home-connections-music"
+                        >
+                            {t("home.connections.music")}
+                        </h3>
+                        <ul
+                            className="studio-home-conn-list"
+                            aria-labelledby="home-connections-music"
+                        >
+                            <ConnectionRow
+                                connection={views.spotify}
+                                name="Spotify"
+                                role={t("home.connections.spotifyRole")}
+                                icon={<SpotifyIcon />}
+                            />
+                        </ul>
+                    </div>
+
+                    <div
+                        className="studio-home-rail-group"
+                        role="group"
+                        aria-labelledby="home-connections-streaming"
+                    >
+                        <h3
+                            className="studio-home-rail-label"
+                            id="home-connections-streaming"
+                        >
+                            {t("home.connections.streaming")}
+                        </h3>
+                        <ul
+                            className="studio-home-conn-list"
+                            aria-labelledby="home-connections-streaming"
+                        >
+                            <ConnectionRow
+                                connection={views.kick}
+                                name="Kick"
+                                role={t("home.connections.kickRole")}
+                                icon={<KickIcon />}
+                            />
+                            <ConnectionRow
+                                connection={views.twitch}
+                                name="Twitch"
+                                role={t("home.connections.twitchRole")}
+                                icon={<TwitchIcon />}
+                            />
+                        </ul>
+                    </div>
+
+                    <div className="studio-home-rail-foot">
+                        <Button
+                            variant={needsSetup ? "primary" : "ghost"}
+                            onClick={() => setConnectionsOpen(true)}
+                        >
+                            {needsSetup
+                                ? t("home.connections.setUp")
+                                : t("home.connections.manage")}
+                        </Button>
+                    </div>
+                </aside>
             </div>
 
-            <div className="flex-1 p-6">
-                <div className="h-full flex gap-5">
-                    <div className="flex-1 grid grid-cols-3 gap-5">
-                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
-                            <SpotifyCard />
-                        </div>
-                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
-                            <KickCard />
-                        </div>
-                        <div className="bg-zinc-800/40 rounded-lg border border-zinc-700/70 overflow-hidden">
-                            <TwitchCard />
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <footer className="studio-home-footer">
+                <span>v{version || "—"}</span>
+                <span
+                    className="studio-home-footer-status"
+                    data-tone={updateTone}
+                    role="status"
+                    aria-live="polite"
+                >
+                    {updateIcon}
+                    {updateStatus}
+                </span>
+            </footer>
 
-            <div className="px-6 py-3 border-t border-zinc-700/60">
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <div className="flex items-center gap-2">
-                        <span>v{version}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {updateIcon}
-                        <span>{updateStatus}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+            {connectionsOpen && (
+                <HomeConnectionsDialog
+                    views={views}
+                    onClose={closeConnections}
+                    onRefresh={refreshAll}
+                    onOpenSettings={openSettingsFromConnections}
+                />
+            )}
+        </StudioTheme>
     );
 }

@@ -5,6 +5,7 @@
  */
 
 import Config from "@/core/config";
+import { findCommandAliasConflict } from "../config/rendererConfig";
 import { logInfo, logDebug, logError, logWarn } from "@/core/logging";
 
 /**
@@ -86,7 +87,11 @@ function loadSavedCommandConfig(
  */
 export class CommandManager {
     private commands: Map<string, Command> = new Map();
-    private aliasMap: Map<string, string> = new Map(); // alias -> commandName
+    private aliasMap: Map<string, string> = new Map(); // normalized alias -> commandName
+
+    private aliasKey(alias: string): string {
+        return alias.trim().toLowerCase();
+    }
 
     // Cooldown tracking - prevents command spam
     private globalCooldownEnd = 0;
@@ -113,17 +118,7 @@ export class CommandManager {
      * @returns Success status of registration
      */
     register(command: Command) {
-        // Validate command structure
-        const validationError = this.validateCommand(command);
-        if (validationError) {
-            logError(
-                `Failed to register command ${command.name}: ${validationError}`,
-                "CommandManager"
-            );
-            return false;
-        }
-
-        // Check for duplicate command names
+        // Check for duplicate command names before building the proposed map.
         if (this.commands.has(command.name)) {
             logWarn(
                 `Command ${command.name} already exists, overwriting`,
@@ -131,22 +126,8 @@ export class CommandManager {
             );
         }
 
-        // Check for duplicate aliases across all commands to prevent conflicts
-        if (command.aliases) {
-            for (const alias of command.aliases) {
-                if (this.aliasMap.has(alias)) {
-                    const existingCommand = this.aliasMap.get(alias);
-                    logWarn(
-                        `Alias '${alias}' already exists for command '${existingCommand}', cannot use for '${command.name}'`,
-                        "CommandManager"
-                    );
-                    return false;
-                }
-            }
-        }
-
-        // Load enabled state and aliases from persistent configuration
-        // This allows commands to retain their customized state across app restarts
+        // Load saved state before validating aliases so registration applies
+        // exactly the same conflict rule as a settings save.
         const savedConfig = loadSavedCommandConfig(
             Config.get("commands"),
             command.name
@@ -156,16 +137,24 @@ export class CommandManager {
                 ? savedConfig.enabled
                 : command.enabled;
         const savedAliases = savedConfig.aliases ?? command.aliases ?? [];
-
-        // Update command with saved state
         command.enabled = enabled;
         command.aliases = savedAliases;
+
+        // Validate command structure and the complete proposed alias map.
+        const validationError = this.validateCommand(command);
+        if (validationError) {
+            logError(
+                `Failed to register command ${command.name}: ${validationError}`,
+                "CommandManager"
+            );
+            return false;
+        }
 
         // Register command and its aliases in lookup maps
         this.commands.set(command.name, command);
         if (command.aliases) {
             for (const alias of command.aliases) {
-                this.aliasMap.set(alias, command.name);
+                this.aliasMap.set(this.aliasKey(alias), command.name);
             }
         }
 
@@ -224,7 +213,8 @@ export class CommandManager {
             return "Command handler must be a function";
         }
 
-        // Validate aliases for conflicts and format
+        // Validate aliases for format, then apply the complete-map conflict
+        // rule shared with config persistence.
         if (command.aliases) {
             if (!Array.isArray(command.aliases)) {
                 return "Command aliases must be an array";
@@ -234,9 +224,8 @@ export class CommandManager {
                 return "Too many aliases (max 10)";
             }
 
-            const seenAliases = new Set<string>();
             for (const alias of command.aliases) {
-                if (!alias || alias.trim() === "") {
+                if (typeof alias !== "string" || alias.trim() === "") {
                     return "Alias cannot be empty";
                 }
 
@@ -247,30 +236,22 @@ export class CommandManager {
                 if (!/^[a-zA-Z0-9_-]+$/.test(alias)) {
                     return "Alias can only contain letters, numbers, hyphens, and underscores";
                 }
-
-                if (alias === command.name) {
-                    return "Alias cannot be the same as the command name";
-                }
-
-                if (seenAliases.has(alias)) {
-                    return `Duplicate alias: ${alias}`;
-                }
-                seenAliases.add(alias);
-
-                // Check if this alias conflicts with any existing command or alias
-                if (this.commands.has(alias)) {
-                    return `Alias '${alias}' conflicts with existing command '${alias}'`;
-                }
-
-                const existingCommandForAlias = this.aliasMap.get(alias);
-                if (
-                    existingCommandForAlias &&
-                    existingCommandForAlias !== command.name
-                ) {
-                    return `Alias '${alias}' is already used by command '${existingCommandForAlias}'`;
-                }
             }
         }
+
+        const proposedCommands: Record<
+            string,
+            { aliases?: string[] }
+        > = {};
+        for (const [name, existing] of this.commands.entries()) {
+            if (name === command.name) continue;
+            proposedCommands[name] = { aliases: existing.aliases ?? [] };
+        }
+        proposedCommands[command.name] = {
+            aliases: command.aliases ?? [],
+        };
+        const aliasConflict = findCommandAliasConflict(proposedCommands);
+        if (aliasConflict) return aliasConflict;
 
         return null;
     }
@@ -354,7 +335,6 @@ export class CommandManager {
             return false;
         }
 
-        // Comprehensive validation of new aliases
         if (!Array.isArray(newAliases)) {
             logError(
                 "New aliases must be an array",
@@ -371,10 +351,8 @@ export class CommandManager {
             return false;
         }
 
-        // Check for duplicates and conflicts within the new aliases
-        const seenAliases = new Set<string>();
         for (const alias of newAliases) {
-            if (!alias || alias.trim() === "") {
+            if (typeof alias !== "string" || alias.trim() === "") {
                 logError(
                     "Alias cannot be empty",
                     "commandManager:updateAliases"
@@ -397,60 +375,36 @@ export class CommandManager {
                 );
                 return false;
             }
-
-            if (alias === commandName) {
-                logError(
-                    "Alias cannot be the same as the command name",
-                    "commandManager:updateAliases"
-                );
-                return false;
-            }
-
-            if (seenAliases.has(alias)) {
-                logError(
-                    `Duplicate alias: ${alias}`,
-                    "commandManager:updateAliases"
-                );
-                return false;
-            }
-            seenAliases.add(alias);
-
-            // Check if this alias conflicts with any existing command
-            if (this.commands.has(alias)) {
-                logError(
-                    `Alias '${alias}' conflicts with existing command '${alias}'`,
-                    "commandManager:updateAliases"
-                );
-                return false;
-            }
-
-            // Check if this alias is already used by another command
-            const existingCommandForAlias = this.aliasMap.get(alias);
-            if (
-                existingCommandForAlias &&
-                existingCommandForAlias !== commandName
-            ) {
-                logWarn(
-                    `Alias '${alias}' is already used by command '${existingCommandForAlias}'`,
-                    "commandManager:updateAliases"
-                );
-                return false;
-            }
         }
 
-        // Remove old aliases from alias map to prevent stale references
+        const proposedCommands: Record<
+            string,
+            { aliases?: string[] }
+        > = {};
+        for (const [name, existing] of this.commands.entries()) {
+            proposedCommands[name] = {
+                aliases:
+                    name === commandName
+                        ? newAliases
+                        : (existing.aliases ?? []),
+            };
+        }
+        const conflict = findCommandAliasConflict(proposedCommands);
+        if (conflict) {
+            logWarn(conflict, "commandManager:updateAliases");
+            return false;
+        }
+
+        // Remove old aliases from alias map to prevent stale references.
         if (command.aliases) {
             for (const oldAlias of command.aliases) {
-                this.aliasMap.delete(oldAlias);
+                this.aliasMap.delete(this.aliasKey(oldAlias));
             }
         }
 
-        // Update command aliases and rebuild alias map
         command.aliases = newAliases;
-
-        // Add new aliases to alias map
         for (const alias of newAliases) {
-            this.aliasMap.set(alias, commandName);
+            this.aliasMap.set(this.aliasKey(alias), commandName);
         }
 
         logInfo(
@@ -495,6 +449,39 @@ export class CommandManager {
     }
 
     /**
+     * Reload enabled state and aliases from the persisted command map. Used
+     * after an acknowledged settings save and after a successful config retry.
+     */
+    reloadFromConfig(): void {
+        const commandsConfig = Config.get("commands");
+
+        for (const [commandName, command] of this.commands.entries()) {
+            const savedConfig = loadSavedCommandConfig(
+                commandsConfig,
+                commandName
+            );
+            if (
+                savedConfig.enabled !== undefined &&
+                command.enabled !== savedConfig.enabled
+            ) {
+                command.enabled = savedConfig.enabled;
+                logDebug(
+                    `Reloaded enabled state for command '${commandName}' from config: ${savedConfig.enabled}`,
+                    "CommandManager"
+                );
+            }
+            const savedAliases = savedConfig.aliases;
+            if (savedAliases === undefined) continue;
+            if (
+                JSON.stringify([...(command.aliases ?? [])].sort()) !==
+                JSON.stringify([...savedAliases].sort())
+            ) {
+                this.updateCommandAliases(commandName, savedAliases);
+            }
+        }
+    }
+
+    /**
      * Get all commands for serialization (for IPC communication)
      * Returns command data without the handler functions
      */
@@ -521,10 +508,14 @@ export class CommandManager {
      * Resolves aliases to their primary command
      */
     get(name: string) {
-        return (
-            this.commands.get(name) ||
-            this.commands.get(this.aliasMap.get(name) || "")
-        );
+        const direct = this.commands.get(name);
+        if (direct) return direct;
+        const normalized = name.trim().toLowerCase();
+        const commandName =
+            Array.from(this.commands.keys()).find(
+                (candidate) => candidate.trim().toLowerCase() === normalized
+            ) ?? this.aliasMap.get(normalized);
+        return commandName ? this.commands.get(commandName) : undefined;
     }
 
     /**

@@ -44,9 +44,10 @@ test("InlineError renders an accessible red alert with a subtle entrance", () =>
     assert.match(html, /aria-live="assertive"/);
     assert.match(html, /aria-atomic="true"/);
     assert.match(html, /inline-error/);
-    assert.match(html, /text-red-\d{3}/);
-    assert.match(html, /border-red-500\/40/);
-    assert.match(html, /bg-red-500\/10/);
+    assert.match(html, /studio-inline-error/);
+    const studioCss = read("src/ui/components/studio/studio.css");
+    assert.match(studioCss, /\.studio-inline-error[^}]*var\(--studio-danger/);
+    assert.match(studioCss, /\.studio-inline-error[^}]*color-mix/);
     assert.match(html, /Please enter a valid Client ID/);
 });
 
@@ -197,24 +198,26 @@ test("Spotify credentials submit through the safe outcome helper", async () => {
     );
 });
 
-test("Settings > Secrets treats every failure status as a red error", () => {
+test("Settings > Secrets exposes the six explicit credential states", () => {
     const {
-        isSecretErrorStatus,
-        secretStatusMessageKey,
-    } = require("../src/features/settings/secretsSave");
+        credentialStatusMessageKey,
+    } = require("../src/features/settings/credentialState");
 
-    for (const status of ["required", "failed", "invalid", "unavailable"]) {
-        assert.equal(isSecretErrorStatus(status), true, status);
-        assert.equal(typeof secretStatusMessageKey(status), "string", status);
-    }
-    for (const status of ["idle", "saving", "saved"]) {
-        assert.equal(isSecretErrorStatus(status), false, status);
+    for (const status of [
+        "needs-credentials",
+        "unverified",
+        "verifying",
+        "verified",
+        "verification-failed",
+        "verification-unavailable",
+    ]) {
+        assert.equal(typeof credentialStatusMessageKey(status), "string", status);
     }
 
     const source = read("src/features/settings/components/sections/Secrets.tsx");
-    assert.match(source, /InlineError/);
-    assert.match(source, /isSecretErrorStatus/);
-    assert.match(source, /role="status"/);
+    assert.match(source, /ServiceCard/);
+    assert.match(source, /credentialStatusMessageKey/);
+    assert.match(source, /role="dialog"/);
     assert.doesNotMatch(source, /\balert\s*\(/);
 });
 
@@ -349,6 +352,13 @@ function loadHook(relativePath, hookName) {
                             : next;
                 },
             ];
+        },
+        useRef(initial) {
+            const index = runtime.cursor++;
+            if (!(index in runtime.slots)) {
+                runtime.slots[index] = { current: initial };
+            }
+            return runtime.slots[index];
         },
     };
     let hookModule;
@@ -519,62 +529,102 @@ test("only the visible slot announces the setup error", () => {
     assert.equal(render("boom", false).includes("mb-2"), false);
 });
 
-test("Secrets section hook clears stale errors and keeps drafts on failure", async () => {
+test("Secrets section hook gates verification and save, and keeps drafts on failure", async () => {
     const { run } = loadHook(
         "src/features/settings/useSecretsSection.ts",
         "useSecretsSection"
     );
     const clientIdChanges = [];
+    const verifyCalls = [];
     const saveCalls = [];
+    const stored = [];
+    const statuses = {};
     const options = (overrides = {}) => ({
         validate: (key, value) => (value.trim().length === 0 ? "required" : null),
         onClientIdChange: (key, value) => clientIdChanges.push([key, value]),
+        statuses,
+        onStatusChange: (serviceId, status) => {
+            statuses[serviceId] = status;
+        },
+        onResetStatus: (serviceId) => {
+            delete statuses[serviceId];
+        },
+        verify: async (serviceId, drafts) => {
+            verifyCalls.push([serviceId, drafts]);
+            return { ok: true, drafts };
+        },
         save: async (serviceId, drafts) => {
             saveCalls.push([serviceId, drafts]);
             return { ok: false, error: "invalid", drafts };
         },
+        config: { spotifyClientId: "" },
+        storedSecrets: {},
+        storedClientIds: {},
+        onStoredSecretChange: (serviceId, isStored) => stored.push([serviceId, isStored]),
         ...overrides,
     });
 
     let base = options();
     let api = run(base);
     assert.deepEqual(api.drafts, {});
-    assert.deepEqual(api.statuses, {});
+    assert.equal(api.getStatus("spotify"), "needs-credentials");
 
-    // Typing a secret keeps it in the draft and clears the status.
+    // A secret without a client ID is still incomplete.
     api.editField("spotify", "spotifyClientSecret", "draft", true);
     api = run(base);
-    assert.deepEqual(api.drafts, { spotifyClientSecret: "draft" });
-    assert.equal(api.statuses.spotify, "idle");
+    assert.equal(api.getStatus("spotify"), "needs-credentials");
 
-    // Failed save keeps the draft and reports the mapped status.
-    await api.saveService("spotify");
-    api = run(base);
-    assert.equal(api.statuses.spotify, "invalid");
-    assert.deepEqual(api.drafts, { spotifyClientSecret: "draft" });
-    assert.deepEqual(saveCalls[0][1], { spotifyClientSecret: "draft" });
-
-    // Editing the CLIENT ID clears that service's stale error (root item 2).
     api.editField("spotify", "spotifyClientId", "client-id", false);
-    api = run(base);
-    assert.equal(api.statuses.spotify, "idle");
-    assert.deepEqual(clientIdChanges, [["spotifyClientId", "client-id"]]);
-
-    // Local validation errors surface and clear as the input is corrected.
-    api.editField("spotify", "spotifyClientId", "", false);
-    api = run(base);
-    assert.equal(api.validationErrors.spotifyClientId, "required");
-    api.editField("spotify", "spotifyClientId", "ok", false);
-    api = run(base);
-    assert.equal(api.validationErrors.spotifyClientId, null);
-
-    // Success clears the drafts and reports saved.
-    const success = options({
-        save: async () => ({ ok: true, drafts: {} }),
+    base = options({
+        config: { spotifyClientId: "client-id" },
+        verify: base.verify,
+        save: base.save,
     });
-    api = run(success);
+    api = run(base);
+    assert.equal(api.getStatus("spotify"), "unverified");
+
+    // Verification failure keeps the draft and blocks Save.
+    base = options({
+        config: { spotifyClientId: "client-id" },
+        verify: async (serviceId, drafts) => {
+            verifyCalls.push([serviceId, drafts]);
+            return { ok: false, error: "invalid", drafts };
+        },
+        save: base.save,
+    });
+    api = run(base);
+    await api.verifyService("spotify");
+    api = run(base);
+    assert.equal(api.getStatus("spotify"), "verification-failed");
+    assert.deepEqual(api.drafts, { spotifyClientSecret: "draft" });
+    assert.equal((await api.saveService("spotify")), undefined);
+    assert.deepEqual(saveCalls, [], "Save must not run before Verified");
+
+    // Success verifies without clearing the draft, then Save clears it.
+    base = options({
+        config: { spotifyClientId: "client-id" },
+        verify: async (serviceId, drafts) => {
+            verifyCalls.push([serviceId, drafts]);
+            return { ok: true, drafts };
+        },
+        save: async (serviceId, drafts) => {
+            saveCalls.push([serviceId, drafts]);
+            return { ok: true, drafts: {} };
+        },
+    });
+    api = run(base);
+    await api.verifyService("spotify");
+    api = run(base);
+    assert.equal(api.getStatus("spotify"), "verified");
+    assert.deepEqual(api.drafts, { spotifyClientSecret: "draft" });
     await api.saveService("spotify");
-    api = run(success);
-    assert.equal(api.statuses.spotify, "saved");
+    api = run(base);
+    assert.equal(api.getStatus("spotify"), "verified");
     assert.deepEqual(api.drafts, {});
+    assert.deepEqual(stored, [["spotify", true]]);
+
+    // Editing after verification invalidates the state immediately.
+    api.editField("spotify", "spotifyClientSecret", "edited", true);
+    api = run(base);
+    assert.equal(api.getStatus("spotify"), "unverified");
 });

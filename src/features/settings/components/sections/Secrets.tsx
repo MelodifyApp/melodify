@@ -1,30 +1,45 @@
-import { type ReactNode } from "react";
-import Input from "@/ui/components/Input";
-import { Button } from "@/ui/components/Button";
-import InlineError from "@/ui/components/InlineError";
-import KickIcon from "@/features/kick/components/KickIcon";
-import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
-import TwitchIcon from "@/features/twitch/components/TwitchIcon";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
+import { Button, IconButton, Input, ServiceCard } from "@/ui/components/studio";
+import ExternalLink from "@/ui/components/ExternalLink";
 import { validateField } from "../validation";
 import { useSecretsSection } from "../../useSecretsSection";
 import {
     SECRET_SERVICES,
-    isSecretErrorStatus,
+    getSetupGuide,
     type SecretServiceId,
     saveServiceSecrets,
-    secretStatusMessageKey,
+    verifyServiceSecrets,
 } from "../../secretsSave";
+import {
+    canSaveCredentials,
+    canVerifyCredentials,
+    credentialStatusMessageKey,
+    toChipStatus,
+    type CredentialStatus,
+} from "../../credentialState";
+
+import {
+    markCredentialSaved,
+    resetCredentialStatus,
+    setCredentialStatus,
+    useCredentialStatuses,
+} from "../../credentialStatusStore";
 
 interface SecretsProps {
     config: any;
+    baselineConfig?: any;
     onConfigChange: (key: string, value: any) => void;
+    onDraftStateChange?: (pending: boolean) => void;
+    onServiceSaved?: (serviceId: SecretServiceId) => void;
+    active?: boolean;
 }
 
 interface SecretFieldDefinition {
     key: string;
-    label: string;
-    placeholder: string;
+    labelKey: string;
+    placeholderKey: string;
     isSecret: boolean;
 }
 
@@ -32,172 +47,404 @@ const secretFields: Record<SecretServiceId, SecretFieldDefinition[]> = {
     spotify: [
         {
             key: "spotifyClientId",
-            label: "Client ID",
-            placeholder: "1a2b3c4d5e6f...",
+            labelKey: "setup.clientId",
+            placeholderKey: "setup.enterSpotifyClientId",
             isSecret: false,
         },
         {
             key: "spotifyClientSecret",
-            label: "Client Secret",
-            placeholder: "a1b2c3d4e5f6...",
+            labelKey: "setup.clientSecret",
+            placeholderKey: "setup.enterSpotifyClientSecret",
             isSecret: true,
         },
     ],
     kick: [
         {
             key: "kickClientId",
-            label: "Client ID",
-            placeholder: "kick_client_id_here",
+            labelKey: "setup.clientId",
+            placeholderKey: "setup.enterKickClientId",
             isSecret: false,
         },
         {
             key: "kickClientSecret",
-            label: "Client Secret",
-            placeholder: "kick_client_secret_here",
+            labelKey: "setup.clientSecret",
+            placeholderKey: "setup.enterKickClientSecret",
             isSecret: true,
         },
     ],
     twitch: [
         {
             key: "twitchClientId",
-            label: "Client ID",
-            placeholder: "twitch_client_id_here",
+            labelKey: "setup.clientId",
+            placeholderKey: "setup.enterTwitchClientId",
             isSecret: false,
         },
         {
             key: "twitchClientSecret",
-            label: "Client Secret",
-            placeholder: "twitch_client_secret_here",
+            labelKey: "setup.clientSecret",
+            placeholderKey: "setup.enterTwitchClientSecret",
             isSecret: true,
         },
     ],
 };
 
-export default function Secrets({ config, onConfigChange }: SecretsProps) {
+function statusHelpKey(status: CredentialStatus): string {
+    switch (status) {
+        case "needs-credentials":
+            return "common.needsCredentialsHelp";
+        case "unverified":
+            return "common.unverifiedHelp";
+        case "verifying":
+            return "common.verifyingHelp";
+        case "verified":
+            return "common.verifiedHelp";
+        case "verification-failed":
+            return "common.verificationFailedHelp";
+        case "verification-unavailable":
+            return "common.verificationUnavailableHelp";
+    }
+}
+
+export default function Secrets({
+    config,
+    baselineConfig = config,
+    onConfigChange,
+    onDraftStateChange,
+    onServiceSaved,
+    active = true,
+}: SecretsProps) {
     const { t } = useTranslation();
-    // Secrets live only in local drafts until the user presses Save; they never
-    // go through config:set. Editing either field clears the stale error.
+    const credentialStatuses = useCredentialStatuses();
+    const [guideService, setGuideService] = useState<SecretServiceId | null>(
+        null
+    );
+    const closeGuide = useCallback(() => setGuideService(null), []);
+
+    useEffect(() => {
+        if (!active) setGuideService(null);
+    }, [active]);
+
+    const storedClientIds = useMemo(
+        () =>
+            Object.fromEntries(
+                SECRET_SERVICES.map((service) => [
+                    service.id,
+                    typeof baselineConfig[service.clientIdKey] === "string"
+                        ? baselineConfig[service.clientIdKey]
+                        : "",
+                ])
+            ),
+        [baselineConfig]
+    );
+
     const section = useSecretsSection({
-        save: (serviceId, drafts) =>
-            saveServiceSecrets(serviceId, config, drafts, window.electronAPI),
+        verify: (serviceId, drafts) =>
+            verifyServiceSecrets(
+                serviceId,
+                config,
+                drafts,
+                window.electronAPI
+            ),
+        save: async (serviceId, drafts) => {
+            const result = await saveServiceSecrets(
+                serviceId,
+                config,
+                drafts,
+                window.electronAPI
+            );
+            if (result.ok) onServiceSaved?.(serviceId);
+            return result;
+        },
         validate: validateField,
         onClientIdChange: onConfigChange,
+        statuses: credentialStatuses.statuses,
+        onStatusChange: setCredentialStatus,
+        onResetStatus: resetCredentialStatus,
+        config,
+        storedSecrets: credentialStatuses.storedSecrets,
+        storedClientIds,
+        onStoredSecretChange: (serviceId) => {
+            markCredentialSaved(serviceId);
+        },
     });
 
-    const renderService = (
-        serviceId: SecretServiceId,
-        icon: ReactNode,
-        iconClassName: string
-    ) => {
+    const clientDraftPending = SECRET_SERVICES.some(
+        (service) =>
+            (config[service.clientIdKey] ?? "") !==
+            (baselineConfig[service.clientIdKey] ?? "")
+    );
+    const pending =
+        clientDraftPending ||
+        Object.values(section.drafts).some((value) => value.trim().length > 0);
+    useEffect(() => {
+        onDraftStateChange?.(pending);
+    }, [pending, onDraftStateChange]);
+
+    const renderService = (serviceId: SecretServiceId) => {
         const service = SECRET_SERVICES.find(
             (candidate) => candidate.id === serviceId
         );
         if (!service) return null;
-        const status = section.statuses[serviceId] ?? "idle";
-        const statusKey = secretStatusMessageKey(status);
+        const status = section.getStatus(serviceId);
         const fields = secretFields[serviceId];
+        const clientIdValue =
+            typeof config[service.clientIdKey] === "string"
+                ? (config[service.clientIdKey] as string)
+                : "";
+        const secretDraft = section.drafts[service.clientSecretKey] ?? "";
+        const baselineClientId =
+            typeof baselineConfig[service.clientIdKey] === "string"
+                ? (baselineConfig[service.clientIdKey] as string)
+                : "";
+        const stored =
+            credentialStatuses.storedSecrets[serviceId] === true;
+        const hasServiceDraft =
+            clientIdValue !== baselineClientId || secretDraft.trim().length > 0;
+        const canVerify = canVerifyCredentials(status, {
+            clientId: clientIdValue,
+            secretDraft,
+            stored,
+            storedClientId: baselineClientId,
+        });
+        // Two-step flow: Verify credentials first, then enable Save. The main
+        // process verifies again before persisting, so a renderer cannot save
+        // an unverified pair.
+        const canSave = canSaveCredentials(status, { secretDraft });
+        const isSaving = section.saving[serviceId] === true;
+        const helpKey =
+            status === "unverified" && stored && !secretDraft.trim()
+                ? "common.storedCredentialsHelp"
+                : status === "verified" && stored && !secretDraft.trim()
+                  ? "common.verifiedStoredHelp"
+                  : statusHelpKey(status);
 
         return (
-            <div className="bg-zinc-800/30 rounded-md border border-zinc-700/50 p-3">
-                <div className="flex items-center gap-2 mb-3">
-                    <div
-                        className={`w-8 h-8 ${iconClassName} rounded flex items-center justify-center`}
-                    >
-                        {icon}
-                    </div>
-                    <h3 className="text-sm font-semibold text-white">
-                        {service.label}
-                    </h3>
-                </div>
-
-                <div className="space-y-2">
-                    {fields.map((field, index) => (
-                        <div key={field.key}>
-                            <div className="relative">
-                                <Input
-                                    label={field.label}
-                                    type="password"
-                                    value={
-                                        field.isSecret
-                                            ? section.drafts[field.key] || ""
-                                            : typeof config[field.key] ===
-                                                "string"
-                                              ? (config[field.key] as string)
-                                              : ""
-                                    }
-                                    onChange={(e) =>
-                                        section.editField(
-                                            serviceId,
-                                            field.key,
-                                            e.target.value,
-                                            field.isSecret
-                                        )
-                                    }
-                                    placeholder={field.placeholder}
-                                    className="text-sm"
-                                    error={!!section.validationErrors[field.key]}
-                                    helperText={
-                                        section.validationErrors[field.key] ||
-                                        undefined
-                                    }
-                                />
-                            </div>
-                            {index < fields.length - 1 && (
-                                <div className="h-px bg-zinc-700/30 my-2"></div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-3 flex items-center gap-3">
-                    <Button
-                        type="button"
-                        onClick={() => section.saveService(serviceId)}
-                        disabled={status === "saving"}
-                        aria-label={`${t("common.save")} ${service.label}`}
-                    >
-                        {t("common.save")}
-                    </Button>
-                    {isSecretErrorStatus(status) ? (
-                        <InlineError
-                            className="flex-1"
-                            message={statusKey ? t(statusKey) : undefined}
-                        />
-                    ) : (
-                        <p
-                            role="status"
-                            aria-live="polite"
-                            className="text-xs text-zinc-400"
+            <ServiceCard
+                key={serviceId}
+                service={serviceId}
+                headingLevel={2}
+                status={toChipStatus(status)}
+                statusLabel={t(credentialStatusMessageKey(status))}
+                aria-busy={status === "verifying" || isSaving || undefined}
+                actions={
+                    <>
+                        <Button
+                            variant="secondary"
+                            onClick={() => void section.verifyService(serviceId)}
+                            disabled={!canVerify || isSaving}
+                            loading={status === "verifying"}
+                            aria-label={`${t("common.verifyCredentials")} ${service.label}`}
                         >
-                            {statusKey ? t(statusKey) : ""}
-                        </p>
-                    )}
-                </div>
-            </div>
+                            {status === "verifying"
+                                ? t("common.verifying")
+                                : t("common.verifyCredentials")}
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => void section.saveService(serviceId)}
+                            disabled={!canSave || isSaving}
+                            loading={isSaving}
+                            aria-label={`${t("common.save")} ${service.label}`}
+                        >
+                            {t("common.save")}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                section.cancelService(serviceId);
+                                onConfigChange(
+                                    service.clientIdKey,
+                                    baselineClientId
+                                );
+                            }}
+                            disabled={!hasServiceDraft || isSaving}
+                            aria-label={`${t("common.cancel")} ${service.label}`}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => setGuideService(serviceId)}
+                            aria-haspopup="dialog"
+                            aria-label={`${t("common.setupGuide")} ${service.label}`}
+                        >
+                            {t("common.setupGuide")}
+                        </Button>
+                    </>
+                }
+                note={
+                    <p className="studio-credential-help" data-tone={status}>
+                        {t(helpKey)}
+                    </p>
+                }
+            >
+                {fields.map((field) => (
+                    <Input
+                        key={field.key}
+                        label={t(field.labelKey)}
+                        type={field.isSecret ? "password" : "text"}
+                        value={
+                            field.isSecret
+                                ? section.drafts[field.key] || ""
+                                : clientIdValue
+                        }
+                        onChange={(event) =>
+                            section.editField(
+                                serviceId,
+                                field.key,
+                                event.target.value,
+                                field.isSecret
+                            )
+                        }
+                        placeholder={t(field.placeholderKey)}
+                        maxLength={field.isSecret ? 200 : 100}
+                        autoComplete="off"
+                        disabled={isSaving}
+                        error={section.validationErrors[field.key] || undefined}
+                    />
+                ))}
+            </ServiceCard>
         );
     };
 
     return (
-        <div className="space-y-4">
-            <h3 className="text-base font-medium text-white mb-4">
-                {t("settings.secrets")}
-            </h3>
+        <div className="studio-settings-api">
+            <div className="studio-settings-api-heading">
+                <h2>{t("settings.secrets")}</h2>
+            </div>
+            <div className="studio-service-stack">
+                {SECRET_SERVICES.map((service) => renderService(service.id))}
+            </div>
+            {guideService && (
+                <SetupGuideDialog
+                    serviceId={guideService}
+                    {...getSetupGuide(guideService, config)}
+                    onClose={closeGuide}
+                />
+            )}
+        </div>
+    );
+}
 
-            {renderService(
-                "spotify",
-                <SpotifyIcon className="w-5 h-5" />,
-                "bg-spotify-green"
-            )}
-            {renderService(
-                "kick",
-                <KickIcon className="w-5 h-5" />,
-                "bg-kick-green"
-            )}
-            {renderService(
-                "twitch",
-                <TwitchIcon className="w-5 h-5" />,
-                "bg-twitch-purple"
-            )}
+function SetupGuideDialog({
+    serviceId,
+    dashboardUrl,
+    redirectUri,
+    onClose,
+}: {
+    serviceId: SecretServiceId;
+    dashboardUrl: string;
+    redirectUri: string;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    const dialogRef = useRef<HTMLElement>(null);
+    const closeRef = useRef<HTMLButtonElement>(null);
+    const previousFocus = useRef<HTMLElement | null>(null);
+    const service = SECRET_SERVICES.find((item) => item.id === serviceId);
+
+    useEffect(() => {
+        previousFocus.current =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
+        closeRef.current?.focus();
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+                return;
+            }
+            if (event.key !== "Tab") return;
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const focusable = [
+                ...dialog.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                ),
+            ].filter(
+                (element) =>
+                    element.offsetParent !== null ||
+                    element === document.activeElement
+            );
+            if (focusable.length === 0) {
+                event.preventDefault();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("keydown", onKeyDown);
+            const previous = previousFocus.current;
+            if (previous && previous.isConnected && previous.offsetParent !== null) {
+                previous.focus();
+            }
+        };
+    }, [onClose]);
+
+    if (!service) return null;
+
+    return (
+        <div
+            className="studio-setup-overlay"
+            role="presentation"
+            onMouseDown={(event) => {
+                if (event.target === event.currentTarget) onClose();
+            }}
+        >
+            <section
+                ref={dialogRef}
+                className="studio-setup-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="studio-setup-title"
+            >
+                <div className="studio-setup-head">
+                    <h2 id="studio-setup-title">
+                        {t("common.setupGuide")} — {service.label}
+                    </h2>
+                    <IconButton
+                        ref={closeRef}
+                        variant="ghost"
+                        label={t("common.close")}
+                        onClick={onClose}
+                    >
+                        <X size={16} />
+                    </IconButton>
+                </div>
+                <ol className="studio-setup-steps">
+                    <li>
+                        {t("common.setupStepCreate")}{" "}
+                        <ExternalLink
+                            href={dashboardUrl}
+                            className="studio-link"
+                        >
+                            {dashboardUrl}
+                        </ExternalLink>
+                    </li>
+                    {redirectUri && (
+                        <li>
+                            {t("common.setupStepRedirect")}{" "}
+                            <code>{redirectUri}</code>
+                        </li>
+                    )}
+                    <li>{t("common.setupStepCopy")}</li>
+                    <li>{t("common.setupStepVerify")}</li>
+                </ol>
+                <div className="studio-setup-actions">
+                    <Button variant="primary" onClick={onClose}>
+                        {t("common.back")}
+                    </Button>
+                </div>
+            </section>
         </div>
     );
 }

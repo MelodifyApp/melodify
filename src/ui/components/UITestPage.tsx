@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Select as StudioSelect } from "@/ui/components/studio";
 import {
     RotateCcw,
     TestTube,
@@ -262,12 +263,15 @@ function SelectControl({
     onChange: (value: string) => void;
 }) {
     return (
-        <label className="block text-[11px] text-zinc-400">
-            {label}
-            <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-[11px] text-zinc-100">
-                {options.map((option) => <option key={option} value={option}>{titleFor(option)}</option>)}
-            </select>
-        </label>
+        <StudioSelect
+            label={label}
+            value={value}
+            options={options.map((option) => ({
+                value: option,
+                label: titleFor(option),
+            }))}
+            onChange={onChange}
+        />
     );
 }
 
@@ -572,12 +576,16 @@ export default function UITestPage() {
                     <TestTube size={18} className="text-melodify-primary" aria-hidden="true" />
                     <div><h1 className="m-0 text-sm font-semibold">UI state lab</h1><p className="m-0 text-[10px] text-zinc-500">Development only · mock data · no live integrations</p></div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-[10px] text-zinc-400">Preview screen
-                        <select value={route} onChange={(event) => setRoute(event.target.value as Route)} className="ml-2 rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-100">
-                            {UI_TEST_ROUTES.map((page) => <option key={page.id} value={page.id}>{page.label}</option>)}
-                        </select>
-                    </label>
+                <div className="flex items-end gap-2">
+                    <StudioSelect
+                        label="Preview screen"
+                        value={route}
+                        options={UI_TEST_ROUTES.map((page) => ({
+                            value: page.id,
+                            label: page.label,
+                        }))}
+                        onChange={(value) => setRoute(value as Route)}
+                    />
                     <button type="button" className="rounded border border-zinc-600 px-2 py-1 text-[10px] text-zinc-300 hover:bg-zinc-800" onClick={() => setPreset("first-run")}><RotateCcw size={12} className="mr-1 inline" />Reset</button>
                 </div>
             </header>

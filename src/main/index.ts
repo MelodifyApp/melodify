@@ -8,6 +8,8 @@ import { applyNavigationGuards } from "./navigationGuard";
 import Config from "@/core/config";
 import Updater from "basic-electron-updater";
 import { createUpdateController, statUpdateArtifact } from "./updateController";
+import { createUpdateStatusSnapshot } from "./updateSnapshot";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -15,8 +17,10 @@ import os from "os";
 // Import IPC handlers for different features
 import "@/core/ipc";
 import "@/features/kick/ipc/handlers";
+import "@/features/kick/ipc/rewards";
 import "@/features/spotify/ipc/handlers";
 import "@/features/twitch/ipc/handlers";
+import "@/features/twitch/ipc/rewards";
 
 // Import feature initialization functions
 import {
@@ -86,6 +90,8 @@ const realTempDir = (() => {
     }
 })();
 
+const updateStatusSnapshot = createUpdateStatusSnapshot();
+
 const updateController = createUpdateController({
     updater,
     platform: process.platform,
@@ -102,6 +108,9 @@ const updateController = createUpdateController({
 
 function broadcast(channel: string, ...args: any[]) {
     try {
+        if (channel === "update:status") {
+            updateStatusSnapshot.record(args[0], args[1]);
+        }
         const windows = BrowserWindow.getAllWindows();
         if (windows.length === 0) {
             logDebug(
@@ -253,6 +262,17 @@ const createTray = () => {
 };
 
 /**
+ * Keeps the renderer titlebar icon in sync with native maximize/restore.
+ */
+const trackMaximizedState = (window: BrowserWindow): void => {
+    const notify = () => {
+        sendToWindowIfAlive(window, "window:maximized", window.isMaximized());
+    };
+    window.on("maximize", notify);
+    window.on("unmaximize", notify);
+};
+
+/**
  * Creates the UI test window for development purposes.
  * Only available in development mode.
  */
@@ -277,8 +297,11 @@ const createTestWindow = (): void => {
         testWindow = new BrowserWindow({
             width: 1200,
             height: 800,
+            minWidth: 320,
+            minHeight: 600,
             fullscreenable: false,
             resizable: true,
+            maximizable: true,
             autoHideMenuBar: true,
             frame: false,
             webPreferences: {
@@ -288,6 +311,8 @@ const createTestWindow = (): void => {
             },
             parent: mainWindow || undefined,
         });
+
+        trackMaximizedState(testWindow);
 
         // Load the same entry point but with a query parameter to identify it as test window
         testWindow.loadURL(`${MAIN_WINDOW_WEBPACK_ENTRY}?testmode=true`);
@@ -351,8 +376,11 @@ const createMainWindow = (): void => {
         mainWindow = new BrowserWindow({
             width: WINDOW_WIDTH,
             height: WINDOW_HEIGHT,
+            minWidth: 320,
+            minHeight: 600,
             fullscreenable: false,
-            resizable: false,
+            resizable: true,
+            maximizable: true,
             autoHideMenuBar: true,
             frame: false,
             webPreferences: {
@@ -361,6 +389,8 @@ const createMainWindow = (): void => {
                 nodeIntegration: false,
             },
         });
+
+        trackMaximizedState(mainWindow);
 
         // Load the app and remove default menu
         mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
@@ -481,6 +511,22 @@ ipcMain.on("window:minimize", (event) => {
     }
 });
 
+ipcMain.on("window:maximize", (event) => {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    const target =
+        senderWindow === testWindow ? testWindow : mainWindow;
+    if (!target || target.isDestroyed()) return;
+    if (target.isMaximized()) target.unmaximize();
+    else target.maximize();
+});
+
+ipcMain.handle("window:isMaximized", (event) => {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    const target =
+        senderWindow === testWindow ? testWindow : mainWindow;
+    return !!target && !target.isDestroyed() && target.isMaximized();
+});
+
 ipcMain.on("window:close", (event) => {
     logInfo("Window close requested");
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
@@ -512,6 +558,8 @@ ipcMain.on("app:restart", () => {
 ipcMain.removeAllListeners("update:check");
 ipcMain.removeAllListeners("update:download");
 ipcMain.removeAllListeners("update:install");
+
+ipcMain.handle("update:getStatus", () => updateStatusSnapshot.read());
 
 ipcMain.on("update:check", () => {
     logDebug("Update check requested from renderer", "updater:ipc");

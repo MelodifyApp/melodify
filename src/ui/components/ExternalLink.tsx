@@ -1,24 +1,36 @@
+import type {
+    AnchorHTMLAttributes,
+    MouseEvent,
+    ReactNode,
+} from "react";
+
 interface ExternalLinkProps
-    extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
-    children?: React.ReactNode;
+    extends AnchorHTMLAttributes<HTMLAnchorElement> {
+    children?: ReactNode;
 }
 
 export default function ExternalLink({
     className,
     href,
     children,
+    onClick,
     ...props
 }: ExternalLinkProps) {
+    const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick?.(event);
+        if (href) {
+            window.electronAPI.openExternal(href);
+        }
+    };
+
     return (
         <a
-            onClick={(e) => {
-                e.preventDefault();
-                if (href) {
-                    window.electronAPI.openExternal(href);
-                }
-            }}
-            className={`cursor-pointer ${className || ""}`}
             {...props}
+            href={href}
+            onClick={handleClick}
+            className={`cursor-pointer ${className || ""}`.trim()}
         >
             {children}
         </a>

@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getKickCardView } from "./kickCardView";
 import CredentialSetupFeedback from "@/ui/components/CredentialSetupFeedback";
+import { credentialFailureMessageKey } from "@/shared/utils/credentialFailure";
 
 export default function KickCard() {
     const { t } = useTranslation();
@@ -139,10 +140,15 @@ export default function KickCard() {
         }
 
         try {
-            window.electronAPI.send("kick:setSecrets", {
+            const result = await window.electronAPI.invoke("kick:setSecrets", {
                 kickClientId: kickClientId,
                 kickClientSecret: kickClientSecret,
             });
+            if (!result || result.success !== true) {
+                const messageKey = credentialFailureMessageKey(result?.code);
+                setError(messageKey ? t(messageKey) : t("common.secretsSaveError"));
+                return;
+            }
             setError(null);
             setHasSecrets(true);
             setKickClientId("");
@@ -150,7 +156,7 @@ export default function KickCard() {
             setShowSetup(false);
         } catch (error) {
             logError(error as Error, "Error setting Kick secrets");
-            setError(t("common.secretsSaveError"));
+            setError(t("common.verificationUnavailable"));
         }
     };
 
@@ -253,7 +259,7 @@ export default function KickCard() {
     });
 
     return (
-        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative">
+        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative studio-provider-card">
             <div className="p-4 pb-3">
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-kick-green rounded-md flex items-center justify-center">

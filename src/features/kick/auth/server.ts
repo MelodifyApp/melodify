@@ -238,7 +238,7 @@ export async function startKickAuthServer(
 export function openKickAuthUrl() {
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = generateCodeChallenge(codeVerifier);
-    const scopes = "chat:write user:read channel:read";
+    const scopes = "chat:write user:read channel:read channel:rewards:read";
 
     Config.set({ codeVerifier });
 

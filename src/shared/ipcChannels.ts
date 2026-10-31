@@ -13,6 +13,7 @@
 export const SEND_CHANNELS: readonly string[] = Object.freeze([
     // Window / app control
     "window:minimize",
+    "window:maximize",
     "window:close",
     "window:test",
     "tray:test-create",
@@ -43,13 +44,11 @@ export const SEND_CHANNELS: readonly string[] = Object.freeze([
     "kick:authComplete",
     "kick:sendMessage",
     "kick:logout",
-    "kick:setSecrets",
     "kick:stopListening",
     "twitch:auth",
     "twitch:authComplete",
     "twitch:sendMessage",
     "twitch:logout",
-    "twitch:setSecrets",
     "twitch:stopListening",
 ]);
 
@@ -58,11 +57,15 @@ export const INVOKE_CHANNELS: readonly string[] = Object.freeze([
     // Window / app
     "open-ui-test-window",
     "app:getVersion",
+    "window:isMaximized",
     // Config / startup / updates
     "config:get",
+    "config:save",
+    "config:reload",
     "config:updateTranslatedDefaults",
     "startup:getStatus",
     "update:getAuto",
+    "update:getStatus",
     // Commands
     "commands:getAll",
     "commands:getPerformanceStats",
@@ -76,6 +79,7 @@ export const INVOKE_CHANNELS: readonly string[] = Object.freeze([
     "spotify:checkAuth",
     "spotify:isRunning",
     "spotify:hasSecrets",
+    "spotify:verifySecrets",
     "spotify:setSecrets",
     "spotify:hasSession",
     // Kick
@@ -84,12 +88,18 @@ export const INVOKE_CHANNELS: readonly string[] = Object.freeze([
     "kick:checkAuth",
     "kick:retryChat",
     "kick:hasSecrets",
+    "kick:verifySecrets",
+    "kick:setSecrets",
     "kick:isListeningToChat",
+    "kick:listRewardTitles",
     // Twitch
     "twitch:getUserData",
     "twitch:checkAuth",
     "twitch:hasSecrets",
+    "twitch:verifySecrets",
+    "twitch:setSecrets",
     "twitch:isListeningToChat",
+    "twitch:listRewardTitles",
 ]);
 
 /** Main -> renderer events the renderer may subscribe to. */
@@ -98,6 +108,7 @@ export const LISTEN_CHANNELS: readonly string[] = Object.freeze([
     "open-settings",
     "show-update-dialog",
     "toast",
+    "window:maximized",
     // Updates / logs / song requests
     "update:status",
     "log:entry",

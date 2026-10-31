@@ -317,33 +317,30 @@ test("the retired config:reset channel is neither registered nor forwardable", a
     assert.deepEqual(calls.invoke, []);
 });
 
-test("the supported credential save flow crosses the bridge on approved channels", async () => {
+test("the supported credential flow crosses the bridge on approved invoke channels", async () => {
     const { api, calls } = loadPreload();
 
     for (const service of SECRET_SERVICES) {
-        if (service.transport === "invoke") {
+        for (const channel of [service.verifyChannel, service.channel]) {
             assert.ok(
-                INVOKE_CHANNELS.includes(service.channel),
-                `${service.channel} must be an invoke channel`
+                INVOKE_CHANNELS.includes(channel),
+                `${channel} must be an invoke channel`
             );
-            assert.equal(SEND_CHANNELS.includes(service.channel), false);
-            await api.invoke(service.channel, { probe: true });
-        } else {
-            assert.ok(
-                SEND_CHANNELS.includes(service.channel),
-                `${service.channel} must be a send channel`
-            );
-            assert.equal(INVOKE_CHANNELS.includes(service.channel), false);
-            api.send(service.channel, { probe: true });
+            assert.equal(SEND_CHANNELS.includes(channel), false);
+            await api.invoke(channel, { probe: true });
         }
     }
 
     assert.deepEqual(
         calls.invoke.map(([channel]) => channel),
-        ["spotify:setSecrets"]
+        [
+            "spotify:verifySecrets",
+            "spotify:setSecrets",
+            "kick:verifySecrets",
+            "kick:setSecrets",
+            "twitch:verifySecrets",
+            "twitch:setSecrets",
+        ]
     );
-    assert.deepEqual(
-        calls.send.map(([channel]) => channel),
-        ["kick:setSecrets", "twitch:setSecrets"]
-    );
+    assert.deepEqual(calls.send, []);
 });

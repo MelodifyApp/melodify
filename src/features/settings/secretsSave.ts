@@ -1,14 +1,17 @@
 import type { CredentialFailureCode } from "../../shared/utils/credentialFailure";
+import {
+    KICK_REDIRECT_URI,
+    SPOTIFY_REDIRECT_URI,
+    TWITCH_REDIRECT_URI,
+} from "../../shared/constants";
 
 /**
- * Save flow for the Settings > Secrets section.
+ * Save and verification flow for the Settings > API Keys section.
  *
  * Credential secrets must never travel through the generic `config:set` path,
- * so the section keeps them in component-local drafts and only submits them
- * when the user presses the per-service Save button. Each service has its own
- * typed bridge direction: Spotify validates credentials through an
- * `ipcMain.handle` channel (invoke) while Kick and Twitch store them through
- * `ipcMain.on` channels (send).
+ * so the section keeps them in component-local drafts. Verification and save
+ * are both request/response IPC calls: verification never persists, and save
+ * asks the main process to verify again before writing the credentials.
  */
 
 export type SecretServiceId = "spotify" | "kick" | "twitch";
@@ -17,10 +20,12 @@ export interface SecretServiceDefinition {
     readonly id: SecretServiceId;
     /** Display name used in accessible labels. */
     readonly label: string;
-    /** IPC channel that stores the credentials. */
+    /** IPC channel that verifies credentials without persisting. */
+    readonly verifyChannel: string;
+    /** IPC channel that verifies and persists credentials. */
     readonly channel: string;
-    /** Bridge method the channel is registered with. */
-    readonly transport: "invoke" | "send";
+    /** Both operations are awaited request/response calls. */
+    readonly transport: "invoke";
     readonly clientIdKey: string;
     readonly clientSecretKey: string;
 }
@@ -29,6 +34,7 @@ export const SECRET_SERVICES: readonly SecretServiceDefinition[] = Object.freeze
     Object.freeze({
         id: "spotify" as const,
         label: "Spotify API",
+        verifyChannel: "spotify:verifySecrets",
         channel: "spotify:setSecrets",
         transport: "invoke" as const,
         clientIdKey: "spotifyClientId",
@@ -37,16 +43,18 @@ export const SECRET_SERVICES: readonly SecretServiceDefinition[] = Object.freeze
     Object.freeze({
         id: "kick" as const,
         label: "Kick API",
+        verifyChannel: "kick:verifySecrets",
         channel: "kick:setSecrets",
-        transport: "send" as const,
+        transport: "invoke" as const,
         clientIdKey: "kickClientId",
         clientSecretKey: "kickClientSecret",
     }),
     Object.freeze({
         id: "twitch" as const,
         label: "Twitch API",
+        verifyChannel: "twitch:verifySecrets",
         channel: "twitch:setSecrets",
-        transport: "send" as const,
+        transport: "invoke" as const,
         clientIdKey: "twitchClientId",
         clientSecretKey: "twitchClientSecret",
     }),
@@ -60,6 +68,44 @@ export function getSecretService(
         throw new Error(`Unknown secret service: ${String(id)}`);
     }
     return service;
+}
+
+const SETUP_DASHBOARD_URLS: Record<SecretServiceId, string> = {
+    spotify: "https://developer.spotify.com/dashboard",
+    kick: "https://kick.com/settings/developer",
+    twitch: "https://dev.twitch.tv/console",
+};
+
+export interface SetupGuideDetails {
+    dashboardUrl: string;
+    redirectUri: string;
+}
+
+/**
+ * Resolves the read-only setup values shown for a service. Twitch OAuth always
+ * uses the shared constant, regardless of any legacy renderer config value.
+ */
+export function getSetupGuide(
+    id: SecretServiceId,
+    config: Record<string, unknown> = {}
+): SetupGuideDetails {
+    let redirectUri: string;
+    if (id === "twitch") {
+        redirectUri = TWITCH_REDIRECT_URI;
+    } else {
+        const key = id === "kick" ? "kickRedirectUri" : "spotifyRedirectUri";
+        const configured = config[key];
+        redirectUri =
+            typeof configured === "string" && configured.length > 0
+                ? configured
+                : id === "kick"
+                  ? KICK_REDIRECT_URI
+                  : SPOTIFY_REDIRECT_URI;
+    }
+    return {
+        dashboardUrl: SETUP_DASHBOARD_URLS[id],
+        redirectUri,
+    };
 }
 
 /** Draft secret values keyed by their config key. */
@@ -86,7 +132,6 @@ export function clearSecretDrafts(
 }
 
 export interface SecretsBridge {
-    send(channel: string, data?: unknown): unknown;
     invoke(channel: string, data?: unknown): Promise<unknown>;
 }
 
@@ -102,6 +147,8 @@ export interface SecretSaveResult {
     /** Drafts after the attempt: cleared on success, retained on failure. */
     readonly drafts: SecretDrafts;
 }
+
+export type SecretVerificationResult = SecretSaveResult;
 
 function readTrimmedString(
     source: Record<string, unknown>,
@@ -120,7 +167,7 @@ function invokeSucceeded(result: unknown): boolean {
 }
 
 /**
- * Maps a handler's stable failure code to the save-flow status. Unknown or
+ * Maps a handler's stable failure code to a save-flow status. Unknown or
  * missing codes fall back to the generic failure so no raw text is shown.
  */
 function failureStatusFor(result: unknown): SecretSaveErrorCode {
@@ -140,10 +187,56 @@ function failureStatusFor(result: unknown): SecretSaveErrorCode {
     }
 }
 
+function credentialPayload(
+    service: SecretServiceDefinition,
+    config: Record<string, unknown>,
+    drafts: SecretDrafts,
+    includeEmptySecret = false
+): Record<string, string> {
+    const payload: Record<string, string> = {
+        [service.clientIdKey]: readTrimmedString(config, service.clientIdKey),
+    };
+    const secret = readTrimmedString(drafts, service.clientSecretKey);
+    if (secret || includeEmptySecret) {
+        payload[service.clientSecretKey] = secret;
+    }
+    return payload;
+}
+
 /**
- * Submits one service's credentials through its typed bridge direction.
- * Missing credentials are rejected before any IPC call; failed saves keep the
- * draft so the user can retry.
+ * Verifies credentials without persisting them. A stored secret may be used by
+ * the main process when the submitted client ID still matches the stored one.
+ */
+export async function verifyServiceSecrets(
+    id: SecretServiceId,
+    config: Record<string, unknown>,
+    drafts: SecretDrafts,
+    bridge: SecretsBridge
+): Promise<SecretVerificationResult> {
+    const service = getSecretService(id);
+    const payload = credentialPayload(service, config, drafts, true);
+    if (!payload[service.clientIdKey]) {
+        return { ok: false, error: "required", drafts };
+    }
+
+    try {
+        const result = await bridge.invoke(service.verifyChannel, payload);
+        if (!invokeSucceeded(result)) {
+            return {
+                ok: false,
+                error: failureStatusFor(result),
+                drafts,
+            };
+        }
+        return { ok: true, drafts };
+    } catch {
+        return { ok: false, error: "unavailable", drafts };
+    }
+}
+
+/**
+ * Persists one service's credentials after the main process verifies them
+ * again. Save is gated in the UI; failed saves retain the draft for retry.
  */
 export async function saveServiceSecrets(
     id: SecretServiceId,
@@ -159,65 +252,20 @@ export async function saveServiceSecrets(
         return { ok: false, error: "required", drafts };
     }
 
-    const payload = {
-        [service.clientIdKey]: clientId,
-        [service.clientSecretKey]: clientSecret,
-    };
+    const payload = credentialPayload(service, config, drafts);
 
     try {
-        if (service.transport === "invoke") {
-            const result = await bridge.invoke(service.channel, payload);
-            if (!invokeSucceeded(result)) {
-                return {
-                    ok: false,
-                    error: failureStatusFor(result),
-                    drafts,
-                };
-            }
-        } else {
-            bridge.send(service.channel, payload);
+        const result = await bridge.invoke(service.channel, payload);
+        if (!invokeSucceeded(result)) {
+            return {
+                ok: false,
+                error: failureStatusFor(result),
+                drafts,
+            };
         }
         return { ok: true, drafts: clearSecretDrafts(drafts, id) };
     } catch {
         // The bridge or the network failed before verification could happen.
         return { ok: false, error: "unavailable", drafts };
-    }
-}
-
-export type SecretSaveStatus =
-    | "idle"
-    | "saving"
-    | "saved"
-    | SecretSaveErrorCode;
-
-const SECRET_ERROR_STATUSES: ReadonlySet<SecretSaveStatus> = new Set([
-    "required",
-    "invalid",
-    "unavailable",
-    "failed",
-]);
-
-/** True for the statuses that must use the red in-app error treatment. */
-export function isSecretErrorStatus(status: SecretSaveStatus): boolean {
-    return SECRET_ERROR_STATUSES.has(status);
-}
-
-/** Translation key for a save status, or null when nothing should be shown. */
-export function secretStatusMessageKey(status: SecretSaveStatus): string | null {
-    switch (status) {
-        case "saving":
-            return "common.saving";
-        case "saved":
-            return "common.saved";
-        case "required":
-            return "common.secretsRequired";
-        case "invalid":
-            return "common.invalidCredentials";
-        case "unavailable":
-            return "common.verificationUnavailable";
-        case "failed":
-            return "common.secretsSaveError";
-        default:
-            return null;
     }
 }

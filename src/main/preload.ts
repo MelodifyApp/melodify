@@ -58,6 +58,8 @@ function removeListenerWrapper(
 contextBridge.exposeInMainWorld("electronAPI", {
     // Window control functions
     minimize: () => ipcRenderer.send("window:minimize"),
+    maximize: () => ipcRenderer.send("window:maximize"),
+    isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
     close: () => ipcRenderer.send("window:close"),
 
     // Development functions

@@ -15,6 +15,7 @@ export default function SpotifyCard() {
     const [authenticated, setAuthenticated] = useState<boolean | null>(null);
     const [spotifyRunning, setSpotifyRunning] = useState<boolean | null>(null);
     const [spotifyHasSession, setSpotifyHasSession] = useState<boolean | null>(null);
+    const [spotifySessionError, setSpotifySessionError] = useState(false);
     const [spotifyRedirectUri, setSpotifyRedirectUri] =
         useState<string>(SPOTIFY_REDIRECT_URI);
     const [refreshInProgress, setRefreshInProgress] = useState(false);
@@ -59,12 +60,14 @@ export default function SpotifyCard() {
                 } else {
                     setSpotifyUsername(null);
                     setSpotifyHasSession(false);
+                    setSpotifySessionError(false);
                 }
             })
             .catch((error) => {
                 setAuthenticated(false);
                 setSpotifyUsername(null);
                 setSpotifyHasSession(false);
+                setSpotifySessionError(false);
                 logError(error, "Failed to check Spotify authentication");
             });
     }, []);
@@ -82,11 +85,15 @@ export default function SpotifyCard() {
                     );
                     setAuthenticated(false);
                     setSpotifyUsername(null);
+                    setSpotifyHasSession(false);
+                    setSpotifySessionError(false);
                 }
             } catch (error) {
                 logError(error as Error, "handleAuthenticated");
                 setAuthenticated(false);
                 setSpotifyUsername(null);
+                setSpotifyHasSession(false);
+                setSpotifySessionError(false);
             }
         };
 
@@ -106,15 +113,18 @@ export default function SpotifyCard() {
             window.electronAPI
                 .invoke("spotify:hasSession")
                 .then((hasSession) => {
-                    setSpotifyHasSession(hasSession);
-                    if (hasSession && interval) {
-                        clearInterval(interval);
-                        interval = null;
+                    if (typeof hasSession !== "boolean") {
+                        setSpotifyHasSession(null);
+                        setSpotifySessionError(true);
+                        return;
                     }
+                    setSpotifyHasSession(hasSession);
+                    setSpotifySessionError(false);
                 })
                 .catch((error) => {
                     logError(error, "Failed to check Spotify session");
-                    setSpotifyHasSession(false);
+                    setSpotifyHasSession(null);
+                    setSpotifySessionError(true);
                 });
         }
 
@@ -148,6 +158,7 @@ export default function SpotifyCard() {
             setAuthenticated(false);
             setSpotifyUsername(null);
             setSpotifyHasSession(false);
+            setSpotifySessionError(false);
         } catch (error) {
             logError(error as Error, "Failed to logout from Spotify");
         }
@@ -160,6 +171,10 @@ export default function SpotifyCard() {
             const authResult = await window.electronAPI.invoke("spotify:checkAuth");
             setAuthenticated(authResult.authenticated);
             setSpotifyUsername(authResult.authenticated ? authResult.username : null);
+            if (!authResult.authenticated) {
+                setSpotifyHasSession(false);
+                setSpotifySessionError(false);
+            }
         } catch (error) {
             logError(error as Error, "Error refreshing Spotify status");
         } finally {
@@ -168,7 +183,7 @@ export default function SpotifyCard() {
     };
 
     return (
-        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative">
+        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative studio-provider-card">
             <div className="p-4 pb-3">
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-spotify-green rounded-full flex items-center justify-center">
@@ -189,24 +204,28 @@ export default function SpotifyCard() {
                 <div
                     className={`px-3 py-1.5 rounded-md text-xs font-medium text-center ${authenticated === null || hasSecrets === null
                         ? "bg-zinc-700/40 text-zinc-300 border border-zinc-600/50"
-                        : authenticated && spotifyHasSession
-                            ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                            : authenticated
-                                ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
-                                : hasSecrets
-                                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                                    : "bg-red-500/20 text-red-300 border border-red-500/30"
+                        : spotifySessionError
+                            ? "bg-red-500/20 text-red-300 border border-red-500/30"
+                            : authenticated && spotifyHasSession
+                                ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                                : authenticated
+                                    ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                    : hasSecrets
+                                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                                        : "bg-red-500/20 text-red-300 border border-red-500/30"
                         }`}
                 >
                     {authenticated === null || hasSecrets === null
                         ? t("common.checking")
-                        : authenticated && spotifyHasSession
-                        ? `✓ ${t("common.readyForRequests")}`
-                        : authenticated
-                            ? `⚠ ${t("common.startPlayingMusic")}`
-                            : hasSecrets
-                                ? `🔗 ${t("common.readyToConnect")}`
-                                : `⚙ ${t("common.setupRequired")}`}
+                        : spotifySessionError
+                            ? `⚠ ${t("common.error")}`
+                            : authenticated && spotifyHasSession
+                                ? `✓ ${t("common.readyForRequests")}`
+                                : authenticated
+                                    ? `⚠ ${t("common.startPlayingMusic")}`
+                                    : hasSecrets
+                                        ? `🔗 ${t("common.readyToConnect")}`
+                                        : `⚙ ${t("common.setupRequired")}`}
                 </div>
             </div>
 
@@ -236,17 +255,19 @@ export default function SpotifyCard() {
                                 {t("statusCards.app")}
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${spotifyRunning === null && spotifyHasSession === null ? "bg-zinc-500" : isSpotifyAppAvailable(spotifyRunning, spotifyHasSession) ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${spotifySessionError ? "bg-red-400" : spotifyRunning === null && spotifyHasSession === null ? "bg-zinc-500" : isSpotifyAppAvailable(spotifyRunning, spotifyHasSession) ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
-                            {spotifyRunning === null
-                                ? t("common.checking")
-                                : spotifyRunning
-                                    ? t("common.running")
-                                    : spotifyHasSession
-                                        ? t("common.runningOnAnotherDevice")
-                                        : t("common.closed")}
+                            {spotifySessionError
+                                ? t("common.error")
+                                : spotifyRunning === null
+                                    ? t("common.checking")
+                                    : spotifyRunning
+                                        ? t("common.running")
+                                        : spotifyHasSession
+                                            ? t("common.runningOnAnotherDevice")
+                                            : t("common.closed")}
                         </p>
                     </div>
 
@@ -274,15 +295,17 @@ export default function SpotifyCard() {
                                 {t("statusCards.session")}
                             </span>
                             <div
-                                className={`w-2 h-2 rounded-full ${spotifyHasSession === null ? "bg-zinc-500" : spotifyHasSession ? "bg-green-400" : "bg-red-400"}`}
+                                className={`w-2 h-2 rounded-full ${spotifySessionError ? "bg-red-400" : spotifyHasSession === null ? "bg-zinc-500" : spotifyHasSession ? "bg-green-400" : "bg-red-400"}`}
                             ></div>
                         </div>
                         <p className="text-xs text-zinc-300 mt-0.5">
-                            {spotifyHasSession === null
-                                ? t("common.checking")
-                                : spotifyHasSession
-                                    ? t("common.active")
-                                    : t("common.inactive")}
+                            {spotifySessionError
+                                ? t("common.error")
+                                : spotifyHasSession === null
+                                    ? t("common.checking")
+                                    : spotifyHasSession
+                                        ? t("common.active")
+                                        : t("common.inactive")}
                         </p>
                     </div>
                 </div>

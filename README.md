@@ -1,107 +1,86 @@
 # Melodify
 
-**The Ultimate Spotify + Kick Chat Song Request App for Streamers**
+Melodify is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Melodify runs locally and does not require a Melodify account or cloud service.
 
-Melodify is a next-generation desktop app that lets your viewers control the music on your stream—directly from your Kick chat! Instantly turn your Kick channel into a live, interactive jukebox powered by Spotify. Delight your community, boost engagement, and keep your stream's vibe fresh—all with a beautiful, modern UI.
+**Stable release:** 1.0.7 — [download the latest installer](https://github.com/MelodifyApp/melodify/releases/latest)
 
----
+## Features
 
-## 🚀 Features
+- **Kick and Twitch chat requests** — viewers type `!sr <song name or Spotify URL>`.
+- **Reward redemptions** — a configured Kick or Twitch reward title works as a request.
+- **Spotify queue insertion** — searches Spotify (or resolves a track URL/URI) and adds the track to the active Spotify queue. A request counts as successful only after Spotify accepts it.
+- **Configurable request rules** — permissions/badges, global and per-user cooldowns, reply templates, prefix, and optional current-song text file output.
+- **Commands** — built-in `!sr` and moderator-only `!volume`, with editable aliases and moderators.
+- **Local data** — credentials, settings, request logs and counters stay on the local machine. There is no Melodify API, account system, cloud sync, web dashboard or persistent server-side queue.
+- **English and Turkish** UI.
+- **GitHub Releases updater** — checks for stable updates; Melodify does not install one silently.
 
-- **Seamless Kick, Spotify & Twitch Integration**
-    - Securely authenticate with Kick, Spotify, and Twitch
-    - Manage API secrets locally—your data stays private
-    - Instantly detect and display your Spotify playback status and devices
-    - Listen to Kick and Twitch chat in real time and respond to song requests automatically
+## Requirements
 
-- **Effortless Song Requests from Chat**
-    - Viewers request songs in Kick chat using a simple command (e.g., `!sr <song name>`)
-    - Melodify searches Spotify and queues the requested track on your device
-    - Customizable feedback and status messages sent to chat
+- Windows 10/11
+- [Node.js](https://nodejs.org/) 22+ and npm (development only)
+- Spotify Premium and an active Spotify playback device for queue additions
+- Your own Spotify, Kick and (optional) Twitch developer-app credentials
 
-- **Modern, Streamer-Friendly UI**
-    - Built with React, Tailwind CSS, and TypeScript
-    - Responsive, accessible, and dark-mode ready
-    - Intuitive settings and onboarding—no tech skills required
+Melodify does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
 
-- **Smart Notifications & Error Handling**
-    - Toast notifications for errors, info, and success
-    - Automatic error logging—get a log file for support if anything goes wrong
-
-- **Fully Customizable**
-    - Change your song request prefix, reply messages, and more in the settings
-    - Open source and easy to extend
-
----
-
-## 🛠️ Getting Started
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) (v18+ recommended)
-- [Yarn](https://yarnpkg.com/) or [npm](https://www.npmjs.com/)
-
-### Installation
-
-1. **Clone the repository:**
-    ```sh
-    git clone https://github.com/yourusername/melodify.git
-    cd melodify
-    ```
-2. **Install dependencies:**
-    ```sh
-    yarn install
-    # or
-    npm install
-    ```
-3. **Start the app in development mode:**
-    ```sh
-    yarn start
-    # or
-    npm start
-    ```
-
-### Build for Production
+## Getting started (development)
 
 ```sh
-yarn make
-# or
-npm run make
+git clone https://github.com/MelodifyApp/melodify.git
+cd melodify
+npm ci
+npm start
 ```
 
----
+`npm start` launches Electron Forge in development mode.
 
-## 🎤 How It Works
+### Build
 
-1. **Connect your Spotify, Kick, and Twitch accounts** in the app settings.
-2. **Start your Kick or Twitch stream and open chat.**
-3. **Viewers request songs** by typing `!sr <song name/url>` in Kick or Twitch chat (prefix is customizable).
-4. Melodify searches Spotify and plays the requested song on your connected device.
-5. The app sends a customizable reply message to chat, confirming the song request.
+```sh
+npm run package   # unpacked app
+npm run make      # platform installer/artifacts
+```
 
----
+### Verification
 
-## 📁 Project Structure
+```sh
+npx tsc --noEmit
+npm run lint
+npm run validate-translations
+npm run test:config        # plus the other focused test:* scripts
+```
 
-- `src/`
-    - `client/` — React UI components
-    - `ipc/` — Electron IPC handlers
-    - `lib/` — Utilities, config, and API logic
-    - `types/` — TypeScript type definitions
-    - `index.ts` — Electron main process
+The focused suites are defined under `scripts` in `package.json`: `test:kick`, `test:spotify`, `test:config`, `test:ui-states`, `test:twitch`, `test:permissions`, `test:logging`, `test:i18n`, `test:security`, `test:routing`. There is no aggregate `npm test` script and no `npm run build` script.
 
----
+## How it works
 
-## 🤝 Contributing
+1. Connect Spotify, Kick, and optionally Twitch in Settings.
+2. Start the stream and open chat.
+3. A viewer types `!sr <song>` or redeems the configured reward.
+4. Melodify searches Spotify and adds the track to the active Spotify queue.
+5. If enabled, Melodify posts a configurable reply in chat and records the accepted request locally.
 
-Pull requests are welcome! For major changes, please open an issue first to discuss your ideas.
+A request is not a promise of playback order: Spotify controls the playback queue, and Melodify does not implement reordering, removal or Undo.
 
-## 📄 License
+## Project structure
+
+- `src/main/` — Electron main process, preload bridge, IPC, OAuth callback servers, updater
+- `src/renderer/` — React renderer entry
+- `src/core/` — config, commands, i18n, logging, IPC handlers
+- `src/features/` — Spotify, Kick, Twitch and Settings features
+- `src/ui/` — shared React UI components
+- `src/shared/` — shared types and constants
+- `src/assets/` — icons and static assets
+- `test/` — focused `node:test` suites
+- `scripts/` — translation validation and maintenance scripts
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
 
 [MIT](LICENSE)
 
----
-
-**Not affiliated with Kick or Spotify. Use at your own risk.**
-
-> **Melodify: Let your community DJ your stream!**
+Melodify is not affiliated with Kick, Twitch or Spotify. Use at your own risk.

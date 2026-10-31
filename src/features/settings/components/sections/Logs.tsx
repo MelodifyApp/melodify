@@ -1,18 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+// Logs settings - Studio layout over the existing log/search/export behavior.
+
+import { useEffect, useRef, useState } from "react";
 import {
-    Terminal,
-    Download,
-    Trash2,
     AlertCircle,
-    Info,
     AlertTriangle,
     Bug,
+    Download,
+    Info,
     Search,
-    ChevronDown,
+    Terminal,
 } from "lucide-react";
-import { Button } from "@/ui/components/Button";
-import Input from "@/ui/components/Input";
 import { useTranslation } from "react-i18next";
+import { Button, Input, Select, SettingGroup } from "@/ui/components/studio";
 import { formatLogsForExport } from "@/core/logging/export";
 
 interface LogsProps {
@@ -20,30 +19,31 @@ interface LogsProps {
     searchQuery?: string;
 }
 
-export default function Logs({ logs, searchQuery }: LogsProps) {
+const LEVELS = ["error", "warn", "info", "debug"] as const;
+type LogLevel = (typeof LEVELS)[number];
+
+const levelIcons: Record<LogLevel, typeof AlertCircle> = {
+    error: AlertCircle,
+    warn: AlertTriangle,
+    info: Info,
+    debug: Bug,
+};
+
+const levelMessageKeys: Record<LogLevel, string> = {
+    error: "logs.error",
+    warn: "logs.warnings",
+    info: "logs.info",
+    debug: "logs.debug",
+};
+
+export default function Logs({ logs }: LogsProps) {
     const { t } = useTranslation();
-    const logsEndRef = useRef<HTMLDivElement>(null);
     const logsContainerRef = useRef<HTMLDivElement>(null);
     const [filter, setFilter] = useState<string>("all");
     const [searchTerm, setSearchTerm] = useState<string>("");
 
-    const levelIcons = {
-        error: AlertCircle,
-        warn: AlertTriangle,
-        info: Info,
-        debug: Bug,
-    };
-
-    const levelColors = {
-        error: "text-red-400",
-        warn: "text-yellow-300",
-        info: "text-cyan-300",
-        debug: "text-purple-300",
-    };
-
     useEffect(() => {
         if (logsContainerRef.current) {
-            // Scroll to bottom of the log container, not the entire page
             logsContainerRef.current.scrollTop =
                 logsContainerRef.current.scrollHeight;
         }
@@ -57,241 +57,174 @@ export default function Logs({ logs, searchQuery }: LogsProps) {
         ) {
             return filter === "all";
         }
-
         const matchesLevel = filter === "all" || log.level === filter;
         const matchesSearch =
             !searchTerm ||
             log.message.toLowerCase().includes(searchTerm.toLowerCase());
-
         return matchesLevel && matchesSearch;
     });
 
     const logCounts = logs.reduce(
-        (acc, log) => {
+        (accumulator, log) => {
             const level = log?.level ?? "unknown";
-            acc[level] = (acc[level] || 0) + 1;
-            return acc;
+            accumulator[level] = (accumulator[level] || 0) + 1;
+            return accumulator;
         },
         {} as Record<string, number>
     );
 
-    const handleExportLogs = () => {
-        // Create a downloadable log file
-        const logData = formatLogsForExport(logs);
+    const levelOptions = [
+        {
+            value: "all",
+            label: `${t("logs.all")} (${logs.length})`,
+        },
+        ...LEVELS.map((level) => ({
+            value: level,
+            label: `${t(levelMessageKeys[level])} (${logCounts[level] || 0})`,
+        })),
+    ];
 
+    const handleExportLogs = () => {
+        const logData = formatLogsForExport(logs);
         const blob = new Blob([logData], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `melodify-logs-${new Date().toISOString().split("T")[0]}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `melodify-logs-${
+            new Date().toISOString().split("T")[0]
+        }.txt`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
     };
 
-    const handleClearLogs = () => {
-        // This would need to be implemented to clear logs from the main process
-        console.log("Clear logs functionality not yet implemented");
-    };
-
     return (
-        <div className="space-y-4">
-            <h3 className="text-base font-medium text-white mb-4">
-                {t("logs.title")}
-            </h3>
+        <div className="studio-settings-api studio-logs">
+            <div className="studio-settings-api-heading">
+                <h2>{t("logs.title")}</h2>
+            </div>
 
-            <div className="settings-section">
-                <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center">
-                        <Terminal className="w-3 h-3 text-blue-300" />
+            <SettingGroup heading={t("logs.applicationLogs")}>
+                <div className="studio-logs-head">
+                    <div className="studio-logs-head-copy">
+                        <span className="studio-logs-icon" aria-hidden="true">
+                            <Terminal />
+                        </span>
+                        <div>
+                            <h3>{t("logs.title")}</h3>
+                            <p>{t("logs.runtimeLogs")}</p>
+                        </div>
                     </div>
-                    <div className="flex-1">
-                        <h3 className="text-sm font-semibold text-white">
-                            {t("logs.title")}
-                        </h3>
-                        <p className="text-xs text-zinc-400">
-                            {t("logs.runtimeLogs")}
-                        </p>
-                    </div>
-                    <div className="flex gap-1">
-                        <Button
-                            onClick={handleExportLogs}
-                            className="text-xs px-2 py-1 h-auto bg-green-600 hover:bg-green-700"
-                        >
-                            <Download className="w-3 h-3 mr-1" />
-                            {t("logs.export")}
-                        </Button>
-                        <Button
-                            onClick={handleClearLogs}
-                            className="text-xs px-2 py-1 h-auto bg-red-600 hover:bg-red-700"
-                        >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            {t("logs.clear")}
-                        </Button>
-                    </div>
+                    <Button variant="secondary" onClick={handleExportLogs}>
+                        <Download aria-hidden="true" />
+                        {t("logs.export")}
+                    </Button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                    {["error", "warn", "info", "debug"].map((level) => {
-                        const Icon =
-                            levelIcons[level as keyof typeof levelIcons];
-                        const count = logCounts[level] || 0;
+                <div className="studio-logs-counts">
+                    {LEVELS.map((level) => {
+                        const Icon = levelIcons[level];
                         return (
                             <div
                                 key={level}
-                                className="bg-zinc-700/30 rounded p-2 text-center"
+                                className="studio-logs-count"
+                                data-level={level}
                             >
-                                <div className="flex items-center justify-center gap-1 mb-1">
-                                    <Icon
-                                        className={`w-3 h-3 ${levelColors[level as keyof typeof levelColors]}`}
-                                    />
-                                    <span className="text-xs text-zinc-400 capitalize">
-                                        {t(
-                                            `logs.${level === "warn" ? "warnings" : level}`
-                                        )}
-                                    </span>
-                                </div>
-                                <div className="text-sm font-mono text-white">
-                                    {count}
-                                </div>
+                                <span className="studio-logs-count-label">
+                                    <Icon aria-hidden="true" />
+                                    {t(levelMessageKeys[level])}
+                                </span>
+                                <strong>{logCounts[level] || 0}</strong>
                             </div>
                         );
                     })}
                 </div>
 
-                {/* Search and Filter Controls */}
-                <div className="flex gap-3 mb-4">
-                    {/* Search Input */}
-                    <div className="flex-1">
-                        <Input
-                            placeholder={t("logs.searchPlaceholder")}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full"
-                        />
-                    </div>
-
-                    {/* Level Filter Dropdown */}
-                    <div className="relative min-w-[140px]">
-                        <select
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="w-full appearance-none bg-zinc-800/50 border border-zinc-600/50 rounded-lg px-3 py-2.5 pr-8 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-200 hover:border-zinc-500/70 cursor-pointer"
-                        >
-                            <option value="all">
-                                {t("logs.all")} ({logs.length})
-                            </option>
-                            <option value="error">
-                                {t("logs.error")} ({logCounts.error || 0})
-                            </option>
-                            <option value="warn">
-                                {t("logs.warnings")} ({logCounts.warn || 0})
-                            </option>
-                            <option value="info">
-                                {t("logs.info")} ({logCounts.info || 0})
-                            </option>
-                            <option value="debug">
-                                {t("logs.debug")} ({logCounts.debug || 0})
-                            </option>
-                        </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
-                    </div>
+                <div className="studio-logs-filters">
+                    <Input
+                        id="logs-search"
+                        label={t("logs.search")}
+                        type="search"
+                        value={searchTerm}
+                        onChange={(event) =>
+                            setSearchTerm(event.target.value)
+                        }
+                        placeholder={t("logs.searchPlaceholder")}
+                        wrapperClassName="studio-logs-search"
+                    />
+                    <Select
+                        id="logs-filter"
+                        label={t("logs.level")}
+                        value={filter}
+                        options={levelOptions}
+                        onChange={setFilter}
+                        wrapperClassName="studio-logs-filter"
+                    />
                 </div>
 
-                {/* Active Filters Summary */}
                 {(searchTerm || filter !== "all") && (
-                    <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
+                    <div className="studio-logs-active-filters">
+                        <Search aria-hidden="true" />
                         <span>
                             {t("logs.showingResults", {
                                 count: filteredLogs.length,
                                 total: logs.length,
                             })}
                         </span>
-                        {searchTerm && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-700/50 rounded text-zinc-300">
-                                <Search className="h-3 w-3" />"{searchTerm}"
-                            </span>
-                        )}
-                        {filter !== "all" && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-700/50 rounded text-zinc-300">
-                                {levelIcons[
-                                    filter as keyof typeof levelIcons
-                                ] &&
-                                    React.createElement(
-                                        levelIcons[
-                                            filter as keyof typeof levelIcons
-                                        ],
-                                        { className: "h-3 w-3" }
-                                    )}
-                                {t(
-                                    `logs.${filter === "warn" ? "warnings" : filter}`
-                                )}
-                            </span>
-                        )}
                     </div>
                 )}
-            </div>
 
-            <div className="bg-zinc-900 border border-zinc-700/50 rounded-md">
                 <div
                     ref={logsContainerRef}
-                    className="overflow-y-auto p-3 text-xs font-mono max-h-80 min-h-40"
+                    className="studio-logs-list"
+                    role="log"
+                    aria-label={t("logs.title")}
+                    tabIndex={0}
                 >
-                    {filteredLogs.length === 0 && (
-                        <div className="text-zinc-500 text-center py-8">
+                    {filteredLogs.length === 0 ? (
+                        <p className="studio-logs-empty">
                             {logs.length === 0
-                                ? "No logs yet."
-                                : "No logs match your filters."}
-                        </div>
-                    )}
-                    {filteredLogs.map((log, i) => {
-                        const level = log?.level ?? "info";
-                        const timestamp = log?.timestamp ?? Date.now();
-                        const message = log?.message ?? JSON.stringify(log);
-
-                        if (
-                            !log ||
-                            typeof log.level !== "string" ||
-                            typeof log.message !== "string"
-                        ) {
+                                ? t("logs.noLogs")
+                                : t("logs.noMatches")}
+                        </p>
+                    ) : (
+                        filteredLogs.map((log, index) => {
+                            const level = (
+                                LEVELS.includes(log?.level)
+                                    ? log.level
+                                    : "info"
+                            ) as LogLevel;
+                            const Icon = levelIcons[level];
+                            const timestamp =
+                                log?.timestamp ?? Date.now();
+                            const message =
+                                log?.message ?? JSON.stringify(log);
                             return (
                                 <div
-                                    key={i}
-                                    className="text-zinc-500 break-words mb-1 opacity-50"
+                                    key={index}
+                                    className="studio-log-row"
+                                    data-level={level}
                                 >
-                                    [INVALID] {JSON.stringify(log)}
+                                    <Icon aria-hidden="true" />
+                                    <span className="studio-log-time">
+                                        {new Date(
+                                            timestamp
+                                        ).toLocaleTimeString()}
+                                    </span>
+                                    <span className="studio-log-message">
+                                        {message}
+                                    </span>
                                 </div>
                             );
-                        }
-
-                        const Icon =
-                            levelIcons[level as keyof typeof levelIcons];
-
-                        return (
-                            <div
-                                key={i}
-                                className={`${levelColors[level as keyof typeof levelColors]} break-words mb-1 flex items-start gap-2`}
-                            >
-                                <Icon className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                <span className="text-zinc-400 flex-shrink-0">
-                                    {new Date(timestamp).toLocaleTimeString()}
-                                </span>
-                                <span className="break-words min-w-0">
-                                    {message}
-                                </span>
-                            </div>
-                        );
-                    })}
-                    <div ref={logsEndRef} />
+                        })
+                    )}
                 </div>
-            </div>
 
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-3">
-                <p className="text-blue-300 text-xs leading-relaxed">
+                <p className="studio-logs-note">
                     {t("logs.logsRetentionNotice")}
                 </p>
-            </div>
+            </SettingGroup>
         </div>
     );
 }

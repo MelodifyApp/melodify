@@ -31,7 +31,11 @@ import { redactSecrets } from "@/core/logging/utils";
 import { CommandManager } from "@/core/commands/manager";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { isSafeExternalUrl } from "@/shared/utils/externalUrl";
-import { sanitizeConfigForRenderer, sanitizeConfigUpdate } from "@/core/config/rendererConfig";
+import {
+    inspectConfigUpdate,
+    sanitizeConfigForRenderer,
+    sanitizeConfigUpdate,
+} from "@/core/config/rendererConfig";
 import {
     isPlainObject,
     readBoolean,
@@ -52,6 +56,59 @@ registerAllCommands(commandManager);
 
 export { commandManager };
 
+interface ConfigSideEffectState {
+    saveCurrentSongToFile?: boolean;
+    startOnStartup?: boolean;
+}
+
+function applyConfigSideEffects(
+    oldConfig: ConfigSideEffectState,
+    effectiveConfig: ConfigSideEffectState
+): void {
+    const reloadable = commandManager as CommandManager & {
+        reloadFromConfig?: () => void;
+    };
+    try {
+        if (typeof reloadable.reloadFromConfig === "function") {
+            reloadable.reloadFromConfig();
+        } else {
+            commandManager.reloadCommandAliasesFromConfig();
+        }
+    } catch (error) {
+        logError(error, "config:side-effects:commands");
+    }
+
+    try {
+        const oldSaveToFile = oldConfig.saveCurrentSongToFile;
+        const newSaveToFile = effectiveConfig.saveCurrentSongToFile;
+        if (oldSaveToFile !== newSaveToFile) {
+            if (newSaveToFile) startSongFileSaving();
+            else stopSongFileSaving();
+        }
+    } catch (error) {
+        logError(error, "config:side-effects:song-file");
+    }
+
+    try {
+        const oldStartOnStartup = oldConfig.startOnStartup;
+        const newStartOnStartup = effectiveConfig.startOnStartup;
+        if (oldStartOnStartup !== newStartOnStartup) {
+            if (newStartOnStartup) {
+                app.setLoginItemSettings({
+                    openAtLogin: true,
+                    openAsHidden: true,
+                });
+                logInfo("App configured to start on startup", "config:save");
+            } else {
+                app.setLoginItemSettings({ openAtLogin: false });
+                logInfo("App configured to not start on startup", "config:save");
+            }
+        }
+    } catch (error) {
+        logError(error, "config:side-effects:startup");
+    }
+}
+
 /**
  * External URL Handler
  * Opens URLs in the user's default browser with security validation
@@ -71,9 +128,79 @@ ipcMain.on("open-external", (_, url: unknown) => {
  * Includes all user settings, defaults, and translated values
  */
 ipcMain.handle("config:get", () => {
+    const loadState =
+        typeof Config.getLoadState === "function"
+            ? Config.getLoadState()
+            : { ok: true };
+    if (!loadState.ok) {
+        throw new Error(loadState.error || "Config could not be loaded.");
+    }
     // Credentials never leave the main process; the renderer receives a
     // projected config with has<Key> presence flags instead.
     return sanitizeConfigForRenderer(Config.get());
+});
+
+ipcMain.handle("config:reload", () => {
+    const previous = Config.get();
+    const result =
+        typeof Config.reload === "function"
+            ? Config.reload()
+            : { ok: false, error: "Config reload is unavailable." };
+    if (result.ok) {
+        try {
+            applyConfigSideEffects(previous, Config.get());
+        } catch (error) {
+            logError(error, "config:reload:side-effects");
+        }
+    }
+    return result;
+});
+
+ipcMain.handle("config:save", (_event, payload: unknown) => {
+    const loadState =
+        typeof Config.getLoadState === "function"
+            ? Config.getLoadState()
+            : { ok: true };
+    if (!loadState.ok) {
+        return { ok: false, code: "load-failed" };
+    }
+    const inspection = inspectConfigUpdate(payload);
+    if (inspection.rejected.length > 0) {
+        logWarn("Rejected config save payload", "config:save");
+        return {
+            ok: false,
+            code: "rejected",
+            rejected: inspection.rejected,
+        };
+    }
+
+    const patch = inspection.patch;
+    if (Object.keys(patch).length === 0) {
+        return {
+            ok: true,
+            config: sanitizeConfigForRenderer(Config.get()),
+        };
+    }
+
+    const previous = Config.get();
+    try {
+        Config.setPersisted(patch);
+    } catch (error) {
+        logError(error, "config:save");
+        return { ok: false, code: "write-failed" };
+    }
+
+    const effective = Config.get();
+    try {
+        applyConfigSideEffects(previous, effective);
+    } catch (error) {
+        logError(error, "config:save:side-effects");
+    }
+
+    return {
+        ok: true,
+        config: sanitizeConfigForRenderer(effective),
+    };
 });
 
 /**
@@ -99,69 +226,7 @@ ipcMain.on("config:set", (event, newConfig) => {
 
     const oldConfig = Config.get();
     Config.set(patch);
-    const effectiveConfig = Config.get();
-
-    // Detect and handle song file saving state changes
-    // This feature requires main process coordination for file system access
-    const oldSaveToFile = oldConfig.saveCurrentSongToFile;
-    const newSaveToFile = effectiveConfig.saveCurrentSongToFile;
-
-    if (oldSaveToFile !== newSaveToFile) {
-        if (newSaveToFile) {
-            startSongFileSaving();
-        } else {
-            stopSongFileSaving();
-        }
-    }
-
-    // Handle startup setting changes
-    const oldStartOnStartup = oldConfig.startOnStartup;
-    const newStartOnStartup = effectiveConfig.startOnStartup;
-
-    if (oldStartOnStartup !== newStartOnStartup) {
-        if (newStartOnStartup) {
-            app.setLoginItemSettings({
-                openAtLogin: true,
-                openAsHidden: true,
-            });
-            logInfo("App configured to start on startup", "config:set");
-        } else {
-            app.setLoginItemSettings({
-                openAtLogin: false,
-            });
-            logInfo("App configured to not start on startup", "config:set");
-        }
-    }
-
-    // Handle command alias updates
-    const oldCommandsConfig = oldConfig.commands || {};
-    const newCommandsConfig = effectiveConfig.commands || {};
-
-    // Check for changes in command aliases and update CommandManager
-    for (const [commandName, newCmdConfig] of Object.entries(
-        newCommandsConfig
-    )) {
-        const oldCmdConfig = oldCommandsConfig[commandName] || {};
-        const oldAliases = oldCmdConfig.aliases || [];
-        const newAliases = (newCmdConfig as any).aliases || [];
-
-        // Check if aliases have changed
-        if (
-            JSON.stringify(oldAliases.sort()) !==
-            JSON.stringify(newAliases.sort())
-        ) {
-            logDebug(
-                `Updating aliases for command '${commandName}': ${oldAliases.join(
-                    ", "
-                )} -> ${newAliases.join(", ")}`,
-                "config:set"
-            );
-            commandManager.updateCommandAliases(commandName, newAliases);
-        }
-    }
-
-    // Also reload all command aliases from config to ensure consistency
-    commandManager.reloadCommandAliasesFromConfig();
+    applyConfigSideEffects(oldConfig, Config.get());
 });
 
 /**
@@ -412,8 +477,10 @@ ipcMain.handle("file:selectSongFilePath", async () => {
 
         if (!result.canceled && result.filePath) {
             // The main process owns the write target: persist the path the
-            // user picked here so a renderer payload can never set it.
-            Config.set({ currentSongFilePath: result.filePath });
+            // user picked here so a renderer payload can never set it. Return
+            // it only after the durable write succeeds, so the renderer can
+            // acknowledge the effective path.
+            Config.setPersisted({ currentSongFilePath: result.filePath });
             logInfo(
                 "Song file path updated from the save dialog",
                 "file:selectSongFilePath"

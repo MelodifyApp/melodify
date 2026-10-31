@@ -1,104 +1,322 @@
-// Titlebar.tsx
-// Custom title bar component for the Electron app, including app name, version, update status, and window controls.
+// Studio titlebar: brand/Home, Settings, theme picker and window controls.
 
-import React from "react";
-import { SettingsIcon, XIcon, TestTube } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import MelodifyMark from "./MelodifyMark";
+import { STUDIO_THEMES } from "@/ui/theme";
+import type { StudioThemeName } from "@/ui/components/studio";
+import "./titlebarStudio.css";
 
-/**
- * Props for the Titlebar component.
- * @property onMinimize - Function to minimize the window.
- * @property onClose - Function to close the window.
- * @property onSettings - Function to open the settings page.
- */
 interface TitlebarProps {
     onMinimize: () => void;
+    onMaximize?: () => void;
     onClose: () => void;
     onSettings: () => void;
+    onHome?: () => void;
+    onThemeChange?: (theme: StudioThemeName) => void;
+    theme?: StudioThemeName;
+    maximized?: boolean;
     showSettings?: boolean;
 }
 
-/**
- * Renders the custom title bar for the Electron app.
- * Displays app name, version, update status, and window controls.
- */
+const noop = (): void => undefined;
+
 export default function Titlebar({
     onMinimize,
+    onMaximize = noop,
     onClose,
     onSettings,
+    onHome,
+    onThemeChange = noop,
+    theme = "graphite",
+    maximized = false,
     showSettings = true,
 }: TitlebarProps) {
     const { t } = useTranslation();
-    const isDevelopment = process.env.NODE_ENV === "development";
+    const [themeOpen, setThemeOpen] = useState(false);
+    const themeWrapRef = useRef<HTMLDivElement>(null);
+    const themeButtonRef = useRef<HTMLButtonElement>(null);
+    const popoverRef = useRef<HTMLDivElement>(null);
 
-    const openUITestWindow = () => {
-        window.electronAPI?.openUITestWindow();
+    useEffect(() => {
+        if (!themeOpen) return;
+        const selected = popoverRef.current?.querySelector<HTMLElement>(
+            '.studio-theme-option[aria-pressed="true"]'
+        );
+        const first = popoverRef.current?.querySelector<HTMLElement>(
+            ".studio-theme-option"
+        );
+        (selected || first)?.focus();
+
+        const onPointerDown = (event: MouseEvent) => {
+            if (
+                themeWrapRef.current &&
+                !themeWrapRef.current.contains(event.target as Node)
+            ) {
+                setThemeOpen(false);
+            }
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setThemeOpen(false);
+                themeButtonRef.current?.focus();
+            }
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [themeOpen]);
+
+    const chooseTheme = (next: StudioThemeName) => {
+        onThemeChange(next);
+        setThemeOpen(false);
+        themeButtonRef.current?.focus();
     };
 
     return (
-        <div
-            className="w-full flex items-center border-b border-zinc-700/70 justify-between bg-zinc-900 h-9 select-none pl-3 gap-3"
-            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        >
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <MelodifyMark className="w-6 h-6" />
-                    <div className="flex items-center font-bold text-white">
-                        {t("app.name")}
-                    </div>
-                </div>
-            </div>
-
-            <div
-                className="flex items-center h-full ml-auto"
-                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        <header className="studio-titlebar">
+            <button
+                type="button"
+                className="studio-titlebar-brand"
+                data-titlebar-brand
+                onClick={onHome}
+                aria-label={t("navigation.homePage")}
+                title={t("navigation.homePage")}
             >
-                {isDevelopment && (
-                    <button
-                        className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-melodify-secondary border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-secondary"
-                        onClick={openUITestWindow}
-                        title="UI Test Window (Dev Only)"
-                        aria-label="Open UI Test Window"
-                    >
-                        <TestTube className="size-4" />
-                    </button>
-                )}
+                <span className="studio-titlebar-mark" aria-hidden="true">
+                    <MelodifyMark />
+                </span>
+                <span className="studio-titlebar-name">{t("app.name")}</span>
+                <span className="studio-titlebar-sep" aria-hidden="true" />
+            </button>
+
+            <div className="studio-titlebar-controls">
                 {showSettings && (
                     <button
-                        className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-primary"
+                        type="button"
+                        className="studio-window-btn"
                         onClick={onSettings}
-                        title={t("settings.title")}
                         aria-label={t("settings.title")}
+                        title={t("settings.title")}
                     >
-                        <SettingsIcon className="size-4" />
+                        <svg
+                            viewBox="0 0 16 16"
+                            width="15"
+                            height="15"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M3 5h10M3 11h10"
+                                stroke="currentColor"
+                                strokeWidth="1.2"
+                                strokeLinecap="round"
+                            />
+                            <circle cx="6" cy="5" r="1.6" fill="currentColor" />
+                            <circle cx="10" cy="11" r="1.6" fill="currentColor" />
+                        </svg>
                     </button>
                 )}
-                <button
-                    className="h-full w-10 flex items-center justify-center transition-colors hover:bg-zinc-800 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-melodify-primary"
-                    onClick={onMinimize}
-                    title="Minimize"
-                    aria-label="Minimize window"
+
+                <div ref={themeWrapRef} className="studio-titlebar-theme-control">
+                    <button
+                        ref={themeButtonRef}
+                        type="button"
+                        className="studio-window-btn theme-btn"
+                        onClick={() => setThemeOpen((open) => !open)}
+                        aria-label={t("titlebar.chooseTheme")}
+                        title={t("titlebar.chooseTheme")}
+                        aria-haspopup="dialog"
+                        aria-expanded={themeOpen}
+                        aria-controls="studio-theme-popover"
+                    >
+                        <svg
+                            viewBox="0 0 14 14"
+                            width="14"
+                            height="14"
+                            aria-hidden="true"
+                        >
+                            <path d="M7 2a5 5 0 0 1 0 10Z" fill="currentColor" />
+                            <circle
+                                cx="7"
+                                cy="7"
+                                r="5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.1"
+                            />
+                        </svg>
+                    </button>
+
+                    <div
+                        ref={popoverRef}
+                        id="studio-theme-popover"
+                        className="studio-theme-popover"
+                        role="dialog"
+                        aria-modal="false"
+                        aria-labelledby="studio-theme-popover-title"
+                        hidden={!themeOpen}
+                    >
+                        <p
+                            className="studio-theme-popover-title"
+                            id="studio-theme-popover-title"
+                        >
+                            {t("titlebar.theme")}
+                        </p>
+                        <div
+                            className="studio-theme-list"
+                            role="group"
+                            aria-label={t("titlebar.themes")}
+                        >
+                            {STUDIO_THEMES.map((option) => (
+                                <button
+                                    key={option.id}
+                                    type="button"
+                                    className="studio-theme-option"
+                                    aria-pressed={theme === option.id}
+                                    onClick={() => chooseTheme(option.id)}
+                                >
+                                    <span
+                                        className="studio-theme-swatch"
+                                        aria-hidden="true"
+                                        style={
+                                            {
+                                                "--sw-canvas":
+                                                    option.swatch.canvas,
+                                                "--sw-panel":
+                                                    option.swatch.panel,
+                                                "--sw-titlebar":
+                                                    option.swatch.titlebar,
+                                                "--sw-rim": option.swatch.rim,
+                                                "--sw-lift": option.swatch.lift,
+                                            } as CSSProperties
+                                        }
+                                    />
+                                    <span>{option.label}</span>
+                                    <span
+                                        className="studio-theme-check"
+                                        aria-hidden="true"
+                                    >
+                                        ✓
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                        <p className="studio-theme-note">
+                            {t("titlebar.themeNote")}
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    className="studio-titlebar-actions"
+                    role="group"
+                    aria-label={t("titlebar.windowControls")}
                 >
-                    <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
-                        <rect
-                            y="7.5"
-                            width="16"
-                            height="1"
-                            rx="0.5"
-                            fill="currentColor"
-                        />
-                    </svg>
-                </button>
-                <button
-                    className="h-full w-12 flex items-center justify-center transition-colors hover:bg-red-700 text-zinc-300 border-none bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400"
-                    onClick={onClose}
-                    title={t("common.close")}
-                    aria-label="Close application"
-                >
-                    <XIcon className="size-5" />
-                </button>
+                    <button
+                        type="button"
+                        className="studio-window-btn"
+                        onClick={onMinimize}
+                        aria-label={t("titlebar.minimize")}
+                        title={t("titlebar.minimize")}
+                    >
+                        <svg
+                            viewBox="0 0 12 12"
+                            width="12"
+                            height="12"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M2.5 6h7"
+                                stroke="currentColor"
+                                strokeWidth="1.2"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                    </button>
+                    <button
+                        type="button"
+                        className="studio-window-btn"
+                        onClick={onMaximize}
+                        aria-label={
+                            maximized
+                                ? t("titlebar.restore")
+                                : t("titlebar.maximize")
+                        }
+                        title={
+                            maximized
+                                ? t("titlebar.restore")
+                                : t("titlebar.maximize")
+                        }
+                    >
+                        {maximized ? (
+                            <svg
+                                viewBox="0 0 12 12"
+                                width="12"
+                                height="12"
+                                aria-hidden="true"
+                            >
+                                <rect
+                                    x="2.2"
+                                    y="4"
+                                    width="5.8"
+                                    height="5.8"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.1"
+                                />
+                                <path
+                                    d="M4.2 4V2.2h5.6v5.6H8.2"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.1"
+                                />
+                            </svg>
+                        ) : (
+                            <svg
+                                viewBox="0 0 12 12"
+                                width="12"
+                                height="12"
+                                aria-hidden="true"
+                            >
+                                <rect
+                                    x="2.5"
+                                    y="2.5"
+                                    width="7"
+                                    height="7"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.1"
+                                />
+                            </svg>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        className="studio-window-btn close"
+                        onClick={onClose}
+                        aria-label={t("titlebar.close")}
+                        title={t("titlebar.close")}
+                    >
+                        <svg
+                            viewBox="0 0 12 12"
+                            width="12"
+                            height="12"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M2.7 2.7l6.6 6.6M9.3 2.7L2.7 9.3"
+                                stroke="currentColor"
+                                strokeWidth="1.2"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                    </button>
+                </div>
             </div>
-        </div>
+        </header>
     );
 }

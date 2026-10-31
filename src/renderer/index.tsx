@@ -6,6 +6,11 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./globals.css";
 import i18n from "@/core/i18n";
+import { initializeUpdateStatusStore } from "@/ui/updateStatusStore";
+
+// Subscribe before React mounts so update events are retained even while the
+// Home page or update dialog is not rendered.
+void initializeUpdateStatusStore(window.electronAPI);
 
 // Suppress webpack development overlay warnings
 if (process.env.NODE_ENV === "development") {

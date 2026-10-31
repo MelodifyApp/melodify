@@ -5,6 +5,7 @@ import { TWITCH_REDIRECT_URI } from "@/shared/constants";
 import { logDebug, logError } from "@/renderer/rendererLogger";
 import { RefreshCw } from "lucide-react";
 import CredentialSetupFeedback from "@/ui/components/CredentialSetupFeedback";
+import { credentialFailureMessageKey } from "@/shared/utils/credentialFailure";
 
 export default function TwitchCard() {
     const { t } = useTranslation();
@@ -15,8 +16,6 @@ export default function TwitchCard() {
     const [authenticated, setAuthenticated] = useState(false);
     const [listeningToChat, setListeningToChat] = useState(false);
     const [showSetup, setShowSetup] = useState(false);
-    const [twitchRedirectUri, setTwitchRedirectUri] =
-        useState<string>(TWITCH_REDIRECT_URI);
     const [authInProgress, setAuthInProgress] = useState(false);
     const [refreshInProgress, setRefreshInProgress] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -77,12 +76,6 @@ export default function TwitchCard() {
                 setTwitchUsername(null);
             });
 
-        window.electronAPI.invoke("config:get").then((cfg) => {
-            if (cfg && cfg.twitchRedirectUri) {
-                setTwitchRedirectUri(cfg.twitchRedirectUri);
-            }
-        });
-
         // Cleanup function to remove event listeners
         return () => {
             window.electronAPI.removeAllListeners("twitch:authenticated");
@@ -99,10 +92,15 @@ export default function TwitchCard() {
         }
 
         try {
-            window.electronAPI.send("twitch:setSecrets", {
+            const result = await window.electronAPI.invoke("twitch:setSecrets", {
                 twitchClientId,
                 twitchClientSecret,
             });
+            if (!result || result.success !== true) {
+                const messageKey = credentialFailureMessageKey(result?.code);
+                setError(messageKey ? t(messageKey) : t("common.secretsSaveError"));
+                return;
+            }
             setError(null);
             setHasSecrets(true);
             setTwitchClientId("");
@@ -110,7 +108,7 @@ export default function TwitchCard() {
             setShowSetup(false);
         } catch (error) {
             logError(error as Error, "Error saving Twitch secrets");
-            setError(t("common.secretsSaveError"));
+            setError(t("common.verificationUnavailable"));
         }
     }
 
@@ -175,7 +173,7 @@ export default function TwitchCard() {
     };
 
     return (
-        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative">
+        <div className="w-full h-full flex flex-col bg-zinc-800/10 relative studio-provider-card">
             <div className="p-4 pb-3">
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-twitch-purple rounded-md flex items-center justify-center">
@@ -409,7 +407,7 @@ export default function TwitchCard() {
                                         dev.twitch.tv/console
                                     </a>{" "}
                                     {t("setup.twitchInstructionsEnd")}{" "}
-                                    {twitchRedirectUri}
+                                    {TWITCH_REDIRECT_URI}
                                 </p>
                                 <p className="text-xs text-zinc-400 mt-1">
                                     {t("setup.twitchAdditionalInfo1")}

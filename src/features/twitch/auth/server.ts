@@ -213,7 +213,7 @@ export async function startTwitchAuthServer(
                 });
                 // Emit auth completion to main process
                 ipcMain.emit("twitch:authComplete");
-                listenToChat(window);
+                listenToChat(window, true);
                 // Don't resolve here - server startup Promise already resolved
             } catch (error) {
                 logError(error, "twitchAuthServer:callback");

@@ -22,6 +22,7 @@ import {
     readBoundedString,
     readChatMessage,
 } from "../../../core/ipc/payloadValidation";
+import { verifyAppCredentials } from "../../../shared/utils/credentialVerification";
 
 let authInProgress = false;
 
@@ -263,28 +264,56 @@ ipcMain.handle("kick:hasSecrets", async () => {
     return !!kickClientId && !!kickClientSecret;
 });
 
-ipcMain.on("kick:setSecrets", (event, secrets) => {
-    const record =
-        secrets && typeof secrets === "object" && !Array.isArray(secrets)
-            ? (secrets as Record<string, unknown>)
-            : null;
-    const kickClientId =
+function readKickCredentialPair(secrets: unknown): {
+    clientId: string;
+    clientSecret: string;
+} {
+    const record = isPlainObject(secrets) ? secrets : null;
+    const clientId =
         typeof record?.kickClientId === "string"
             ? record.kickClientId.trim()
             : "";
-    const kickClientSecret =
+    const suppliedSecret =
         typeof record?.kickClientSecret === "string"
             ? record.kickClientSecret.trim()
             : "";
-    if (!kickClientId || !kickClientSecret) {
+    const storedId = String(Config.get("kickClientId") || "").trim();
+    const storedSecret = String(Config.get("kickClientSecret") || "").trim();
+    return {
+        clientId,
+        clientSecret:
+            suppliedSecret ||
+            (clientId && clientId === storedId ? storedSecret : ""),
+    };
+}
+
+ipcMain.handle("kick:verifySecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readKickCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
+        return { success: false, code: "missing_credentials" };
+    }
+    return verifyAppCredentials("kick", { clientId, clientSecret });
+});
+
+ipcMain.handle("kick:setSecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readKickCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
         logWarn(
             "kick:setSecrets ignored a malformed payload",
             "kick:setSecrets"
         );
-        return;
+        return { success: false, code: "missing_credentials" };
+    }
+    const verification = await verifyAppCredentials("kick", {
+        clientId,
+        clientSecret,
+    });
+    if (!verification.success) {
+        return verification;
     }
     logInfo("kick:setSecrets called");
-    Config.set({ kickClientId, kickClientSecret });
+    Config.set({ kickClientId: clientId, kickClientSecret: clientSecret });
+    return { success: true };
 });
 
 ipcMain.handle("kick:isListeningToChat", async () => {

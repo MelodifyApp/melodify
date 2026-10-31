@@ -36,6 +36,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             showCharacterCount,
             maxLength,
             className,
+            spellCheck = false,
+            autoCorrect = "off",
+            autoCapitalize = "off",
             ...props
         },
         ref
@@ -62,6 +65,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     autoFocus={false}
                     aria-invalid={showError ? true : undefined}
                     aria-describedby={helperText ? describedById : undefined}
+                    spellCheck={spellCheck}
+                    autoCorrect={autoCorrect}
+                    autoCapitalize={autoCapitalize}
                     className={cn(
                         "px-3 py-2 bg-zinc-800 border rounded text-white placeholder-zinc-400 focus:outline-none focus:ring-2 transition-shadow duration-200",
                         error

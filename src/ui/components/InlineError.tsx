@@ -25,7 +25,7 @@ export default function InlineError({
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            className={`inline-error rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-xs text-red-300 ${className ?? ""}`.trim()}
+            className={`inline-error studio-inline-error ${className ?? ""}`.trim()}
         >
             {message}
         </p>

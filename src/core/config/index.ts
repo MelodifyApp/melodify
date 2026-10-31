@@ -218,13 +218,108 @@ const defaultConfig: AppConfig = {
 const storePath = path.join(userDataDirectory, "config.json");
 
 let cache: AppConfig = { ...defaultConfig };
+let loadError: string | null = null;
+let recoveryPath: string | null = null;
+let strictSave = false;
+
+function notLoadedError(): Error {
+    return new Error(
+        "Config is not loaded. Reload or recover the config file before saving."
+    );
+}
+
+/**
+ * Move the unreadable config aside before any later save can replace it. If a
+ * rename is not possible, a copy is still enough because saves remain blocked.
+ */
+function quarantineCorruptConfig(): string | null {
+    if (!fs.existsSync(storePath)) return null;
+
+    const stamp = `${Date.now()}-${process.pid}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+    let target = path.join(
+        userDataDirectory,
+        `config.corrupt-${stamp}.json`
+    );
+    let suffix = 1;
+    while (fs.existsSync(target) && suffix <= 100) {
+        target = path.join(
+            userDataDirectory,
+            `config.corrupt-${stamp}-${suffix}.json`
+        );
+        suffix += 1;
+    }
+    if (fs.existsSync(target)) return null;
+
+    try {
+        fs.renameSync(storePath, target);
+        return target;
+    } catch {
+        try {
+            fs.copyFileSync(storePath, target);
+            try {
+                fs.unlinkSync(storePath);
+            } catch {
+                // The copy is preserved and saves stay blocked until recovery.
+            }
+            return target;
+        } catch {
+            return null;
+        }
+    }
+}
+
+function cloneConfig(config: AppConfig): AppConfig {
+    if (typeof structuredClone === "function") {
+        return structuredClone(config);
+    }
+    return JSON.parse(JSON.stringify(config)) as AppConfig;
+}
+
+function writeConfigAtomically(config: AppConfig): void {
+    const temporaryPath = `${storePath}.tmp`;
+    try {
+        fs.writeFileSync(
+            temporaryPath,
+            JSON.stringify(config, null, 2),
+            "utf-8"
+        );
+        fs.renameSync(temporaryPath, storePath);
+    } catch (error) {
+        try {
+            if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+        } catch {
+            // The original failure is the actionable one.
+        }
+        throw error;
+    }
+}
 
 function load(): void {
+    loadError = null;
+    recoveryPath = null;
+    const previousStrictSave = strictSave;
+    strictSave = true;
+    let inputCorrupt = false;
     try {
         if (fs.existsSync(storePath)) {
-            const raw = fs.readFileSync(storePath, "utf-8");
-            const savedConfig = JSON.parse(raw);
-            cache = { ...defaultConfig, ...savedConfig };
+            let savedConfig: unknown;
+            try {
+                const raw = fs.readFileSync(storePath, "utf-8");
+                savedConfig = JSON.parse(raw);
+                if (
+                    !savedConfig ||
+                    typeof savedConfig !== "object" ||
+                    Array.isArray(savedConfig)
+                ) {
+                    throw new Error("Invalid config file shape");
+                }
+            } catch (error) {
+                inputCorrupt = true;
+                throw error;
+            }
+            cache = { ...defaultConfig, ...(savedConfig as AppConfig) };
 
             // Check if we need to update translated defaults for the current language
             const currentLanguage = cache.language || "en";
@@ -282,17 +377,43 @@ function load(): void {
             save();
         }
     } catch (err) {
+        recoveryPath = inputCorrupt ? quarantineCorruptConfig() : null;
         logError(err, "config:load");
-        cache = { ...defaultConfig };
+        if (inputCorrupt) {
+            if (recoveryPath) {
+                logWarn(
+                    `Config could not be loaded; the original was quarantined at ${recoveryPath}`,
+                    "config:load"
+                );
+            } else {
+                logWarn(
+                    "Config could not be loaded and could not be quarantined; writes are blocked",
+                    "config:load"
+                );
+            }
+            cache = { ...defaultConfig };
+        }
+        loadError = "Config could not be loaded.";
+    } finally {
+        strictSave = previousStrictSave;
     }
 }
 
 function save(): void {
+    if (loadError) {
+        if (strictSave) throw notLoadedError();
+        logWarn(
+            "Config save skipped because the config is not loaded",
+            "config:save"
+        );
+        return;
+    }
     try {
-        fs.writeFileSync(storePath, JSON.stringify(cache, null, 2), "utf-8");
+        writeConfigAtomically(cache);
         logInfo("Saved config to disk", redactSecrets(cache));
     } catch (err) {
         logError(err, "config:save");
+        if (strictSave) throw err;
     }
 }
 
@@ -372,6 +493,45 @@ function get(key?: keyof AppConfig) {
 
 const Config = {
     get,
+    getLoadState(): {
+        ok: boolean;
+        error?: string;
+        recoveryPath?: string;
+    } {
+        return loadError
+            ? {
+                  ok: false,
+                  error: loadError,
+                  ...(recoveryPath ? { recoveryPath } : {}),
+              }
+            : { ok: true };
+    },
+    reload(): {
+        ok: boolean;
+        error?: string;
+        recoveryPath?: string;
+    } {
+        load();
+        return this.getLoadState();
+    },
+    /**
+     * Transactional settings save. The in-memory cache is committed only after
+     * the complete candidate config has been written successfully.
+     */
+    setPersisted(data: Partial<AppConfig>): void {
+        const previous = cloneConfig(cache);
+        const previousStrictSave = strictSave;
+        strictSave = true;
+        try {
+            this.set(data);
+        } catch (error) {
+            cache = previous;
+            isUpdatingLanguage = false;
+            throw error;
+        } finally {
+            strictSave = previousStrictSave;
+        }
+    },
     getMany<K extends keyof AppConfig>(keys: K[]): Pick<AppConfig, K> {
         const result = keys.reduce(
             (acc, key) => {
@@ -384,6 +544,14 @@ const Config = {
         return result;
     },
     set(data: Partial<AppConfig>): void {
+        if (loadError) {
+            if (strictSave) throw notLoadedError();
+            logWarn(
+                "Config update skipped because the config is not loaded",
+                "config:set"
+            );
+            return;
+        }
         logInfo("Config.set called", redactSecrets(data));
 
         // Check if language is being changed
@@ -398,9 +566,8 @@ const Config = {
             // Update cache
             cache = { ...cache, ...data };
 
-            // Update translated defaults for the new language
+            // Update translated defaults for the new language (this saves).
             updateTranslatedDefaults();
-            save();
 
             // Update i18n to match
             if (typeof window !== "undefined") {
@@ -428,9 +595,8 @@ const Config = {
             // Update cache with the new setting and sync defaults language
             cache = { ...cache, ...data, defaultsLanguage: cache.language };
 
-            // Update translated defaults for the current language
+            // Update translated defaults for the current language (this saves).
             updateTranslatedDefaults();
-            save();
         }
         // Check if defaultsLanguage is being manually changed
         else if (
@@ -445,9 +611,8 @@ const Config = {
             // Update cache and disable auto-follow since user is manually setting defaults language
             cache = { ...cache, ...data, autoFollowLanguageDefaults: false };
 
-            // Update translated defaults for the new defaults language
+            // Update translated defaults for the new defaults language (this saves).
             updateTranslatedDefaults();
-            save();
         } else {
             // Normal config update
             cache = { ...cache, ...data };
@@ -455,6 +620,14 @@ const Config = {
         }
     },
     setMany<K extends keyof AppConfig>(entries: [K, AppConfig[K]][]): void {
+        if (loadError) {
+            if (strictSave) throw notLoadedError();
+            logWarn(
+                "Config bulk update skipped because the config is not loaded",
+                "config:setMany"
+            );
+            return;
+        }
         logInfo(
             "Config.setMany called",
             redactSecrets(Object.fromEntries(entries))

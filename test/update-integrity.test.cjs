@@ -11,6 +11,8 @@ const {
     createUpdateController,
     statUpdateArtifact,
     INSTALLER_EXTENSIONS,
+    UPDATE_CHECK_TIMEOUT_MS,
+    UPDATE_DOWNLOAD_TIMEOUT_MS,
 } = require("../src/main/updateController");
 
 const TEMP_DIR = "C:\\Users\\tester\\AppData\\Local\\Temp";
@@ -206,13 +208,17 @@ function harness(overrides = {}) {
         },
     });
 
-    return { controller, broadcasts, logs, calls, stat };
+    return { controller, broadcasts, logs, calls, stat, updater };
 }
 
 function statuses(broadcasts) {
     return broadcasts
         .filter(([channel]) => channel === "update:status")
         .map(([, status]) => status);
+}
+
+function flush() {
+    return new Promise((resolve) => setImmediate(resolve));
 }
 
 test("a validated download unlocks install and emits downloaded once", async () => {
@@ -224,6 +230,211 @@ test("a validated download unlocks install and emits downloaded once", async () 
 
     h.controller.installUpdate();
     assert.equal(h.calls.apply, 1);
+});
+
+test("install marks busy before apply and is single-flight", async () => {
+    let resolveApply;
+    let applyCalls = 0;
+    let statusAtApply = null;
+    const h = harness({
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async () => TEMP_EXE,
+            applyUpdate: () => {
+                applyCalls += 1;
+                statusAtApply = statuses(h.broadcasts).slice();
+                return new Promise((resolve) => {
+                    resolveApply = resolve;
+                });
+            },
+        },
+    });
+
+    await h.controller.downloadUpdate();
+    h.controller.installUpdate();
+    h.controller.installUpdate();
+    h.controller.installUpdate();
+
+    assert.equal(applyCalls, 1);
+    assert.deepEqual(statusAtApply, ["downloaded", "installing"]);
+    assert.deepEqual(statuses(h.broadcasts), ["downloaded", "installing"]);
+
+    resolveApply();
+    await flush();
+    assert.deepEqual(statuses(h.broadcasts), ["downloaded", "installing"]);
+});
+
+test("an explicit install failure stays retryable and does not disable installs", async () => {
+    let attempts = 0;
+    const h = harness({
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async () => TEMP_EXE,
+            applyUpdate: () => {
+                attempts += 1;
+                if (attempts === 1) {
+                    return Promise.reject(new Error("installer refused"));
+                }
+                return Promise.resolve();
+            },
+        },
+    });
+
+    await h.controller.downloadUpdate();
+    h.controller.installUpdate();
+    await flush();
+
+    assert.equal(attempts, 1);
+    assert.deepEqual(statuses(h.broadcasts), [
+        "downloaded",
+        "installing",
+        "install-error",
+    ]);
+
+    h.controller.installUpdate();
+    await flush();
+    assert.equal(attempts, 2);
+    assert.deepEqual(statuses(h.broadcasts), [
+        "downloaded",
+        "installing",
+        "install-error",
+        "installing",
+    ]);
+});
+
+test("update check passes one abort signal and the 60s deadline", async () => {
+    const seen = [];
+    const h = harness({
+        updater: {
+            checkForUpdates: async (options) => {
+                seen.push(options);
+            },
+            downloadUpdate: async () => TEMP_EXE,
+            applyUpdate: () => {},
+        },
+    });
+
+    await h.controller.checkForUpdates();
+    await h.controller.checkForUpdates();
+
+    assert.equal(seen.length, 2);
+    for (const options of seen) {
+        assert.ok(options.signal instanceof AbortSignal);
+        assert.equal(options.signal.aborted, false);
+        assert.equal(options.timeoutMs, UPDATE_CHECK_TIMEOUT_MS);
+    }
+    assert.notEqual(seen[0].signal, seen[1].signal);
+    assert.equal(UPDATE_CHECK_TIMEOUT_MS, 60_000);
+});
+
+test("update check abort and timeout leave a retryable error, not success", async () => {
+    for (const errorName of ["AbortError", "TimeoutError"]) {
+        let seen = null;
+        const h = harness({
+            updater: {
+                checkForUpdates: async (options) => {
+                    seen = options;
+                    throw Object.assign(new Error("cancelled"), {
+                        name: errorName,
+                    });
+                },
+                downloadUpdate: async () => TEMP_EXE,
+                applyUpdate: () => {},
+            },
+        });
+
+        await h.controller.checkForUpdates();
+
+        assert.ok(seen.signal instanceof AbortSignal);
+        assert.deepEqual(statuses(h.broadcasts), ["error"]);
+        assert.equal(statuses(h.broadcasts).includes("not-available"), false);
+        assert.equal(statuses(h.broadcasts).includes("available"), false);
+    }
+});
+
+test("download passes options and abort or timeout cannot become downloaded", async () => {
+    let successOptions = null;
+    const success = harness({
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async (options) => {
+                successOptions = options;
+                return TEMP_EXE;
+            },
+            applyUpdate: () => {},
+        },
+    });
+
+    await success.controller.downloadUpdate();
+    assert.ok(successOptions.signal instanceof AbortSignal);
+    assert.equal(successOptions.signal.aborted, false);
+    assert.equal(successOptions.timeoutMs, UPDATE_DOWNLOAD_TIMEOUT_MS);
+    assert.deepEqual(statuses(success.broadcasts), ["downloaded"]);
+    assert.equal(
+        success.controller.getValidatedArtifactPath(),
+        path.resolve(TEMP_EXE)
+    );
+
+    for (const errorName of ["AbortError", "TimeoutError"]) {
+        let seen = null;
+        const h = harness({
+            updater: {
+                checkForUpdates: async () => {},
+                downloadUpdate: async (options) => {
+                    seen = options;
+                    throw Object.assign(new Error("download cancelled"), {
+                        name: errorName,
+                    });
+                },
+                applyUpdate: () => {},
+            },
+        });
+
+        await h.controller.downloadUpdate();
+
+        assert.ok(seen.signal instanceof AbortSignal);
+        assert.equal(statuses(h.broadcasts).includes("downloaded"), false);
+        assert.deepEqual(statuses(h.broadcasts), ["error"]);
+        assert.equal(h.controller.getValidatedArtifactPath(), null);
+
+        h.controller.installUpdate();
+        assert.equal(h.calls.apply, 0);
+    }
+});
+
+test("a failed re-download clears the previously validated artifact", async () => {
+    let fail = false;
+    const h = harness({
+        updater: {
+            checkForUpdates: async () => {},
+            downloadUpdate: async () => {
+                if (fail) {
+                    throw Object.assign(new Error("timed out"), {
+                        name: "TimeoutError",
+                    });
+                }
+                return TEMP_EXE;
+            },
+            applyUpdate: () => {},
+        },
+    });
+
+    await h.controller.downloadUpdate();
+    assert.equal(
+        h.controller.getValidatedArtifactPath(),
+        path.resolve(TEMP_EXE)
+    );
+
+    fail = true;
+    await h.controller.downloadUpdate();
+
+    assert.equal(h.controller.getValidatedArtifactPath(), null);
+    assert.deepEqual(statuses(h.broadcasts), ["downloaded", "error"]);
+    assert.equal(
+        statuses(h.broadcasts).filter((status) => status === "downloaded")
+            .length,
+        1
+    );
 });
 
 test("an artifact outside the temp directory or of the wrong type is rejected", async () => {
@@ -338,7 +549,11 @@ test("a rejecting applyUpdate is reported instead of escaping unhandled", async 
     h.controller.installUpdate();
     await new Promise((resolve) => setImmediate(resolve));
 
-    assert.deepEqual(statuses(h.broadcasts), ["downloaded", "error"]);
+    assert.deepEqual(statuses(h.broadcasts), [
+        "downloaded",
+        "installing",
+        "install-error",
+    ]);
 });
 
 test("main process wires the controller and never applies a path directly", () => {

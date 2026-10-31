@@ -19,6 +19,8 @@ declare global {
             removeAllListeners: (channel: string) => void;
             openExternal: (url: string) => void;
             minimize: () => void;
+            maximize: () => void;
+            isMaximized: () => Promise<boolean>;
             close: () => void;
             openUITestWindow: () => Promise<void>;
             checkForUpdates: () => void;

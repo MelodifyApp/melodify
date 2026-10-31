@@ -1,0 +1,28 @@
+/* Single source of visual timing/easing for all Studio primitives. */
+.studio {
+    --studio-motion-fast: 120ms;
+    --studio-motion-base: 180ms;
+    --studio-motion-surface: 240ms;
+    --studio-motion-check: 260ms;
+    --studio-motion-spin: 700ms;
+    --studio-motion-ease: cubic-bezier(.2, .8, .2, 1);
+    --studio-motion-lift: -1px;
+    --studio-motion-press: .985;
+}
+
+@keyframes studio-spin { to { transform: rotate(360deg); } }
+@keyframes studio-check-pop {
+    0% { transform: scale(.8); }
+    65% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .studio *, .studio *::before, .studio *::after {
+        transition: none !important;
+        animation: none !important;
+        scroll-behavior: auto !important;
+    }
+    .studio .studio-button:hover, .studio .studio-button:active,
+    .studio .studio-field-error-slot { transform: none !important; }
+}

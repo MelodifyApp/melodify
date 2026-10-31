@@ -1,244 +1,320 @@
-import { useState, useEffect, useRef } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeftIcon, Clock, MoveLeftIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import General from "./sections/General";
 import Secrets from "./sections/Secrets";
 import Requests from "./sections/Requests";
 import Commands from "./sections/Commands";
 import Logs from "./sections/Logs";
 import Debug from "./sections/Debug";
-import { useTranslation } from "react-i18next";
+import { Button, SectionNav, SaveDock, StudioTheme } from "@/ui/components/studio";
+import type { SectionNavGroup, StudioThemeName } from "@/ui/components/studio";
+import {
+    buildConfigSavePatch,
+    acknowledgeSongFilePath,
+    commitAcknowledgedDraft,
+    commitDraft,
+    createDraftState,
+    credentialDraftsFromConfig,
+    discardDraft,
+    editDraftConfig,
+    mergeCredentialDrafts,
+    settingsAreDirty,
+    toggleDraftCommand,
+} from "./draftState";
+import "./settingsStudio.css";
 
-const NAVIGATION_SECTIONS = [
-    {
-        id: "general",
-        title: "general",
-        component: General,
-    },
-    {
-        id: "secrets",
-        title: "secrets",
-        component: Secrets,
-    },
-    {
-        id: "requests",
-        title: "requests",
-        component: Requests,
-    },
-    {
-        id: "commands",
-        title: "commands",
-        component: Commands,
-    },
-    {
-        id: "logs",
-        title: "logs",
-        component: Logs,
-    },
-    ...(process.env.NODE_ENV === "development"
-        ? [
-              {
-                  id: "debug",
-                  title: "debug",
-                  component: Debug,
-              },
-          ]
-        : []),
-];
+const SECTION_IDS = ["general", "secrets", "requests", "commands", "logs", "debug"] as const;
+type SectionId = (typeof SECTION_IDS)[number];
+export type SettingsSectionId = SectionId;
+const SECTION_TITLE_KEYS: Record<SectionId, string> = {
+    general: "settings.general",
+    secrets: "settings.secrets",
+    requests: "settings.requests",
+    commands: "settings.commands",
+    logs: "settings.logs",
+    debug: "settings.debug",
+};
 
-interface SettingsProps {
-    onClose: () => void;
+interface ConfigSaveResponse {
+    ok?: boolean;
+    code?: string;
+    rejected?: Array<{ key?: unknown }>;
+    config?: Record<string, unknown>;
 }
 
-export default function Settings({ onClose }: SettingsProps) {
-    const { t } = useTranslation();
-    const [activeSection, setActiveSection] = useState("general");
-    const [config, setConfig] = useState<any>({});
-    const [commands, setCommands] = useState<any[]>([]);
+export default function Settings({ onClose, theme = "graphite", active = true, requestedSection, onRequestedSectionHandled }: { onClose: () => void; theme?: StudioThemeName; active?: boolean; requestedSection?: SettingsSectionId; onRequestedSectionHandled?: () => void }) {
+    const { t, i18n } = useTranslation();
+    const [activeSection, setActiveSection] = useState<SectionId>("general");
+    const [drafts, setDrafts] = useState(() => createDraftState());
+    const [credentialDrafts, setCredentialDrafts] = useState<Record<string, unknown>>({});
+    const [credentialBaseline, setCredentialBaseline] = useState<Record<string, unknown>>({});
+    const [apiDraftPending, setApiDraftPending] = useState(false);
     const [logs, setLogs] = useState<any[]>([]);
-    const [saveStatus, setSaveStatus] = useState<
-        "idle" | "saving" | "saved" | "error"
-    >("idle");
-    const [unsavedChanges, setUnsavedChanges] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [hasNavigated, setHasNavigated] = useState(false);
+    const contentRef = useRef<HTMLElement>(null);
+    const headingRef = useRef<HTMLHeadingElement>(null);
 
-    const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-    const contentRef = useRef<HTMLDivElement>(null);
-
-    // Load initial data
-    useEffect(() => {
-        Promise.all([
-            window.electronAPI.invoke("config:get"),
-            window.electronAPI.invoke("commands:getAll"),
-            activeSection === "logs"
-                ? window.electronAPI.invoke("log:getAll")
-                : Promise.resolve([]),
-        ]).then(([configData, commandsData, logsData]) => {
-            setConfig(configData || {});
-            setCommands(commandsData || []);
-            setLogs(logsData || []);
-        });
-    }, [activeSection]);
-
-    // Reset scroll position when section changes
-    useEffect(() => {
-        if (contentRef.current) {
-            contentRef.current.scrollTop = 0;
-        }
-    }, [activeSection]);
-
-    // Auto-save with debouncing
-    const autoSave = (newConfig: any) => {
-        setUnsavedChanges(true);
-        setSaveStatus("saving");
-
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-
-        saveTimeoutRef.current = setTimeout(() => {
-            try {
-                window.electronAPI.send("config:set", newConfig);
-                setSaveStatus("saved");
-                setUnsavedChanges(false);
-
-                setTimeout(() => setSaveStatus("idle"), 2000);
-            } catch (error) {
-                setSaveStatus("error");
-                setTimeout(() => setSaveStatus("idle"), 3000);
+    const loadSettings = useCallback(async (reloadFirst = false) => {
+        setLoading(true);
+        setLoaded(false);
+        setLoadError(false);
+        setSaveError(null);
+        try {
+            if (reloadFirst) {
+                const reload = await window.electronAPI.invoke("config:reload");
+                if (!reload || reload.ok !== true) {
+                    throw new Error("Config reload failed");
+                }
             }
-        }, 500);
-    };
+            const [configData, commandsData] = await Promise.all([
+                window.electronAPI.invoke("config:get"),
+                window.electronAPI.invoke("commands:getAll"),
+            ]);
+            if (
+                !configData ||
+                typeof configData !== "object" ||
+                Array.isArray(configData)
+            ) {
+                throw new Error("Invalid config response");
+            }
+            if (!Array.isArray(commandsData)) {
+                throw new Error("Invalid command response");
+            }
+            setDrafts(createDraftState(configData, commandsData));
+            setCredentialDrafts(credentialDraftsFromConfig(configData));
+            setCredentialBaseline(credentialDraftsFromConfig(configData));
+            if (
+                typeof configData.language === "string" &&
+                i18n.language !== configData.language
+            ) {
+                void i18n.changeLanguage(configData.language);
+            }
+            setLoaded(true);
+        } catch (error) {
+            console.error("Failed to load settings", error);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, [i18n]);
 
-    const handleConfigChange = (key: string, value: any) => {
-        const newConfig = { ...config, [key]: value };
-        setConfig(newConfig);
-        autoSave(newConfig);
-    };
+    useEffect(() => {
+        void loadSettings();
+    }, [loadSettings]);
 
-    const handleCommandToggle = (commandName: string, enabled: boolean) => {
-        window.electronAPI.send("commands:setEnabled", {
-            name: commandName,
-            enabled,
-        });
-        setCommands((prev) =>
-            prev.map((cmd) =>
-                cmd.name === commandName ? { ...cmd, enabled } : cmd
-            )
+    useEffect(() => {
+        if (!requestedSection) return;
+        setHasNavigated(true);
+        setActiveSection(requestedSection);
+        onRequestedSectionHandled?.();
+    }, [requestedSection, onRequestedSectionHandled]);
+
+    useEffect(() => {
+        if (!active || activeSection !== "logs") return;
+        window.electronAPI
+            .invoke("log:getAll")
+            .then((data) => setLogs(data || []))
+            .catch((error) => console.error("Failed to load logs", error));
+    }, [active, activeSection]);
+
+    useEffect(() => {
+        if (!loaded) return;
+        if (contentRef.current) contentRef.current.scrollTop = 0;
+        if (hasNavigated) headingRef.current?.focus({ preventScroll: true });
+    }, [activeSection, loaded, hasNavigated]);
+
+    const handleConfigChange = (key: string, value: unknown) => {
+        setSaveError(null);
+        setDrafts((current) =>
+            key === "currentSongFilePath" && typeof value === "string"
+                ? acknowledgeSongFilePath(current, value)
+                : editDraftConfig(current, key, value)
         );
     };
+    const handleCommandToggle = (name: string, enabled: boolean) => {
+        setSaveError(null);
+        setDrafts((current) => toggleDraftCommand(current, name, enabled));
+    };
+    const handleCredentialChange = (key: string, value: unknown) => {
+        setSaveError(null);
+        setCredentialDrafts((current) => ({ ...current, [key]: value }));
+    };
+    const handleServiceSaved = (serviceId: "spotify" | "kick" | "twitch") => {
+        const key = `${serviceId}ClientId`;
+        setCredentialBaseline((current) => ({
+            ...current,
+            [key]: credentialDrafts[key] ?? "",
+        }));
+    };
 
-    const getStatusIndicator = () => {
-        switch (saveStatus) {
-            // case "saving":
-            //     return (
-            //         <div className="flex items-center gap-1.5 text-yellow-400">
-            //             <Clock className="w-3.5 h-3.5 animate-spin" />
-            //             <span className="text-xs whitespace-nowrap">
-            //                 {t("common.saving")}
-            //             </span>
-            //         </div>
-            //     );
-            case "saved":
-                return (
-                    <div className="flex items-center gap-1.5 text-melodify-primary">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {/* <span className="text-xs whitespace-nowrap">
-                            {t("common.saved")}
-                        </span> */}
-                    </div>
+    const dirty = settingsAreDirty(drafts);
+    const handleSave = async () => {
+        if (saving || !loaded) return;
+        const patch = buildConfigSavePatch(drafts);
+        const languageChanged =
+            drafts.draftConfig.language &&
+            drafts.draftConfig.language !== drafts.baselineConfig.language;
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const result: ConfigSaveResponse = await window.electronAPI.invoke(
+                "config:save",
+                patch
+            );
+            if (result?.ok !== true) {
+                if (
+                    result?.code === "rejected" &&
+                    Array.isArray(result.rejected) &&
+                    result.rejected.length > 0
+                ) {
+                    const keys = result.rejected
+                        .map((entry) => String(entry.key || ""))
+                        .filter(Boolean)
+                        .join(", ");
+                    setSaveError(
+                        keys
+                            ? t("settings.saveRejected", { keys })
+                            : t("settings.saveFailed")
+                    );
+                } else if (result?.code === "write-failed") {
+                    setSaveError(t("settings.saveWriteFailed"));
+                } else {
+                    setSaveError(t("settings.saveFailed"));
+                }
+                return;
+            }
+
+            setDrafts((current) =>
+                result.config &&
+                typeof result.config === "object" &&
+                !Array.isArray(result.config)
+                    ? commitAcknowledgedDraft(current, result.config)
+                    : commitDraft(current)
+            );
+            if (languageChanged) {
+                void i18n.changeLanguage(
+                    String(drafts.draftConfig.language)
                 );
-            // case "error":
-            //     return (
-            //         <div className="flex items-center gap-1.5 text-red-400">
-            //             <AlertCircle className="w-3.5 h-3.5" />
-            //             <span className="text-xs whitespace-nowrap">
-            //                 {t("common.error")}
-            //             </span>
-            //         </div>
-            //     );
-            default:
-                // return unsavedChanges ? (
-                //     <div className="flex items-center gap-1.5 text-zinc-400">
-                //         <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-                //         <span className="text-xs whitespace-nowrap">
-                //             Unsaved
-                //         </span>
-                //     </div>
-                // ) : (
-                return <div className="w-3.5 h-3.5" /> // Invisible spacer to maintain consistent height
-                // );
+            }
+        } catch (error) {
+            console.error("Failed to save settings", error);
+            setSaveError(t("settings.saveFailed"));
+        } finally {
+            setSaving(false);
         }
     };
-    return (
-        <div className="fixed left-0 bottom-0 w-full h-screen z-50 flex bg-zinc-950">
-            <div className="w-48 bg-zinc-900 border-r border-zinc-700/70 flex flex-col">
-                <div className="p-4 border-b border-zinc-700/60">
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-lg font-semibold text-white">
-                            {t("settings.title")}
-                        </h1>
-                    </div>
-                </div>
+    const handleDiscard = () => {
+        setSaveError(null);
+        setDrafts((current) => discardDraft(current));
+    };
+    const handleHome = () => {
+        onClose();
+        window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+                document.querySelector<HTMLElement>("[data-titlebar-brand]")?.focus();
+            });
+        });
+    };
+    const groups: SectionNavGroup[] = [
+        { id: "application", label: t("settings.groups.application"), items: [
+            { id: "general", label: t("settings.general") },
+            { id: "secrets", label: t("settings.secrets") },
+        ] },
+        { id: "requests", label: t("settings.groups.requests"), items: [
+            { id: "requests", label: t("settings.requests") },
+            { id: "commands", label: t("settings.commands") },
+        ] },
+        { id: "diagnostics", label: t("settings.groups.diagnostics"), items: [
+            { id: "logs", label: t("settings.logs") },
+            ...(process.env.NODE_ENV === "development" ? [{ id: "debug", label: t("settings.debug") }] : []),
+        ] },
+    ];
 
-                <div className="flex-1 p-2 space-y-1 overflow-y-auto">
-                    {NAVIGATION_SECTIONS.map((section) => {
-                        const isActive = activeSection === section.id;
-                        return (
-                            <button
-                                key={section.id}
-                                onClick={() => setActiveSection(section.id)}
-                                className={`w-full px-3 py-2 rounded text-left text-sm transition-colors ${
-                                    isActive
-                                        ? "bg-zinc-800 text-white border-l-2 border-l-melodify-primary"
-                                        : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-                                }`}
-                            >
-                                {t(`settings.${section.title}`)}
-                            </button>
-                        );
-                    })}
-                </div>
+    if (loading) {
+        return (
+            <StudioTheme theme={theme} className="studio-settings-shell">
+                <div className="studio-settings-loading">Loading settings…</div>
+            </StudioTheme>
+        );
+    }
 
-                <div className="p-3">
-                    <div className="flex items-center justify-between min-h-[20px]">
-                        <button
-                            className="flex items-center gap-1 text-zinc-400 hover:text-white cursor-pointer text-xs transition-colors"
-                            onClick={onClose}
+    if (loadError || !loaded) {
+        return (
+            <StudioTheme theme={theme} className="studio-settings-shell">
+                <div className="studio-settings-load">
+                    <div className="studio-settings-load-card" role="alert">
+                        <h2>{t("settings.loadFailedTitle")}</h2>
+                        <p>{t("settings.loadFailedDescription")}</p>
+                        <Button
+                            variant="primary"
+                            onClick={() => void loadSettings(true)}
                         >
-                            <ChevronLeftIcon className="w-5 h-5" />
-                            <span>{t("navigation.homePage")}</span>
-                        </button>
-                        <div className="min-w-[80px] flex justify-end">
-                            {getStatusIndicator()}
-                        </div>
+                            {t("settings.retry")}
+                        </Button>
                     </div>
                 </div>
-            </div>
+            </StudioTheme>
+        );
+    }
 
-            <div className="flex-1 flex flex-col bg-zinc-900">
-                <div ref={contentRef} className="flex-1 overflow-y-auto">
-                    <div className="p-6 max-w-5xl">
+    return (
+        <StudioTheme theme={theme} className="studio-settings-shell">
+            <aside className="studio-settings-rail" aria-label={t("settings.title")}>
+                <SectionNav
+                    groups={groups}
+                    activeId={activeSection}
+                    onSelect={(id) => {
+                        setHasNavigated(true);
+                        setActiveSection(id as SectionId);
+                    }}
+                    onHome={handleHome}
+                    homeLabel={t("navigation.homePage")}
+                    homeAriaLabel={t("navigation.homePage")}
+                    navTitle={t("settings.title")}
+                    aria-label={t("settings.sections")}
+                />
+            </aside>
+            <div className="studio-settings-workspace">
+                <main
+                    ref={contentRef}
+                    className="studio-settings-main"
+                    tabIndex={0}
+                    aria-labelledby="studio-settings-title"
+                >
+                    <div className="studio-settings-content">
+                        <h1
+                            ref={headingRef}
+                            id="studio-settings-title"
+                            className="studio-settings-title"
+                            tabIndex={-1}
+                        >
+                            {t(SECTION_TITLE_KEYS[activeSection])}
+                        </h1>
                         {activeSection === "general" && (
-                            <General
-                                config={config}
-                                onConfigChange={handleConfigChange}
-                            />
+                            <General config={drafts.draftConfig} onConfigChange={handleConfigChange} />
                         )}
                         {activeSection === "secrets" && (
                             <Secrets
-                                config={config}
-                                onConfigChange={handleConfigChange}
+                                config={mergeCredentialDrafts(drafts.draftConfig, credentialDrafts)}
+                                baselineConfig={mergeCredentialDrafts(drafts.baselineConfig, credentialBaseline)}
+                                onConfigChange={handleCredentialChange}
+                                onDraftStateChange={setApiDraftPending}
+                                onServiceSaved={handleServiceSaved}
+                                active={active}
                             />
                         )}
                         {activeSection === "requests" && (
-                            <Requests
-                                config={config}
-                                onConfigChange={handleConfigChange}
-                            />
+                            <Requests config={drafts.draftConfig} onConfigChange={handleConfigChange} />
                         )}
                         {activeSection === "commands" && (
                             <Commands
-                                config={config}
-                                commands={commands}
+                                config={drafts.draftConfig}
+                                commands={drafts.draftCommands}
                                 onConfigChange={handleConfigChange}
                                 onCommandToggle={handleCommandToggle}
                             />
@@ -246,8 +322,20 @@ export default function Settings({ onClose }: SettingsProps) {
                         {activeSection === "logs" && <Logs logs={logs} />}
                         {activeSection === "debug" && <Debug />}
                     </div>
-                </div>
+                </main>
+                {activeSection === "secrets" ? (
+                    <SaveDock mode="api" draftPending={apiDraftPending} className="studio-settings-dock" />
+                ) : (
+                    <SaveDock
+                        dirty={dirty}
+                        error={saveError}
+                        saving={saving}
+                        onSave={handleSave}
+                        onDiscard={handleDiscard}
+                        className="studio-settings-dock"
+                    />
+                )}
             </div>
-        </div>
+        </StudioTheme>
     );
 }

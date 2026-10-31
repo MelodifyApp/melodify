@@ -1,4 +1,5 @@
 import path from "path";
+import type { UpdateOptions } from "basic-electron-updater";
 
 /**
  * Update integrity boundary.
@@ -212,8 +213,8 @@ export function statUpdateArtifact(
 }
 
 export interface UpdateUpdaterLike {
-    checkForUpdates(): Promise<unknown>;
-    downloadUpdate(): Promise<string>;
+    checkForUpdates(options?: UpdateOptions): Promise<unknown>;
+    downloadUpdate(options?: UpdateOptions): Promise<string>;
     applyUpdate(): unknown;
 }
 
@@ -246,6 +247,21 @@ function messageOf(error: unknown, fallback: string): string {
     return fallback;
 }
 
+export const UPDATE_CHECK_TIMEOUT_MS = 60_000;
+export const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+
+function isNamedError(error: unknown, name: string): boolean {
+    return error instanceof Error && error.name === name;
+}
+
+export function isUpdateAbortError(error: unknown): boolean {
+    return isNamedError(error, "AbortError");
+}
+
+export function isUpdateTimeoutError(error: unknown): boolean {
+    return isNamedError(error, "TimeoutError");
+}
+
 /**
  * State machine around the updater: a download only unlocks install after it
  * passes validation, and install re-validates the artifact first.
@@ -254,6 +270,7 @@ export function createUpdateController(
     deps: UpdateControllerDeps
 ): UpdateController {
     let validatedPath: string | null = null;
+    let installInFlight = false;
 
     const unavailable = (context: string, message: string) => {
         deps.log.warn(`${message} - update functionality disabled`, context);
@@ -288,9 +305,56 @@ export function createUpdateController(
             unavailable("updater:checkForUpdates", "Cannot check for updates");
             return;
         }
+        if (installInFlight) {
+            deps.log.warn(
+                "Ignored update check while an install is in flight",
+                "updater:checkForUpdates"
+            );
+            return;
+        }
+
+        const abortController = new AbortController();
         try {
-            await deps.updater.checkForUpdates();
+            await deps.updater.checkForUpdates({
+                signal: abortController.signal,
+                timeoutMs: UPDATE_CHECK_TIMEOUT_MS,
+            });
+            if (abortController.signal.aborted) {
+                deps.log.warn(
+                    "Update check was cancelled",
+                    "updater:checkForUpdates"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update check cancelled"
+                );
+            }
         } catch (error) {
+            if (isUpdateAbortError(error)) {
+                deps.log.warn(
+                    "Update check was cancelled",
+                    "updater:checkForUpdates"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update check cancelled"
+                );
+                return;
+            }
+            if (isUpdateTimeoutError(error)) {
+                deps.log.warn(
+                    "Update check timed out",
+                    "updater:checkForUpdates"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update check timed out"
+                );
+                return;
+            }
             deps.log.error(error, "updater:checkForUpdates");
             deps.broadcast(
                 "update:status",
@@ -305,11 +369,38 @@ export function createUpdateController(
             unavailable("updater:downloadUpdate", "Cannot download update");
             return;
         }
+        if (installInFlight) {
+            deps.log.warn(
+                "Ignored update download while an install is in flight",
+                "updater:downloadUpdate"
+            );
+            return;
+        }
+
+        const abortController = new AbortController();
         try {
-            const downloadedPath = await deps.updater.downloadUpdate();
+            const downloadedPath = await deps.updater.downloadUpdate({
+                signal: abortController.signal,
+                timeoutMs: UPDATE_DOWNLOAD_TIMEOUT_MS,
+            });
+            if (abortController.signal.aborted) {
+                validatedPath = null;
+                installInFlight = false;
+                deps.log.warn(
+                    "Update download was cancelled",
+                    "updater:downloadUpdate"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update download cancelled"
+                );
+                return;
+            }
             const check = validate(downloadedPath);
             if (!check.ok || !check.path) {
                 validatedPath = null;
+                installInFlight = false;
                 deps.log.error(
                     new Error(`Rejected downloaded update: ${check.reason}`),
                     "updater:downloadUpdate"
@@ -322,10 +413,36 @@ export function createUpdateController(
                 return;
             }
             validatedPath = check.path;
+            installInFlight = false;
             deps.log.info("Update downloaded and validated");
             deps.broadcast("update:status", "downloaded");
         } catch (error) {
             validatedPath = null;
+            installInFlight = false;
+            if (isUpdateAbortError(error)) {
+                deps.log.warn(
+                    "Update download was cancelled",
+                    "updater:downloadUpdate"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update download cancelled"
+                );
+                return;
+            }
+            if (isUpdateTimeoutError(error)) {
+                deps.log.warn(
+                    "Update download timed out",
+                    "updater:downloadUpdate"
+                );
+                deps.broadcast(
+                    "update:status",
+                    "error",
+                    "Update download timed out"
+                );
+                return;
+            }
             deps.log.error(error, "updater:downloadUpdate");
             deps.broadcast(
                 "update:status",
@@ -338,6 +455,13 @@ export function createUpdateController(
     function installUpdate(): void {
         if (!deps.updater) {
             unavailable("updater:installUpdate", "Cannot install update");
+            return;
+        }
+        if (installInFlight) {
+            deps.log.warn(
+                "Ignored duplicate install request while apply is in flight",
+                "updater:installUpdate"
+            );
             return;
         }
         if (!validatedPath) {
@@ -356,6 +480,7 @@ export function createUpdateController(
         const recheck = validate(validatedPath);
         if (!recheck.ok || !recheck.path) {
             validatedPath = null;
+            installInFlight = false;
             deps.log.error(
                 new Error(`Update artifact is no longer valid: ${recheck.reason}`),
                 "updater:installUpdate"
@@ -368,23 +493,27 @@ export function createUpdateController(
             return;
         }
 
+        installInFlight = true;
+        deps.broadcast("update:status", "installing");
         try {
             const result = deps.updater.applyUpdate();
             if (result && typeof (result as Promise<unknown>).then === "function") {
                 (result as Promise<unknown>).catch((error) => {
+                    installInFlight = false;
                     deps.log.error(error, "updater:installUpdate");
                     deps.broadcast(
                         "update:status",
-                        "error",
+                        "install-error",
                         messageOf(error, "Failed to install update")
                     );
                 });
             }
         } catch (error) {
+            installInFlight = false;
             deps.log.error(error, "updater:installUpdate");
             deps.broadcast(
                 "update:status",
-                "error",
+                "install-error",
                 messageOf(error, "Failed to install update")
             );
         }

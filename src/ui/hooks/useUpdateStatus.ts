@@ -1,78 +1,57 @@
 // useUpdateStatus.ts
-// Custom React hook for managing application update status and progress.
+// Reads the shared, always-listening update state store.
 
 import { useEffect, useState } from "react";
+import {
+    updateStatusStore,
+    type UpdateStatusStore,
+    type UpdateStatusSnapshot,
+} from "@/ui/updateStatusStore";
+import type {
+    UpdateManifest,
+    UpdateProgress,
+    UpdateStatus,
+} from "@/shared/updateStatus";
 
-/**
- * Update status types for the application.
- */
-type UpdateStatus =
-    | "idle"
-    | "checking"
-    | "available"
-    | "not-available"
-    | "downloading"
-    | "downloaded"
-    | "error";
+export type {
+    UpdateManifest,
+    UpdateProgress,
+    UpdateStatus,
+} from "@/shared/updateStatus";
 
-/**
- * Update progress information.
- */
-interface UpdateProgress {
-    percent: number;
-    // Add other properties from electron-dl if needed
-}
-
-/**
- * Update manifest information.
- */
-interface UpdateManifest {
-    version: string;
-    releaseNotes?: string;
-    releaseName?: string;
-    releaseDate?: string;
-}
-
-/**
- * Return type for the useUpdateStatus hook.
- */
 interface UseUpdateStatusReturn {
-    status: UpdateStatus;
+    status: UpdateStatus | null;
     progress?: UpdateProgress | null;
     manifest?: UpdateManifest | null;
+    errorMessage?: string | null;
 }
 
 /**
- * Custom hook for managing application update status.
- * Listens for update events from the main process and provides current status and progress.
- *
- * @returns Object containing current update status, progress information, and the update manifest.
+ * Hydrates from the shared snapshot immediately, then follows later events.
+ * Events belong to the store, not to a particular mounted consumer.
  */
-export function useUpdateStatus(): UseUpdateStatusReturn {
-    const [status, setStatus] = useState<UpdateStatus>("idle");
-    const [progress, setProgress] = useState<UpdateProgress | null>(null);
-    const [manifest, setManifest] = useState<UpdateManifest | null>(null);
+export function useUpdateStatus(
+    store: UpdateStatusStore = updateStatusStore
+): UseUpdateStatusReturn {
+    const [snapshot, setSnapshot] = useState<UpdateStatusSnapshot>(() =>
+        store.getSnapshot()
+    );
 
     useEffect(() => {
-        const handleUpdateStatus = (status: UpdateStatus, data: any) => {
-            setStatus(status);
-            if (status === "available") {
-                setManifest(data);
-                setProgress(null);
-            } else if (status === "downloading") {
-                setProgress(data);
-            }
-        };
+        setSnapshot(store.getSnapshot());
+        const unsubscribe = store.subscribe(() => {
+            setSnapshot(store.getSnapshot());
+        });
+        void store.initialize(
+            typeof window !== "undefined" ? window.electronAPI : undefined
+        );
+        return unsubscribe;
+    }, [store]);
 
-        window.electronAPI?.on?.("update:status", handleUpdateStatus);
-
-        return () => {
-            window.electronAPI?.removeListener?.(
-                "update:status",
-                handleUpdateStatus
-            );
-        };
-    }, []);
-
-    return { status, progress, manifest };
+    return {
+        status: snapshot.status,
+        progress: snapshot.progress,
+        manifest: snapshot.manifest,
+        errorMessage: snapshot.errorMessage,
+    };
 }

@@ -16,6 +16,7 @@ import { redactSecrets } from "@/core/logging/utils";
 import { twitchClient } from "@/features/twitch/api/client";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { readChatMessage } from "../../../core/ipc/payloadValidation";
+import { verifyAppCredentials } from "../../../shared/utils/credentialVerification";
 
 let authInProgress = false;
 
@@ -146,28 +147,59 @@ ipcMain.handle("twitch:hasSecrets", async () => {
     return !!twitchClientId && !!twitchClientSecret;
 });
 
-ipcMain.on("twitch:setSecrets", (event, secrets) => {
+function readTwitchCredentialPair(secrets: unknown): {
+    clientId: string;
+    clientSecret: string;
+} {
     const record =
         secrets && typeof secrets === "object" && !Array.isArray(secrets)
             ? (secrets as Record<string, unknown>)
             : null;
-    const twitchClientId =
+    const clientId =
         typeof record?.twitchClientId === "string"
             ? record.twitchClientId.trim()
             : "";
-    const twitchClientSecret =
+    const suppliedSecret =
         typeof record?.twitchClientSecret === "string"
             ? record.twitchClientSecret.trim()
             : "";
-    if (!twitchClientId || !twitchClientSecret) {
+    const storedId = String(Config.get("twitchClientId") || "").trim();
+    const storedSecret = String(Config.get("twitchClientSecret") || "").trim();
+    return {
+        clientId,
+        clientSecret:
+            suppliedSecret ||
+            (clientId && clientId === storedId ? storedSecret : ""),
+    };
+}
+
+ipcMain.handle("twitch:verifySecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readTwitchCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
+        return { success: false, code: "missing_credentials" };
+    }
+    return verifyAppCredentials("twitch", { clientId, clientSecret });
+});
+
+ipcMain.handle("twitch:setSecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readTwitchCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
         logWarn(
             "twitch:setSecrets ignored a malformed payload",
             "twitch:setSecrets"
         );
-        return;
+        return { success: false, code: "missing_credentials" };
+    }
+    const verification = await verifyAppCredentials("twitch", {
+        clientId,
+        clientSecret,
+    });
+    if (!verification.success) {
+        return verification;
     }
     logInfo("twitch:setSecrets called");
-    Config.set({ twitchClientId, twitchClientSecret });
+    Config.set({ twitchClientId: clientId, twitchClientSecret: clientSecret });
+    return { success: true };
 });
 
 ipcMain.handle("twitch:isListeningToChat", async () => {

@@ -1,0 +1,130 @@
+/* Token boundary: eight coordinated Studio themes.
+   The first six are dark, Light switches colour-scheme, Dark is true black. */
+.studio {
+    --studio-canvas: #151719;
+    --studio-titlebar: #111315;
+    --studio-menu-top: #1b1e22;
+    --studio-menu-bottom: #191c20;
+    --studio-panel: #202429;
+    --studio-surface: #25292e;
+    --studio-rail: #202429;
+    --studio-dialog: #1b1e22;
+    --studio-input: #25292e;
+    --studio-ink: #f2f5fa;
+    --studio-muted: #b0bdcd;
+    --studio-line: rgba(242, 245, 250, 0.1);
+    --studio-control-line: rgba(242, 245, 250, 0.2);
+    --studio-accent: #34d399;
+    --studio-accent-ink: #06281c;
+    --studio-secondary: #c084fc;
+    --studio-warning: #fcd34d;
+    --studio-danger: #fda4af;
+    --studio-focus: #a7f3d0;
+    --studio-radius-control: 7px;
+    --studio-radius-surface: 16px;
+    --studio-control-height: 36px;
+    color-scheme: dark;
+    background-color: var(--studio-canvas);
+    color: var(--studio-ink);
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.studio[data-studio-theme="midnight"] {
+    --studio-canvas: #111823;
+    --studio-titlebar: #10161e;
+    --studio-menu-top: #17212f;
+    --studio-menu-bottom: #141d2a;
+    --studio-panel: #1a2433;
+    --studio-surface: #202c3c;
+    --studio-rail: #1a2433;
+    --studio-dialog: #151e2b;
+    --studio-input: #202c3c;
+}
+
+.studio[data-studio-theme="plum"] {
+    --studio-canvas: #191620;
+    --studio-titlebar: #14111b;
+    --studio-menu-top: #211c2b;
+    --studio-menu-bottom: #1e1928;
+    --studio-panel: #251f30;
+    --studio-surface: #2b2437;
+    --studio-rail: #251f30;
+    --studio-dialog: #211c2b;
+    --studio-input: #2b2437;
+}
+
+.studio[data-studio-theme="forest"] {
+    --studio-canvas: #111a17;
+    --studio-titlebar: #101713;
+    --studio-menu-top: #17231e;
+    --studio-menu-bottom: #141f1a;
+    --studio-panel: #1b2923;
+    --studio-surface: #20302a;
+    --studio-rail: #1b2923;
+    --studio-dialog: #17231e;
+    --studio-input: #20302a;
+}
+
+.studio[data-studio-theme="deepsea"] {
+    --studio-canvas: #101922;
+    --studio-titlebar: #0e161f;
+    --studio-menu-top: #17232f;
+    --studio-menu-bottom: #131f2a;
+    --studio-panel: #1b2a39;
+    --studio-surface: #203040;
+    --studio-rail: #1b2a39;
+    --studio-dialog: #17232f;
+    --studio-input: #203040;
+}
+
+.studio[data-studio-theme="ember"] {
+    --studio-canvas: #1c1715;
+    --studio-titlebar: #191311;
+    --studio-menu-top: #29201d;
+    --studio-menu-bottom: #221a18;
+    --studio-panel: #30231f;
+    --studio-surface: #382a25;
+    --studio-rail: #30231f;
+    --studio-dialog: #29201d;
+    --studio-input: #382a25;
+}
+
+.studio[data-studio-theme="light"] {
+    --studio-canvas: #f2f4f7;
+    --studio-titlebar: #e8ecf2;
+    --studio-menu-top: #ffffff;
+    --studio-menu-bottom: #f6f8fb;
+    --studio-panel: #ffffff;
+    --studio-surface: #ffffff;
+    --studio-rail: #ffffff;
+    --studio-dialog: #ffffff;
+    --studio-input: #eef1f6;
+    --studio-ink: #121821;
+    --studio-muted: #5a6675;
+    --studio-line: rgba(18, 24, 33, 0.12);
+    --studio-control-line: rgba(18, 24, 33, 0.23);
+    --studio-accent: #0b7057;
+    --studio-accent-ink: #ffffff;
+    --studio-secondary: #7047ad;
+    --studio-warning: #8a5a00;
+    --studio-danger: #b4233c;
+    --studio-focus: #09694f;
+    color-scheme: light;
+}
+
+.studio[data-studio-theme="dark"] {
+    --studio-canvas: #000000;
+    --studio-titlebar: #000000;
+    --studio-menu-top: #08080a;
+    --studio-menu-bottom: #050506;
+    --studio-panel: #0a0a0c;
+    --studio-surface: #0d0d10;
+    --studio-rail: #0a0a0c;
+    --studio-dialog: #0a0a0c;
+    --studio-input: #141418;
+    color-scheme: dark;
+}
+
+.studio, .studio *, .studio *::before, .studio *::after { box-sizing: border-box; }

@@ -1,20 +1,18 @@
-// Debug section - compact development tools
+// Debug section - Studio layout for development-only tools.
 
+import { useEffect, useState } from "react";
 import {
     Bug,
-    Monitor,
-    Cpu,
-    MemoryStick,
-    Network,
-    HardDrive,
     Clock,
-    Zap,
+    Cpu,
+    HardDrive,
+    Monitor,
+    Network,
     RotateCcw,
+    TestTube,
+    Zap,
 } from "lucide-react";
-import Toggle from "@/ui/components/Toggle";
-import { Button } from "@/ui/components/Button";
-import Input from "@/ui/components/Input";
-import { useState, useEffect } from "react";
+import { Button, Input, SettingGroup, Toggle } from "@/ui/components/studio";
 
 interface PerformanceStats {
     commandName: string;
@@ -25,13 +23,16 @@ interface PerformanceStats {
     lastExecuted: number;
 }
 
-interface DebugProps {
-    searchQuery?: string;
+interface DebugSystemInfo {
+    platform?: string;
+    language?: string;
+    userAgent?: string;
+    cookieEnabled?: boolean;
 }
 
-export default function Debug({ searchQuery }: DebugProps) {
+export default function Debug() {
     const [checked, setChecked] = useState<Record<string, boolean>>({});
-    const [systemInfo, setSystemInfo] = useState<any>({});
+    const [systemInfo, setSystemInfo] = useState<DebugSystemInfo>({});
     const [testInput, setTestInput] = useState("");
     const [performanceStats, setPerformanceStats] = useState<
         PerformanceStats[]
@@ -39,16 +40,13 @@ export default function Debug({ searchQuery }: DebugProps) {
     const [isLoadingStats, setIsLoadingStats] = useState(false);
 
     useEffect(() => {
-        // Set basic system info from browser APIs
         setSystemInfo({
             platform: navigator.platform,
             userAgent: navigator.userAgent,
             language: navigator.language,
             cookieEnabled: navigator.cookieEnabled,
         });
-
-        // Load initial performance stats
-        loadPerformanceStats();
+        void loadPerformanceStats();
     }, []);
 
     const loadPerformanceStats = async () => {
@@ -68,7 +66,7 @@ export default function Debug({ searchQuery }: DebugProps) {
     const resetAllStats = async () => {
         try {
             window.electronAPI.send("commands:resetPerformanceStats");
-            await loadPerformanceStats(); // Refresh the display
+            await loadPerformanceStats();
         } catch (error) {
             console.error("Failed to reset performance stats:", error);
         }
@@ -80,7 +78,7 @@ export default function Debug({ searchQuery }: DebugProps) {
                 "commands:resetCommandPerformanceStats",
                 commandName
             );
-            await loadPerformanceStats(); // Refresh the display
+            await loadPerformanceStats();
         } catch (error) {
             console.error("Failed to reset command performance stats:", error);
         }
@@ -91,317 +89,235 @@ export default function Debug({ searchQuery }: DebugProps) {
         return `${time.toFixed(2)}ms`;
     };
 
-    const formatDate = (timestamp: number) => {
-        return new Date(timestamp).toLocaleTimeString();
-    };
-
-    const sizes = ["sm"];
-    const buttonVariants = ["primary", "secondary", "danger"];
+    const formatDate = (timestamp: number) =>
+        new Date(timestamp).toLocaleTimeString();
+    const deviceMemory = (
+        navigator as Navigator & { deviceMemory?: number }
+    ).deviceMemory;
 
     return (
-        <div className="space-y-4">
-            <h3 className="text-base font-medium text-white mb-4">
-                Development Tools
-            </h3>
+        <div className="studio-settings-api studio-debug">
+            <div className="studio-settings-api-heading">
+                <h2>Debug</h2>
+            </div>
 
-            <div className="settings-section">
-                <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center">
-                        <Monitor className="w-3 h-3 text-blue-300" />
-                    </div>
-                    <div>
-                        <h3 className="text-sm font-semibold text-white">
-                            System Information
-                        </h3>
-                        <p className="text-xs text-zinc-400">
-                            Runtime environment details
-                        </p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-zinc-700/30 rounded p-2">
-                        <div className="flex items-center gap-1 mb-1">
-                            <Cpu className="w-3 h-3 text-green-300" />
-                            <span className="text-xs text-zinc-400">
-                                Platform
-                            </span>
-                        </div>
-                        <div className="text-xs font-mono text-white">
+            <SettingGroup heading="System information">
+                <div className="studio-debug-grid">
+                    <div className="studio-debug-tile">
+                        <span>
+                            <Cpu aria-hidden="true" />
+                            Platform
+                        </span>
+                        <strong>
                             {systemInfo.platform ||
                                 navigator.platform ||
                                 "Unknown"}
-                        </div>
+                        </strong>
                     </div>
-                    <div className="bg-zinc-700/30 rounded p-2">
-                        <div className="flex items-center gap-1 mb-1">
-                            <MemoryStick className="w-3 h-3 text-blue-300" />
-                            <span className="text-xs text-zinc-400">Arch</span>
-                        </div>
-                        <div className="text-xs font-mono text-white">
-                            {systemInfo.arch || "Unknown"}
-                        </div>
+                    <div className="studio-debug-tile">
+                        <span>
+                            <Monitor aria-hidden="true" />
+                            Language
+                        </span>
+                        <strong>
+                            {systemInfo.language ||
+                                navigator.language ||
+                                "Unknown"}
+                        </strong>
                     </div>
-                    <div className="bg-zinc-700/30 rounded p-2">
-                        <div className="flex items-center gap-1 mb-1">
-                            <Network className="w-3 h-3 text-purple-300" />
-                            <span className="text-xs text-zinc-400">
-                                User Agent
-                            </span>
-                        </div>
-                        <div className="text-xs font-mono text-white truncate">
+                    <div className="studio-debug-tile">
+                        <span>
+                            <Network aria-hidden="true" />
+                            User agent
+                        </span>
+                        <strong>
                             {navigator.userAgent.split(" ")[0] || "Unknown"}
-                        </div>
+                        </strong>
                     </div>
-                    <div className="bg-zinc-700/30 rounded p-2">
-                        <div className="flex items-center gap-1 mb-1">
-                            <HardDrive className="w-3 h-3 text-orange-300" />
-                            <span className="text-xs text-zinc-400">
-                                Memory
-                            </span>
-                        </div>
-                        <div className="text-xs font-mono text-white">
-                            {(navigator as any).deviceMemory
-                                ? `${(navigator as any).deviceMemory}GB`
-                                : "Unknown"}
-                        </div>
+                    <div className="studio-debug-tile">
+                        <span>
+                            <HardDrive aria-hidden="true" />
+                            Memory
+                        </span>
+                        <strong>
+                            {deviceMemory ? `${deviceMemory}GB` : "Unknown"}
+                        </strong>
                     </div>
                 </div>
-            </div>
+            </SettingGroup>
 
-            <div className="settings-section">
-                <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 bg-purple-500/20 rounded flex items-center justify-center">
-                        <Bug className="w-3 h-3 text-purple-300" />
-                    </div>
-                    <div>
-                        <h3 className="text-sm font-semibold text-white">
-                            UI Components
-                        </h3>
-                        <p className="text-xs text-zinc-400">
-                            Test and preview all component states
-                        </p>
-                    </div>
+            <SettingGroup heading="UI components">
+                <div className="studio-debug-block">
+                    <h3>Toggle states</h3>
+                    <Toggle
+                        id="debug-toggle"
+                        label={
+                            checked["toggle-sm"] ? "Enabled" : "Disabled"
+                        }
+                        checked={!!checked["toggle-sm"]}
+                        onCheckedChange={(value) =>
+                            setChecked((current) => ({
+                                ...current,
+                                "toggle-sm": value,
+                            }))
+                        }
+                    />
                 </div>
-
-                <div className="space-y-3">
-                    <div>
-                        <h4 className="text-xs font-medium text-white mb-2">
-                            Toggle States
-                        </h4>
-                        <div className="flex gap-4 flex-wrap">
-                            {sizes.map((size) => {
-                                const key = `toggle-${size}`;
-                                return (
-                                    <div
-                                        key={key}
-                                        className="flex items-center gap-2"
-                                    >
-                                        <Toggle
-                                            checked={!!checked[key]}
-                                            onChange={(v) =>
-                                                setChecked((prev) => ({
-                                                    ...prev,
-                                                    [key]: v,
-                                                }))
-                                            }
-                                        />
-                                        <span className="text-xs text-zinc-400">
-                                            {checked[key]
-                                                ? "Enabled"
-                                                : "Disabled"}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="h-px bg-zinc-700/30"></div>
-
-                    <div>
-                        <h4 className="text-xs font-medium text-white mb-2">
-                            Button Variants
-                        </h4>
-                        <div className="flex gap-2 flex-wrap">
-                            {buttonVariants.map((variant) => (
-                                <Button
-                                    key={variant}
-                                    className={`text-xs px-2 py-1 h-auto ${
-                                        variant === "danger"
-                                            ? "bg-red-600 hover:bg-red-700"
-                                            : variant === "secondary"
-                                              ? "bg-zinc-600 hover:bg-zinc-700"
-                                              : "bg-blue-600 hover:bg-blue-700"
-                                    }`}
-                                    onClick={() =>
-                                        console.log(`${variant} button clicked`)
-                                    }
-                                >
-                                    {variant}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="h-px bg-zinc-700/30"></div>
-
-                    <div>
-                        <h4 className="text-xs font-medium text-white mb-2">
-                            Input States
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2">
-                            <Input
-                                label="Normal Input"
-                                value={testInput}
-                                onChange={(e) => setTestInput(e.target.value)}
-                                placeholder="Type something..."
-                                className="text-xs"
-                            />
-                            <Input
-                                label="Error Input"
-                                value=""
-                                readOnly
-                                placeholder="Error state..."
-                                error={true}
-                                helperText="This is an error message"
-                                className="text-xs"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="settings-section">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-purple-500/20 rounded flex items-center justify-center">
-                            <Zap className="w-3 h-3 text-purple-300" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-white">
-                                Command Performance
-                            </h3>
-                            <p className="text-xs text-zinc-400">
-                                Execution time statistics for commands
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
+                <div className="studio-debug-block">
+                    <h3>Button variants</h3>
+                    <div className="studio-debug-actions">
                         <Button
-                            onClick={loadPerformanceStats}
-                            disabled={isLoadingStats}
-                            className="text-xs px-2 py-1 h-auto bg-blue-600 hover:bg-blue-700"
+                            variant="primary"
+                            onClick={() => console.log("primary clicked")}
                         >
-                            <Clock className="w-3 h-3 mr-1" />
-                            {isLoadingStats ? "Loading..." : "Refresh"}
+                            Primary
                         </Button>
                         <Button
-                            onClick={resetAllStats}
-                            className="text-xs px-2 py-1 h-auto bg-red-600 hover:bg-red-700"
+                            variant="secondary"
+                            onClick={() => console.log("secondary clicked")}
                         >
-                            <RotateCcw className="w-3 h-3 mr-1" />
-                            Reset All
+                            Secondary
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => console.log("ghost clicked")}
+                        >
+                            Ghost
                         </Button>
                     </div>
                 </div>
+                <div className="studio-debug-block">
+                    <h3>Input states</h3>
+                    <div className="studio-debug-inputs">
+                        <Input
+                            id="debug-normal-input"
+                            label="Normal input"
+                            value={testInput}
+                            onChange={(event) =>
+                                setTestInput(event.target.value)
+                            }
+                            placeholder="Type something..."
+                        />
+                        <Input
+                            id="debug-error-input"
+                            label="Error input"
+                            value=""
+                            readOnly
+                            error="This is an error message"
+                            placeholder="Error state..."
+                        />
+                    </div>
+                </div>
+            </SettingGroup>
 
+            <SettingGroup heading="Command performance">
+                <div className="studio-debug-block">
+                    <div className="studio-debug-actions">
+                        <Button
+                            variant="secondary"
+                            onClick={() => void loadPerformanceStats()}
+                            loading={isLoadingStats}
+                        >
+                            <Clock aria-hidden="true" />
+                            Refresh
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => void resetAllStats()}
+                        >
+                            <RotateCcw aria-hidden="true" />
+                            Reset all
+                        </Button>
+                    </div>
+                </div>
                 {performanceStats.length > 0 ? (
-                    <div className="space-y-2">
-                        <div className="grid grid-cols-6 gap-2 text-xs text-zinc-400 border-b border-zinc-700/50 pb-1">
-                            <div>Command</div>
-                            <div>Executions</div>
-                            <div>Avg Time</div>
-                            <div>Fastest</div>
-                            <div>Slowest</div>
-                            <div>Last Run</div>
+                    <div className="studio-debug-table-wrap">
+                        <div className="studio-debug-table studio-debug-table-head">
+                            <span>Command</span>
+                            <span>Executions</span>
+                            <span>Avg</span>
+                            <span>Fastest</span>
+                            <span>Slowest</span>
+                            <span>Last run</span>
+                            <span />
                         </div>
                         {performanceStats.map((stat) => (
                             <div
+                                className="studio-debug-table"
                                 key={stat.commandName}
-                                className="grid grid-cols-6 gap-2 text-xs py-1 hover:bg-zinc-700/30 rounded px-1"
                             >
-                                <div className="text-white font-medium">
-                                    {stat.commandName}
-                                </div>
-                                <div className="text-zinc-300">
-                                    {stat.totalExecutions}
-                                </div>
-                                <div className="text-zinc-300">
-                                    {formatTime(stat.averageTime)}
-                                </div>
-                                <div className="text-green-400">
-                                    {formatTime(stat.fastestTime)}
-                                </div>
-                                <div className="text-red-400">
-                                    {formatTime(stat.slowestTime)}
-                                </div>
-                                <div className="text-zinc-400">
-                                    {formatDate(stat.lastExecuted)}
-                                </div>
+                                <strong>{stat.commandName}</strong>
+                                <span>{stat.totalExecutions}</span>
+                                <span>{formatTime(stat.averageTime)}</span>
+                                <span>{formatTime(stat.fastestTime)}</span>
+                                <span>{formatTime(stat.slowestTime)}</span>
+                                <span>{formatDate(stat.lastExecuted)}</span>
+                                <Button
+                                    variant="ghost"
+                                    size="small"
+                                    onClick={() =>
+                                        void resetCommandStats(stat.commandName)
+                                    }
+                                    aria-label={`Reset ${stat.commandName} stats`}
+                                >
+                                    Reset
+                                </Button>
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-4">
-                        <Clock className="w-8 h-8 mx-auto mb-2 text-zinc-500" />
-                        <p className="text-xs text-zinc-400">
-                            No performance data available. Execute some commands
-                            to see statistics.
+                    <div className="studio-empty-state">
+                        <Zap aria-hidden="true" />
+                        <h3>No performance data</h3>
+                        <p>
+                            Execute some commands to see command performance
+                            statistics.
                         </p>
                     </div>
                 )}
-            </div>
+            </SettingGroup>
 
-            <div className="settings-section">
-                <div className="flex items-center justify-between mb-3">
-                    <div>
-                        <h3 className="text-sm font-semibold text-white">
-                            Debug Actions
-                        </h3>
-                        <p className="text-xs text-zinc-400">
-                            Development tools and utilities
-                        </p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+            <SettingGroup heading="Debug actions">
+                <div className="studio-debug-actions">
                     <Button
-                        onClick={() =>
-                            console.log("Component states:", checked)
-                        }
-                        className="text-xs px-2 py-1 h-auto bg-green-600 hover:bg-green-700"
+                        variant="secondary"
+                        onClick={() => window.electronAPI.openUITestWindow()}
                     >
-                        Log States
+                        <TestTube aria-hidden="true" />
+                        Open UI test window
                     </Button>
                     <Button
+                        variant="ghost"
+                        onClick={() => console.log("states", checked)}
+                    >
+                        Log states
+                    </Button>
+                    <Button
+                        variant="ghost"
                         onClick={() => setChecked({})}
-                        className="text-xs px-2 py-1 h-auto bg-yellow-600 hover:bg-yellow-700"
                     >
-                        Reset All
+                        Reset component states
                     </Button>
                     <Button
+                        variant="ghost"
                         onClick={() => window.location.reload()}
-                        className="text-xs px-2 py-1 h-auto bg-red-600 hover:bg-red-700"
                     >
-                        Reload App
+                        Reload app
                     </Button>
                     <Button
+                        variant="ghost"
                         onClick={() => console.clear()}
-                        className="text-xs px-2 py-1 h-auto bg-blue-600 hover:bg-blue-700"
                     >
-                        Clear Console
+                        Clear console
                     </Button>
                 </div>
-            </div>
+            </SettingGroup>
 
-            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3">
-                <p className="text-yellow-300 text-xs leading-relaxed">
-                    🛠️ This tab is only available in development mode and
-                    provides tools for testing UI components, system
-                    information, and debugging utilities.
-                </p>
-            </div>
+            <p className="studio-debug-note">
+                <Bug aria-hidden="true" />
+                This section is development-only and uses local tools. It never
+                reads credentials or provider data.
+            </p>
         </div>
     );
 }

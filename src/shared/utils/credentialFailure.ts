@@ -10,6 +10,19 @@ export type CredentialFailureCode =
     | "invalid_credentials"
     | "verification_unavailable";
 
+export interface CredentialVerificationSuccess {
+    readonly success: true;
+}
+
+export interface CredentialVerificationFailure {
+    readonly success: false;
+    readonly code: CredentialFailureCode;
+}
+
+export type CredentialVerificationResult =
+    | CredentialVerificationSuccess
+    | CredentialVerificationFailure;
+
 /** Translation key for a credential failure code, or null when unknown. */
 export function credentialFailureMessageKey(code: unknown): string | null {
     switch (code) {

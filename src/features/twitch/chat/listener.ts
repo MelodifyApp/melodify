@@ -9,12 +9,39 @@ import { executeSongRequest } from "@/core/commands/songRequest";
 import { decodeTwitchChatContext } from "./context";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
+export type TwitchReadinessState =
+    | "stopped"
+    | "connecting"
+    | "subscribing"
+    | "ready"
+    | "reconnecting"
+    | "error";
+
 export let isListening = false;
+let readinessState: TwitchReadinessState = "stopped";
+let connectionActive = false;
+let retryRequiresExplicitStart = false;
+let activeWindow: Electron.BrowserWindow | null = null;
 let websocketClient: WebSocket | null = null;
 let websocketSessionID: string | null = null;
+let reconnectTimer: NodeJS.Timeout | null = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const EVENTSUB_WEBSOCKET_URL = "wss://eventsub.wss.twitch.tv/ws";
+
+export function getTwitchReadinessState(): TwitchReadinessState {
+    return readinessState;
+}
+
+function clearReconnectTimer(): void {
+    if (!reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+}
+
+function sendConnectionStatus(channel: string): void {
+    sendToWindowIfAlive(activeWindow, channel);
+}
 
 export async function sendTwitchMessage(message: string): Promise<void> {
     logDebug("sendTwitchMessage called", redactSecrets({ message }));
@@ -111,6 +138,105 @@ async function validateToken(): Promise<boolean> {
     }
 }
 
+function isCurrentConnection(
+    client: WebSocket,
+    sessionId?: string
+): boolean {
+    return (
+        connectionActive &&
+        websocketClient === client &&
+        (sessionId === undefined || websocketSessionID === sessionId)
+    );
+}
+
+function handleSocketClosed(client: WebSocket): void {
+    if (websocketClient !== client) return;
+
+    const wasReady = isListening;
+    websocketClient = null;
+    websocketSessionID = null;
+    isListening = false;
+
+    if (!connectionActive) {
+        if (readinessState !== "error") readinessState = "stopped";
+        if (wasReady) sendConnectionStatus("twitch:chatDisconnected");
+        return;
+    }
+
+    if (wasReady) {
+        sendConnectionStatus("twitch:chatDisconnected");
+    }
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        connectionActive = false;
+        retryRequiresExplicitStart = true;
+        readinessState = "error";
+        reconnectAttempts = 0;
+        logError(
+            "Twitch reconnect attempts exhausted",
+            "twitch:reconnect"
+        );
+        if (!wasReady) sendConnectionStatus("twitch:chatDisconnected");
+        return;
+    }
+
+    reconnectAttempts += 1;
+    readinessState = "reconnecting";
+    logInfo(
+        `Attempting to reconnect to Twitch (attempt ${reconnectAttempts})`,
+        "twitch:reconnect"
+    );
+    clearReconnectTimer();
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!connectionActive || readinessState !== "reconnecting") return;
+        try {
+            websocketClient = startWebSocketClient();
+        } catch (error) {
+            logError(error, "twitch:reconnect");
+            connectionActive = false;
+            retryRequiresExplicitStart = true;
+            readinessState = "error";
+            isListening = false;
+            sendConnectionStatus("twitch:chatDisconnected");
+        }
+    }, 2000 * reconnectAttempts);
+}
+
+function failReadiness(client: WebSocket): void {
+    if (websocketClient !== client) return;
+
+    connectionActive = false;
+    retryRequiresExplicitStart = true;
+    isListening = false;
+    readinessState = "error";
+    websocketSessionID = null;
+    reconnectAttempts = 0;
+    clearReconnectTimer();
+    websocketClient = null;
+
+    try {
+        client.close();
+    } catch (error) {
+        logError(error, "twitch:websocketClose");
+    }
+    sendConnectionStatus("twitch:chatDisconnected");
+}
+
+function markReady(client: WebSocket, sessionId: string): void {
+    if (!isCurrentConnection(client, sessionId)) return;
+
+    isListening = true;
+    readinessState = "ready";
+    retryRequiresExplicitStart = false;
+    reconnectAttempts = 0;
+    logInfo(
+        `Listening to Twitch chat after EventSub subscriptions were accepted`,
+        "twitch:listenToChat"
+    );
+    sendConnectionStatus("twitch:chatConnected");
+}
+
 function startWebSocketClient(): WebSocket {
     logInfo(
         `Connecting to Twitch EventSub WebSocket: ${EVENTSUB_WEBSOCKET_URL}`,
@@ -118,22 +244,28 @@ function startWebSocketClient(): WebSocket {
     );
 
     const client = new WebSocket(EVENTSUB_WEBSOCKET_URL);
+    websocketClient = client;
 
     client.on("error", (error) => {
+        if (websocketClient !== client) return;
         logError(error, "twitch:websocketError");
     });
 
     client.on("open", () => {
+        if (websocketClient !== client) return;
         logInfo(
             `Connected to Twitch EventSub WebSocket`,
             "twitch:websocketOpen"
         );
-        reconnectAttempts = 0;
+        if (connectionActive && !isListening) {
+            readinessState = "connecting";
+        }
     });
 
     client.on("message", (data) => {
+        if (websocketClient !== client) return;
         try {
-            handleWebSocketMessage(JSON.parse(data.toString()));
+            handleWebSocketMessage(client, JSON.parse(data.toString()));
         } catch (error) {
             logError(error, "twitch:websocketMessageParse");
         }
@@ -141,48 +273,20 @@ function startWebSocketClient(): WebSocket {
 
     client.on("close", () => {
         logWarn(`Twitch EventSub WebSocket closed`, "twitch:websocketClose");
-        websocketClient = null;
-        websocketSessionID = null;
-        if (isListening && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts++;
-            logInfo(
-                `Attempting to reconnect to Twitch (attempt ${reconnectAttempts})`,
-                "twitch:reconnect"
-            );
-            // Attempt reconnection after delay
-            setTimeout(() => {
-                if (isListening) {
-                    websocketClient = startWebSocketClient();
-                }
-            }, 2000 * reconnectAttempts);
-        }
+        handleSocketClosed(client);
     });
 
     return client;
 }
 
-async function registerEventSubListeners(): Promise<void> {
-    const broadcasterUserId = Config.get("twitchUserId");
-    const botUserId = Config.get("twitchBotUserId");
-    const accessToken = await twitchClient.getValidAccessToken();
-    const clientId = Config.get("twitchClientId");
-
-    if (!broadcasterUserId || !botUserId || !accessToken || !clientId) {
-        logError(
-            "Missing required Twitch configuration for EventSub",
-            "twitch:registerEventSub"
-        );
-        return;
-    }
-
-    if (!websocketSessionID) {
-        logError(
-            "WebSocket session ID not available",
-            "twitch:registerEventSub"
-        );
-        return;
-    }
-
+async function subscribeEvent(
+    type: string,
+    version: string,
+    condition: Record<string, string>,
+    accessToken: string,
+    clientId: string,
+    sessionId: string
+): Promise<boolean> {
     try {
         const response = await fetch(
             "https://api.twitch.tv/helix/eventsub/subscriptions",
@@ -194,77 +298,124 @@ async function registerEventSubListeners(): Promise<void> {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    type: "channel.chat.message",
-                    version: "1",
-                    condition: {
-                        broadcaster_user_id: broadcasterUserId,
-                        user_id: botUserId,
-                    },
+                    type,
+                    version,
+                    condition,
                     transport: {
                         method: "websocket",
-                        session_id: websocketSessionID,
+                        session_id: sessionId,
                     },
                 }),
             }
         );
 
         if (response.status !== 202) {
-            const data = await response.json();
-            logError(
-                `Failed to subscribe to channel.chat.message. Status: ${response.status}, Data: ${JSON.stringify(data)}`,
-                "twitch:registerEventSub"
-            );
-        } else {
-            const data = await response.json();
-            logInfo(
-                `Subscribed to channel.chat.message [${data.data[0].id}]`,
-                "twitch:registerEventSub"
-            );
-        }
-
-        const rewardsResponse = await fetch(
-            "https://api.twitch.tv/helix/eventsub/subscriptions",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Client-Id": clientId,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    type: "channel.channel_points_custom_reward_redemption.add",
-                    version: "1",
-                    condition: {
-                        broadcaster_user_id: broadcasterUserId,
-                    },
-                    transport: {
-                        method: "websocket",
-                        session_id: websocketSessionID,
-                    },
-                }),
+            let details = "";
+            try {
+                details = JSON.stringify(await response.json());
+            } catch {
+                details = "unreadable response";
             }
-        );
-
-        if (rewardsResponse.status !== 202) {
-            const data = await rewardsResponse.json();
             logError(
-                `Failed to subscribe to channel.channel_points_custom_reward_redemption.add. Status: ${rewardsResponse.status}, Data: ${JSON.stringify(data)}`,
+                `Failed to subscribe to ${type}. Status: ${response.status}, Data: ${details}`,
                 "twitch:registerEventSub"
             );
-        } else {
-            const data = await rewardsResponse.json();
-            logInfo(
-                `Subscribed to channel.channel_points_custom_reward_redemption.add [${data.data[0].id}]`,
-                "twitch:registerEventSub"
-            );
+            return false;
         }
+
+        let subscriptionId = "unknown";
+        try {
+            const data = await response.json();
+            if (typeof data?.data?.[0]?.id === "string") {
+                subscriptionId = data.data[0].id;
+            }
+        } catch {
+            // A 202 is already acceptance; logging the id is best effort.
+        }
+        logInfo(
+            `Subscribed to ${type} [${subscriptionId}]`,
+            "twitch:registerEventSub"
+        );
+        return true;
     } catch (error) {
         logError(error, "twitch:registerEventSub");
+        return false;
     }
 }
 
-function handleWebSocketMessage(data: any): void {
+async function registerEventSubListeners(
+    client: WebSocket,
+    sessionId: string
+): Promise<boolean> {
+    const broadcasterUserId = Config.get("twitchUserId");
+    const botUserId = Config.get("twitchBotUserId");
+    const accessToken = await twitchClient.getValidAccessToken();
+    const clientId = Config.get("twitchClientId");
+
+    if (!broadcasterUserId || !botUserId || !accessToken || !clientId) {
+        logError(
+            "Missing required Twitch configuration for EventSub",
+            "twitch:registerEventSub"
+        );
+        return false;
+    }
+    if (!isCurrentConnection(client, sessionId)) return false;
+
+    const chatAccepted = await subscribeEvent(
+        "channel.chat.message",
+        "1",
+        {
+            broadcaster_user_id: broadcasterUserId,
+            user_id: botUserId,
+        },
+        accessToken,
+        clientId,
+        sessionId
+    );
+    if (!chatAccepted || !isCurrentConnection(client, sessionId)) {
+        return false;
+    }
+
+    const rewardsAccepted = await subscribeEvent(
+        "channel.channel_points_custom_reward_redemption.add",
+        "1",
+        {
+            broadcaster_user_id: broadcasterUserId,
+        },
+        accessToken,
+        clientId,
+        sessionId
+    );
+    return rewardsAccepted && isCurrentConnection(client, sessionId);
+}
+
+function handleRevocation(client: WebSocket): void {
+    if (websocketClient !== client) return;
+
+    logWarn(
+        "Twitch EventSub subscription was revoked",
+        "twitch:registerEventSub"
+    );
+    connectionActive = false;
+    retryRequiresExplicitStart = true;
+    isListening = false;
+    readinessState = "error";
+    websocketSessionID = null;
+    reconnectAttempts = 0;
+    clearReconnectTimer();
+    websocketClient = null;
+
     try {
+        client.close();
+    } catch (error) {
+        logError(error, "twitch:websocketClose");
+    }
+    sendConnectionStatus("twitch:chatDisconnected");
+}
+
+function handleWebSocketMessage(client: WebSocket, data: any): void {
+    try {
+        if (websocketClient !== client) return;
         if (!data.metadata) {
             logDebug(
                 "Invalid WebSocket message format",
@@ -276,12 +427,36 @@ function handleWebSocketMessage(data: any): void {
         const messageType = data.metadata.message_type;
 
         if (messageType === "session_welcome") {
-            websocketSessionID = data.payload.session.id;
+            if (!connectionActive) return;
+            if (readinessState === "subscribing" || readinessState === "ready") {
+                return;
+            }
+            const sessionId = data.payload?.session?.id;
+            if (typeof sessionId !== "string" || !sessionId) {
+                failReadiness(client);
+                return;
+            }
+            websocketSessionID = sessionId;
+            readinessState = "subscribing";
+            isListening = false;
             logInfo(
                 `WebSocket session established: ${websocketSessionID}`,
                 "twitch:sessionWelcome"
             );
-            registerEventSubListeners();
+            void registerEventSubListeners(client, sessionId)
+                .then((registered) => {
+                    if (registered) {
+                        markReady(client, sessionId);
+                    } else {
+                        failReadiness(client);
+                    }
+                })
+                .catch((error) => {
+                    logError(error, "twitch:registerEventSub");
+                    failReadiness(client);
+                });
+        } else if (messageType === "revocation") {
+            handleRevocation(client);
         } else if (
             messageType === "notification" &&
             data.metadata.subscription_type === "channel.chat.message"
@@ -354,62 +529,91 @@ async function handleChatMessage(event: any): Promise<void> {
     }
 }
 
-export async function listenToChat(window?: Electron.BrowserWindow) {
-    if (isListening) {
-        logDebug("Already listening to Twitch chat", "twitch:listenToChat");
+export async function listenToChat(
+    window?: Electron.BrowserWindow,
+    forceRetry = false
+) {
+    if (connectionActive) {
+        logDebug("Twitch chat connection is already active", "twitch:listenToChat");
+        return;
+    }
+    if (retryRequiresExplicitStart && !forceRetry) {
+        logDebug(
+            "Twitch readiness is in a terminal state; waiting for an explicit retry",
+            "twitch:listenToChat"
+        );
         return;
     }
 
-    // Validate token before connecting
-    const tokenValid = await validateToken();
-    if (!tokenValid) {
-        logError("Token validation failed", "twitch:listenToChat");
-        sendToWindowIfAlive(window, "twitch:authenticationFailed");
-        return;
-    }
+    clearReconnectTimer();
+    connectionActive = true;
+    retryRequiresExplicitStart = false;
+    isListening = false;
+    readinessState = "connecting";
+    activeWindow = window ?? activeWindow;
+    reconnectAttempts = 0;
 
     try {
-        isListening = true;
-        websocketClient = startWebSocketClient();
+        const tokenValid = await validateToken();
+        if (!connectionActive || readinessState !== "connecting") return;
+        if (!tokenValid) {
+            logError("Token validation failed", "twitch:listenToChat");
+            connectionActive = false;
+            retryRequiresExplicitStart = false;
+            isListening = false;
+            readinessState = "error";
+            sendConnectionStatus("twitch:authenticationFailed");
+            return;
+        }
 
-        logInfo("Started listening to Twitch chat", "twitch:listenToChat");
-        sendToWindowIfAlive(window, "twitch:chatConnected");
+        websocketClient = startWebSocketClient();
+        logInfo(
+            "Connecting to Twitch chat; waiting for EventSub subscriptions",
+            "twitch:listenToChat"
+        );
     } catch (error) {
         logError(error, "twitch:listenToChat");
+        connectionActive = false;
+        retryRequiresExplicitStart = false;
         isListening = false;
+        readinessState = "error";
         websocketClient = null;
-        sendToWindowIfAlive(window, "twitch:authenticationFailed");
+        websocketSessionID = null;
+        sendConnectionStatus("twitch:authenticationFailed");
     }
 }
 
 export function stopListeningToChat(window?: Electron.BrowserWindow) {
-    if (!isListening) {
-        logDebug(
-            "Not currently listening to Twitch chat",
-            "twitch:stopListeningToChat"
-        );
-        return;
-    }
+    const hadConnection =
+        connectionActive ||
+        websocketClient !== null ||
+        readinessState !== "stopped";
 
-    try {
-        if (websocketClient) {
-            websocketClient.close();
-            websocketClient = null;
+    clearReconnectTimer();
+    if (window) activeWindow = window;
+    connectionActive = false;
+    retryRequiresExplicitStart = false;
+    isListening = false;
+    readinessState = "stopped";
+    websocketSessionID = null;
+    reconnectAttempts = 0;
+
+    const client = websocketClient;
+    websocketClient = null;
+    if (client) {
+        try {
+            client.close();
+        } catch (error) {
+            logError(error, "twitch:stopListeningToChat");
         }
-
-        isListening = false;
-        websocketSessionID = null;
-        reconnectAttempts = 0;
-
-        logInfo(
-            "Stopped listening to Twitch chat",
-            "twitch:stopListeningToChat"
-        );
-        sendToWindowIfAlive(window, "twitch:chatDisconnected");
-    } catch (error) {
-        logError(error, "twitch:stopListeningToChat");        // Force reset state even if cleanup failed
-        isListening = false;
-        websocketClient = null;
-        websocketSessionID = null;
     }
+
+    logInfo(
+        "Stopped listening to Twitch chat",
+        "twitch:stopListeningToChat"
+    );
+    if (hadConnection) {
+        sendConnectionStatus("twitch:chatDisconnected");
+    }
+    activeWindow = null;
 }

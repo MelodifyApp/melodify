@@ -226,6 +226,49 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+export interface CommandAliasConflictEntry {
+    aliases?: string[];
+}
+
+/**
+ * Validates aliases against the complete proposed command map. Conflict keys
+ * are case-insensitive because chat parsing lowercases command input.
+ */
+export function findCommandAliasConflict(
+    commands: Record<string, CommandAliasConflictEntry>
+): string | null {
+    const commandNames = new Set<string>();
+    for (const name of Object.keys(commands)) {
+        const key = name.trim().toLowerCase();
+        if (commandNames.has(key)) {
+            return `Duplicate command name: ${name}`;
+        }
+        commandNames.add(key);
+    }
+
+    const aliasOwners = new Map<string, string>();
+    for (const [name, entry] of Object.entries(commands)) {
+        const commandKey = name.trim().toLowerCase();
+        for (const alias of entry.aliases ?? []) {
+            const aliasKey = alias.trim().toLowerCase();
+            if (aliasKey === commandKey) {
+                return `Alias '${alias}' cannot be the same as its command`;
+            }
+            if (commandNames.has(aliasKey)) {
+                return `Alias '${alias}' conflicts with command '${aliasKey}'`;
+            }
+            const owner = aliasOwners.get(aliasKey);
+            if (owner !== undefined) {
+                return owner === name
+                    ? `Duplicate alias: ${alias}`
+                    : `Alias '${alias}' is already used by command '${owner}'`;
+            }
+            aliasOwners.set(aliasKey, name);
+        }
+    }
+    return null;
+}
+
 /** Returns a trimmed copy of a bounded string list, or undefined when invalid. */
 function validateStringList(
     value: unknown,
@@ -322,6 +365,13 @@ function validateCommands(value: unknown): Record<string, unknown> | undefined {
         commands[name] = sanitized;
         accepted += 1;
     }
+    if (
+        findCommandAliasConflict(
+            commands as Record<string, CommandAliasConflictEntry>
+        )
+    ) {
+        return undefined;
+    }
     return commands;
 }
 
@@ -369,6 +419,58 @@ function validateSettableValue(key: string, value: unknown): unknown {
     return undefined;
 }
 
+export type ConfigUpdateRejectionReason =
+    | "invalid-payload"
+    | "not-settable"
+    | "invalid-value";
+
+export interface ConfigUpdateRejection {
+    key: string;
+    reason: ConfigUpdateRejectionReason;
+}
+
+export interface ConfigUpdateInspection {
+    patch: Record<string, unknown>;
+    rejected: ConfigUpdateRejection[];
+}
+
+/**
+ * Projects a renderer save payload onto the settable allowlist while retaining
+ * enough information for the save IPC to report rejected keys. Unlike the
+ * legacy `sanitizeConfigUpdate` projection, callers can refuse the whole write
+ * instead of silently persisting a partial patch.
+ */
+export function inspectConfigUpdate(payload: unknown): ConfigUpdateInspection {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return {
+            patch: {},
+            rejected: [{ key: "payload", reason: "invalid-payload" }],
+        };
+    }
+
+    const patch: Record<string, unknown> = {};
+    const rejected: ConfigUpdateRejection[] = [];
+    for (const [key, value] of Object.entries(
+        payload as Record<string, unknown>
+    )) {
+        if (!RENDERER_SETTABLE_KEYS.has(key)) {
+            rejected.push({ key, reason: "not-settable" });
+            continue;
+        }
+        if (value === undefined) {
+            rejected.push({ key, reason: "invalid-value" });
+            continue;
+        }
+        const validated = validateSettableValue(key, value);
+        if (validated === undefined) {
+            rejected.push({ key, reason: "invalid-value" });
+            continue;
+        }
+        patch[key] = validated;
+    }
+    return { patch, rejected };
+}
+
 /**
  * Projects a renderer `config:set` payload onto the settable allowlist and
  * validates each value. Non-object payloads, unknown/credential/flag keys and
@@ -379,19 +481,5 @@ function validateSettableValue(key: string, value: unknown): unknown {
 export function sanitizeConfigUpdate(
     payload: unknown
 ): Record<string, unknown> {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        return {};
-    }
-
-    const patch: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(
-        payload as Record<string, unknown>
-    )) {
-        if (!RENDERER_SETTABLE_KEYS.has(key)) continue;
-        if (value === undefined) continue;
-        const validated = validateSettableValue(key, value);
-        if (validated === undefined) continue;
-        patch[key] = validated;
-    }
-    return patch;
+    return inspectConfigUpdate(payload).patch;
 }

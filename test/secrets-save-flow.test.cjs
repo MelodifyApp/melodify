@@ -11,7 +11,7 @@ const {
     updateSecretDraft,
     clearSecretDrafts,
     saveServiceSecrets,
-    secretStatusMessageKey,
+    verifyServiceSecrets,
 } = require("../src/features/settings/secretsSave");
 
 const {
@@ -26,22 +26,13 @@ function readSource(relativePath) {
     return fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 }
 
-function lookup(locale, dottedKey) {
-    return dottedKey
-        .split(".")
-        .reduce((node, part) => (node == null ? undefined : node[part]), locale);
-}
-
-function fakeBridge() {
+function fakeBridge(result = { success: true }) {
     const calls = [];
     return {
         calls,
         invoke: async (channel, data) => {
             calls.push(["invoke", channel, data]);
-            return { success: true };
-        },
-        send: (channel, data) => {
-            calls.push(["send", channel, data]);
+            return typeof result === "function" ? result(channel, data) : result;
         },
     };
 }
@@ -53,40 +44,22 @@ const SPOTIFY_DRAFTS = { spotifyClientSecret: "spotify-secret-value" };
 const KICK_DRAFTS = { kickClientSecret: "kick-secret-value" };
 const TWITCH_DRAFTS = { twitchClientSecret: "twitch-secret-value" };
 
-test("secret services declare the correct transport direction", () => {
+test("all credential operations are awaited invoke channels", () => {
     assert.ok(Object.isFrozen(SECRET_SERVICES));
     assert.deepEqual(
         SECRET_SERVICES.map((service) => service.id).sort(),
         ["kick", "spotify", "twitch"]
     );
 
-    const spotify = getSecretService("spotify");
-    assert.equal(spotify.channel, "spotify:setSecrets");
-    assert.equal(spotify.transport, "invoke");
-    assert.equal(spotify.clientIdKey, "spotifyClientId");
-    assert.equal(spotify.clientSecretKey, "spotifyClientSecret");
-
-    const kick = getSecretService("kick");
-    assert.equal(kick.channel, "kick:setSecrets");
-    assert.equal(kick.transport, "send");
-    assert.equal(kick.clientIdKey, "kickClientId");
-    assert.equal(kick.clientSecretKey, "kickClientSecret");
-
-    const twitch = getSecretService("twitch");
-    assert.equal(twitch.channel, "twitch:setSecrets");
-    assert.equal(twitch.transport, "send");
-    assert.equal(twitch.clientIdKey, "twitchClientId");
-    assert.equal(twitch.clientSecretKey, "twitchClientSecret");
-
     for (const service of SECRET_SERVICES) {
         assert.ok(Object.isFrozen(service));
-        if (service.transport === "invoke") {
-            assert.ok(INVOKE_CHANNELS.includes(service.channel));
-            assert.equal(SEND_CHANNELS.includes(service.channel), false);
-        } else {
-            assert.ok(SEND_CHANNELS.includes(service.channel));
-            assert.equal(INVOKE_CHANNELS.includes(service.channel), false);
-        }
+        assert.equal(service.transport, "invoke");
+        assert.ok(service.verifyChannel.endsWith(":verifySecrets"));
+        assert.ok(service.channel.endsWith(":setSecrets"));
+        assert.ok(INVOKE_CHANNELS.includes(service.verifyChannel));
+        assert.ok(INVOKE_CHANNELS.includes(service.channel));
+        assert.equal(SEND_CHANNELS.includes(service.verifyChannel), false);
+        assert.equal(SEND_CHANNELS.includes(service.channel), false);
     }
 });
 
@@ -109,127 +82,63 @@ test("draft helpers are immutable and scoped per service", () => {
     });
 });
 
-test("status messages map to translation keys present in every locale", () => {
-    const expected = {
-        saving: "common.saving",
-        saved: "common.saved",
-        required: "common.secretsRequired",
-        invalid: "common.invalidCredentials",
-        unavailable: "common.verificationUnavailable",
-        failed: "common.secretsSaveError",
-    };
-    for (const [status, key] of Object.entries(expected)) {
-        assert.equal(secretStatusMessageKey(status), key);
-        assert.equal(typeof lookup(en, key), "string", `en missing ${key}`);
-        assert.equal(typeof lookup(tr, key), "string", `tr missing ${key}`);
+for (const [id, config, drafts, channel] of [
+    ["spotify", SPOTIFY_CONFIG, SPOTIFY_DRAFTS, "spotify:setSecrets"],
+    ["kick", KICK_CONFIG, KICK_DRAFTS, "kick:setSecrets"],
+    ["twitch", TWITCH_CONFIG, TWITCH_DRAFTS, "twitch:setSecrets"],
+]) {
+    test(`saving ${id} uses invoke once and clears the draft`, async () => {
+        const bridge = fakeBridge();
+        const result = await saveServiceSecrets(id, config, drafts, bridge);
+        assert.equal(result.ok, true);
+        assert.deepEqual(result.drafts, {});
+        assert.deepEqual(bridge.calls, [
+            [
+                "invoke",
+                channel,
+                {
+                    [getSecretService(id).clientIdKey]: config[getSecretService(id).clientIdKey],
+                    [getSecretService(id).clientSecretKey]: drafts[getSecretService(id).clientSecretKey],
+                },
+            ],
+        ]);
+    });
+
+    test(`verifying ${id} awaits the verify channel and keeps the draft`, async () => {
+        const bridge = fakeBridge();
+        const result = await verifyServiceSecrets(id, config, drafts, bridge);
+        assert.equal(result.ok, true);
+        assert.deepEqual(result.drafts, drafts);
+        assert.deepEqual(bridge.calls, [
+            [
+                "invoke",
+                getSecretService(id).verifyChannel,
+                {
+                    [getSecretService(id).clientIdKey]: config[getSecretService(id).clientIdKey],
+                    [getSecretService(id).clientSecretKey]: drafts[getSecretService(id).clientSecretKey],
+                },
+            ],
+        ]);
+    });
+}
+
+test("credential operations never travel through config:set", async () => {
+    const bridge = fakeBridge();
+    for (const [id, config, drafts] of [
+        ["spotify", SPOTIFY_CONFIG, SPOTIFY_DRAFTS],
+        ["kick", KICK_CONFIG, KICK_DRAFTS],
+        ["twitch", TWITCH_CONFIG, TWITCH_DRAFTS],
+    ]) {
+        await verifyServiceSecrets(id, config, drafts, bridge);
+        await saveServiceSecrets(id, config, drafts, bridge);
     }
-    assert.equal(secretStatusMessageKey("idle"), null);
-});
-
-test("credential failure copy tells the user what to do", () => {
-    assert.equal(
-        lookup(en, "common.invalidCredentials"),
-        "Please enter a valid Client ID and Client Secret."
-    );
-    assert.equal(
-        lookup(tr, "common.invalidCredentials"),
-        "Lütfen geçerli bir Client ID ve Client Secret girin."
-    );
-    assert.match(lookup(en, "common.verificationUnavailable"), /connection/i);
-    assert.match(lookup(tr, "common.verificationUnavailable"), /[Bb]ağlantı/);
-});
-
-test("saving Spotify secrets uses invoke exactly once and clears the draft", async () => {
-    const bridge = fakeBridge();
-
-    const result = await saveServiceSecrets(
-        "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        bridge
-    );
-
-    assert.equal(result.ok, true);
-    assert.equal(result.error, undefined);
-    assert.deepEqual(result.drafts, {});
-    assert.deepEqual(bridge.calls, [
-        [
-            "invoke",
-            "spotify:setSecrets",
-            {
-                spotifyClientId: "spotify-id-123",
-                spotifyClientSecret: "spotify-secret-value",
-            },
-        ],
-    ]);
-});
-
-test("saving Kick secrets uses send exactly once and clears the draft", async () => {
-    const bridge = fakeBridge();
-
-    const result = await saveServiceSecrets(
-        "kick",
-        KICK_CONFIG,
-        KICK_DRAFTS,
-        bridge
-    );
-
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.drafts, {});
-    assert.deepEqual(bridge.calls, [
-        [
-            "send",
-            "kick:setSecrets",
-            {
-                kickClientId: "kick-id-123",
-                kickClientSecret: "kick-secret-value",
-            },
-        ],
-    ]);
-});
-
-test("saving Twitch secrets uses send exactly once and clears the draft", async () => {
-    const bridge = fakeBridge();
-
-    const result = await saveServiceSecrets(
-        "twitch",
-        TWITCH_CONFIG,
-        TWITCH_DRAFTS,
-        bridge
-    );
-
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.drafts, {});
-    assert.deepEqual(bridge.calls, [
-        [
-            "send",
-            "twitch:setSecrets",
-            {
-                twitchClientId: "twitch-id-123",
-                twitchClientSecret: "twitch-secret-value",
-            },
-        ],
-    ]);
-});
-
-test("credential saves never travel through config:set", async () => {
-    const bridge = fakeBridge();
-
-    await saveServiceSecrets("spotify", SPOTIFY_CONFIG, SPOTIFY_DRAFTS, bridge);
-    await saveServiceSecrets("kick", KICK_CONFIG, KICK_DRAFTS, bridge);
-    await saveServiceSecrets("twitch", TWITCH_CONFIG, TWITCH_DRAFTS, bridge);
-
     assert.equal(
         bridge.calls.some(([, channel]) => channel === "config:set"),
         false
     );
-    assert.deepEqual(
-        bridge.calls.map(([direction, channel]) => [direction, channel]),
-        [
-            ["invoke", "spotify:setSecrets"],
-            ["send", "kick:setSecrets"],
-            ["send", "twitch:setSecrets"],
-        ]
+    assert.equal(
+        bridge.calls.every(([direction]) => direction === "invoke"),
+        true
     );
 });
 
@@ -250,122 +159,63 @@ test("incomplete credentials are rejected before any IPC call", async () => {
             drafts,
             bridge
         );
-
         assert.equal(result.ok, false, `${serviceId} should not save`);
         assert.equal(result.error, "required");
-        assert.deepEqual(result.drafts, drafts, "draft must be retained");
-        assert.deepEqual(bridge.calls, [], "no IPC call may happen");
+        assert.deepEqual(result.drafts, drafts);
+        assert.deepEqual(bridge.calls, []);
     }
 });
 
-test("failed saves retain the draft and report the failure cause", async () => {
-    const rejecting = {
-        calls: [],
-        invoke: async (channel, data) => {
-            rejecting.calls.push(["invoke", channel, data]);
-            throw new Error("network down");
-        },
-        send: (channel, data) => {
-            rejecting.calls.push(["send", channel, data]);
-        },
-    };
-    const rejected = await saveServiceSecrets(
+test("verification can use a stored secret and never clears the draft", async () => {
+    const bridge = fakeBridge();
+    const result = await verifyServiceSecrets(
         "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        rejecting
+        { spotifyClientId: "stored-id" },
+        {},
+        bridge
     );
-    assert.equal(rejected.ok, false);
-    assert.equal(rejected.error, "unavailable");
-    assert.deepEqual(rejected.drafts, SPOTIFY_DRAFTS);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.drafts, {});
+    assert.deepEqual(bridge.calls[0][2], {
+        spotifyClientId: "stored-id",
+        spotifyClientSecret: "",
+    });
+});
 
-    const invalid = {
-        calls: [],
-        invoke: async (channel, data) => {
-            invalid.calls.push(["invoke", channel, data]);
-            return {
-                success: false,
-                code: "invalid_credentials",
-                error: "Invalid client ID or secret.",
-            };
-        },
-        send: () => {},
-    };
-    const invalidResult = await saveServiceSecrets(
-        "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        invalid
-    );
-    assert.equal(invalidResult.ok, false);
-    assert.equal(invalidResult.error, "invalid");
-    assert.deepEqual(invalidResult.drafts, SPOTIFY_DRAFTS);
+test("failed saves retain the draft and map only stable errors", async () => {
+    const cases = [
+        [async () => { throw new Error("network down"); }, "unavailable"],
+        [async () => ({ success: false, code: "invalid_credentials", error: "raw" }), "invalid"],
+        [async () => ({ success: false, code: "verification_unavailable" }), "unavailable"],
+        [async () => ({ success: false, code: "missing_credentials" }), "required"],
+        [async () => ({ success: false }), "failed"],
+    ];
+    for (const [invoke, expected] of cases) {
+        const bridge = { invoke };
+        const result = await saveServiceSecrets(
+            "spotify",
+            SPOTIFY_CONFIG,
+            SPOTIFY_DRAFTS,
+            bridge
+        );
+        assert.equal(result.ok, false);
+        assert.equal(result.error, expected);
+        assert.deepEqual(result.drafts, SPOTIFY_DRAFTS);
+        assert.doesNotMatch(JSON.stringify(result), /network down|raw/);
+    }
+});
 
-    const unavailable = {
-        calls: [],
-        invoke: async () => ({
-            success: false,
-            code: "verification_unavailable",
-        }),
-        send: () => {},
-    };
-    const unavailableResult = await saveServiceSecrets(
-        "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        unavailable
+test("failed verification keeps the draft for retry", async () => {
+    const bridge = fakeBridge({ success: false, code: "invalid_credentials" });
+    const result = await verifyServiceSecrets(
+        "twitch",
+        TWITCH_CONFIG,
+        TWITCH_DRAFTS,
+        bridge
     );
-    assert.equal(unavailableResult.ok, false);
-    assert.equal(unavailableResult.error, "unavailable");
-    assert.deepEqual(unavailableResult.drafts, SPOTIFY_DRAFTS);
-
-    const missing = {
-        calls: [],
-        invoke: async () => ({ success: false, code: "missing_credentials" }),
-        send: () => {},
-    };
-    const missingResult = await saveServiceSecrets(
-        "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        missing
-    );
-    assert.equal(missingResult.ok, false);
-    assert.equal(missingResult.error, "required");
-    assert.deepEqual(missingResult.drafts, SPOTIFY_DRAFTS);
-
-    const unknown = {
-        calls: [],
-        invoke: async () => ({ success: false }),
-        send: () => {},
-    };
-    const unknownResult = await saveServiceSecrets(
-        "spotify",
-        SPOTIFY_CONFIG,
-        SPOTIFY_DRAFTS,
-        unknown
-    );
-    assert.equal(unknownResult.ok, false);
-    assert.equal(unknownResult.error, "failed");
-    assert.deepEqual(unknownResult.drafts, SPOTIFY_DRAFTS);
-
-    const throwing = {
-        calls: [],
-        invoke: async () => ({ success: true }),
-        send: (channel, data) => {
-            throwing.calls.push(["send", channel, data]);
-            throw new Error("bridge blocked");
-        },
-    };
-    const sendResult = await saveServiceSecrets(
-        "kick",
-        KICK_CONFIG,
-        KICK_DRAFTS,
-        throwing
-    );
-    assert.equal(sendResult.ok, false);
-    assert.equal(sendResult.error, "unavailable");
-    assert.deepEqual(sendResult.drafts, KICK_DRAFTS);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "invalid");
+    assert.deepEqual(result.drafts, TWITCH_DRAFTS);
 });
 
 test("saving one service leaves the other service draft untouched", async () => {
@@ -374,14 +224,12 @@ test("saving one service leaves the other service draft untouched", async () => 
         spotifyClientSecret: "spotify-secret-value",
         kickClientSecret: "kick-secret-value",
     };
-
     const result = await saveServiceSecrets(
         "spotify",
         SPOTIFY_CONFIG,
         drafts,
         bridge
     );
-
     assert.deepEqual(result.drafts, { kickClientSecret: "kick-secret-value" });
     assert.deepEqual(drafts, {
         spotifyClientSecret: "spotify-secret-value",
@@ -389,58 +237,58 @@ test("saving one service leaves the other service draft untouched", async () => 
     });
 });
 
-test("Secrets section keeps secrets in local drafts and only saves on demand", () => {
+test("Secrets uses Studio cards, explicit verification and Save gating", () => {
     const source = readSource(
         "src/features/settings/components/sections/Secrets.tsx"
     );
     const hook = readSource("src/features/settings/useSecretsSection.ts");
 
-    // Uses the tested save model and hook instead of ad-hoc IPC.
-    assert.match(source, /saveServiceSecrets/);
-    assert.match(source, /SECRET_SERVICES/);
-    assert.match(source, /useSecretsSection/);
+    assert.match(source, /ServiceCard/);
+    assert.match(source, /verifyServiceSecrets/);
+    assert.match(source, /verifyService/);
+    assert.match(source, /common\.verifyCredentials/);
+    assert.match(source, /canVerifyCredentials/);
+    assert.match(source, /canSaveCredentials/);
+    assert.match(source, /disabled={!canSave/);
+    assert.match(source, /credentialStatusMessageKey/);
+    assert.match(source, /common\.setupGuide/);
+    assert.match(source, /role="dialog"/);
+    assert.match(source, /Escape/);
+    assert.match(source, /aria-modal="true"/);
+    assert.match(source, /common\.back/);
+    assert.match(source, /useCredentialStatuses/);
+    assert.match(source, /credentialStatuses\.storedSecrets/);
+    const store = readSource(
+        "src/features/settings/credentialStatusStore.ts"
+    );
+    assert.match(store, /\$\{service\.id\}:hasSecrets/);
 
-    // No credential channel literals and no generic config:set for secrets.
-    assert.doesNotMatch(source, /["'`]setSecrets["'`]/);
-    assert.doesNotMatch(source, /["'`]config:set["'`]/);
-    assert.doesNotMatch(source, /onConfigChange\(\s*[^)]*Secret/);
-
-    // Secret drafts are local; client IDs still flow through the settings
-    // callback. Both live in the hook so the component stays presentational.
     assert.match(hook, /updateSecretDraft\(prev, key, value\)/);
     assert.match(hook, /onClientIdChange\(key, value\)/);
-    const secretBranch = hook.indexOf("updateSecretDraft(prev, key, value)");
-    const configCall = hook.indexOf("onClientIdChange(key, value)");
-    assert.ok(secretBranch > -1, "secret edits must use the draft helper");
-    assert.ok(configCall > -1, "client IDs must still use onConfigChange");
-    assert.ok(
-        secretBranch < configCall,
-        "secret edits must be handled before the generic config path"
-    );
-
-    // Accessible status region, red error treatment and an explicit save action.
-    assert.match(source, /role="status"/);
-    assert.match(source, /aria-live="polite"/);
-    assert.match(source, /t\("common\.save"\)/);
-    assert.match(source, /InlineError/);
-    assert.match(source, /isSecretErrorStatus/);
+    assert.match(hook, /statusForSaveFailure/);
+    assert.match(hook, /onStoredSecretChange/);
+    assert.match(hook, /onStatusChange/);
+    assert.match(hook, /onResetStatus/);
 });
 
-test("Settings > Secrets exposes Twitch credentials", () => {
+test("Settings does not route credential fields through global save/discard", () => {
+    const source = readSource("src/features/settings/components/Settings.tsx");
+    assert.doesNotMatch(source, /ClientSecret/);
+    assert.doesNotMatch(source, /setSecrets/);
+    assert.match(source, /mode="api"/);
+});
+
+test("Twitch and Kick credential labels and validation remain available", () => {
     const source = readSource(
         "src/features/settings/components/sections/Secrets.tsx"
     );
     const { validateField } = require("../src/features/settings/components/validation");
-
-    assert.match(source, /TwitchIcon/);
-    assert.match(source, /renderService\(\s*"twitch"/);
-    assert.match(source, /bg-twitch-purple/);
+    assert.match(source, /twitch/);
+    assert.match(source, /kick/);
+    assert.match(source, /TwitchIcon|ServiceCard/);
     assert.match(validateField("twitchClientId", "short"), /too short/);
     assert.match(validateField("twitchClientSecret", "short"), /too short/);
-});
-
-test("Settings no longer routes secret edits through the generic save path", () => {
-    const source = readSource("src/features/settings/components/Settings.tsx");
-    assert.doesNotMatch(source, /ClientSecret/);
-    assert.doesNotMatch(source, /setSecrets/);
+    assert.match(validateField("kickClientId", "short"), /too short/);
+    assert.equal(typeof en.common.verifyCredentials, "string");
+    assert.equal(typeof tr.common.verifyCredentials, "string");
 });

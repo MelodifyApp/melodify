@@ -1,16 +1,137 @@
-import Input from "@/ui/components/Input";
-import MultipleInput from "@/ui/components/MultipleInput";
-import Toggle from "@/ui/components/Toggle";
-import { Hash, MessageSquare, Plus, X, Clock } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import { validateCommandAlias, validateTemplate } from "../validation";
+// Commands settings - Studio layout over the existing command config.
+
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Clock, Hash, MessageSquare, X } from "lucide-react";
+import {
+    Button,
+    Field,
+    IconButton,
+    Input,
+    SettingGroup,
+    Toggle,
+} from "@/ui/components/studio";
+import {
+    validateCommandAlias,
+    validateField,
+    validateTemplate,
+} from "../validation";
 
 interface CommandsProps {
     config: any;
     commands: any[];
     onConfigChange: (key: string, value: any) => void;
     onCommandToggle: (name: string, enabled: boolean) => void;
+}
+
+function StringListEditor({
+    id,
+    label,
+    helper,
+    placeholder,
+    values,
+    onChange,
+    maxLength,
+    validate,
+    addLabel,
+    removeLabel,
+}: {
+    id: string;
+    label: string;
+    helper?: string;
+    placeholder: string;
+    values: string[];
+    onChange: (values: string[]) => void;
+    maxLength: number;
+    validate: (candidate: string, current: string[]) => string | null;
+    addLabel: string;
+    removeLabel: (value: string) => string;
+}) {
+    const [draft, setDraft] = useState("");
+    const [error, setError] = useState<string | null>(null);
+
+    const addValue = () => {
+        const value = draft.trim();
+        if (!value) return;
+        const validationError = validate(value, values);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+        onChange([...values, value]);
+        setDraft("");
+        setError(null);
+    };
+
+    return (
+        <div className="studio-string-list">
+            <Field
+                id={id}
+                label={label}
+                helper={helper}
+                error={error || undefined}
+            >
+                {(control) => (
+                    <div className="studio-string-list-row">
+                        <input
+                            {...control}
+                            className="studio-input"
+                            value={draft}
+                            onChange={(event) => {
+                                setDraft(event.target.value);
+                                if (error) setError(null);
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    addValue();
+                                }
+                            }}
+                            placeholder={placeholder}
+                            maxLength={maxLength}
+                            spellCheck={false}
+                            autoCorrect="off"
+                            autoCapitalize="off"
+                        />
+                        <Button
+                            variant="secondary"
+                            onClick={addValue}
+                            disabled={!draft.trim()}
+                        >
+                            {addLabel}
+                        </Button>
+                    </div>
+                )}
+            </Field>
+            {values.length > 0 && (
+                <ul className="studio-token-list" aria-label={label}>
+                    {values.map((value, index) => (
+                        <li
+                            key={`${value}-${index}`}
+                            className="studio-token"
+                        >
+                            <span>{value}</span>
+                            <IconButton
+                                label={removeLabel(value)}
+                                variant="ghost"
+                                size="small"
+                                onClick={() =>
+                                    onChange(
+                                        values.filter(
+                                            (_, itemIndex) =>
+                                                itemIndex !== index
+                                        )
+                                    )
+                                }
+                            >
+                                <X size={14} />
+                            </IconButton>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
 }
 
 export default function Commands({
@@ -25,37 +146,31 @@ export default function Commands({
     >({});
 
     useEffect(() => {
-        // Load performance stats for all commands
-        const loadPerformanceStats = async () => {
-            try {
-                const stats = await window.electronAPI.invoke(
-                    "commands:getPerformanceStats"
-                );
-                const statsMap = stats.reduce(
-                    (acc: Record<string, any>, stat: any) => {
-                        acc[stat.commandName] = stat;
-                        return acc;
+        window.electronAPI
+            .invoke("commands:getPerformanceStats")
+            .then((stats) => {
+                const statsMap = (stats || []).reduce(
+                    (accumulator: Record<string, any>, stat: any) => {
+                        accumulator[stat.commandName] = stat;
+                        return accumulator;
                     },
                     {}
                 );
                 setPerformanceStats(statsMap);
-            } catch (error) {
-                console.error("Failed to load performance stats:", error);
-            }
-        };
-
-        loadPerformanceStats();
+            })
+            .catch((error) =>
+                console.error("Failed to load performance stats:", error)
+            );
     }, []);
 
-    const handleAliasChange = (cmdName: string, aliases: string[]) => {
-        const newCommands = {
+    const handleAliasChange = (commandName: string, aliases: string[]) => {
+        onConfigChange("commands", {
             ...config.commands,
-            [cmdName]: {
-                ...config.commands?.[cmdName],
+            [commandName]: {
+                ...config.commands?.[commandName],
                 aliases,
             },
-        };
-        onConfigChange("commands", newCommands);
+        });
     };
 
     const handleReplyToggle = (key: string, enabled: boolean) => {
@@ -63,33 +178,27 @@ export default function Commands({
     };
 
     const handleReplyTemplateChange = (key: string, template: string) => {
-        // Validate template based on the key
         let allowedVars: string[] = [];
         if (key.includes("songRequest")) {
             allowedVars = ["title", "artist"];
         } else if (key.includes("volume")) {
-            if (key.includes("Change") || key.includes("Get")) {
-                allowedVars = ["volume"];
-            } else {
-                allowedVars = ["error"];
-            }
+            allowedVars = key.includes("Change") || key.includes("Get")
+                ? ["volume"]
+                : ["error"];
         }
-
         if (allowedVars.length > 0) {
             const validationError = validateTemplate(template, allowedVars);
             if (validationError) {
                 console.warn(
                     `Template validation failed for ${key}: ${validationError}`
                 );
-                // You could show a toast notification or set an error state here
             }
         }
-
         onConfigChange(key, template);
     };
 
-    const getReplyConfig = (cmdName: string) => {
-        switch (cmdName) {
+    const getReplyConfig = (commandName: string) => {
+        switch (commandName) {
             case "songRequest":
             case "sr":
                 return {
@@ -102,6 +211,7 @@ export default function Commands({
                     successPlaceholder: t("commands.sr.successPlaceholder"),
                     errorPlaceholder: t("commands.sr.errorPlaceholder"),
                     variables: t("commands.sr.variables"),
+                    errorVariables: "{error}",
                 };
             case "volume":
             case "vol":
@@ -119,343 +229,326 @@ export default function Commands({
                     errorPlaceholder: t("commands.volume.errorPlaceholder"),
                     getPlaceholder: t("commands.volume.getPlaceholder"),
                     variables: t("commands.volume.variables"),
+                    errorVariables: "{error}",
                 };
             default:
                 return null;
         }
     };
 
+    const prefix = config.prefix || "!";
+
     return (
-        <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-white">
-                {t("commands.title")}
-            </h2>
-
-            <div className="settings-section">
-                <h3 className="text-base font-medium text-white mb-4">
-                    {t("requests.commandPrefix")}
-                </h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-zinc-200 mb-2">
-                            {t("commands.prefixCharacter")}
-                        </label>
-                        <Input
-                            value={config.prefix || "!"}
-                            onChange={(e) =>
-                                onConfigChange("prefix", e.target.value)
-                            }
-                            placeholder="!"
-                            maxLength={5}
-                            className="max-w-24"
-                        />
-                        <p className="text-xs text-zinc-400 mt-1">
-                            {t("requests.commandPrefixDesc")}
-                        </p>
-                    </div>
-                </div>
+        <div className="studio-settings-api studio-commands">
+            <div className="studio-settings-api-heading">
+                <h2>{t("commands.title")}</h2>
             </div>
 
-            <div className="settings-section">
-                <h3 className="text-base font-medium text-white mb-4">
-                    {t("commands.customModerators")}
-                </h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-zinc-200 mb-2">
-                            {t("commands.moderatorsList")}
-                        </label>
-                        <MultipleInput
-                            values={config.customModerators || []}
-                            onChange={(newModerators) => {
-                                onConfigChange(
-                                    "customModerators",
-                                    newModerators
-                                );
-                            }}
-                            placeholder={t("commands.addModeratorPlaceholder")}
-                        />
-                        <p className="text-xs text-zinc-400 mt-1">
-                            {t("commands.customModeratorsDesc")}
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <SettingGroup heading={t("commands.prefixAndModerators")}>
+                <Input
+                    id="commands-prefix"
+                    label={t("commands.prefixCharacter")}
+                    helper={t("requests.commandPrefixDesc")}
+                    value={prefix}
+                    onChange={(event) =>
+                        onConfigChange("prefix", event.target.value)
+                    }
+                    placeholder="!"
+                    maxLength={5}
+                    wrapperClassName="studio-requests-prefix"
+                />
+                <StringListEditor
+                    id="commands-moderators"
+                    label={t("commands.moderatorsList")}
+                    helper={t("commands.customModeratorsDesc")}
+                    placeholder={t("commands.addModeratorPlaceholder")}
+                    values={
+                        Array.isArray(config.customModerators)
+                            ? config.customModerators
+                            : []
+                    }
+                    onChange={(values) =>
+                        onConfigChange("customModerators", values)
+                    }
+                    maxLength={50}
+                    validate={(candidate, current) =>
+                        validateField("customModerators", [
+                            ...current,
+                            candidate,
+                        ])
+                    }
+                    addLabel={t("commands.addModerator")}
+                    removeLabel={(name) =>
+                        t("commands.removeModerator", { name })
+                    }
+                />
+            </SettingGroup>
 
-            <h3 className="text-base font-medium text-white">
-                {t("commands.availableCommands")}
-            </h3>
-
-            {commands.length > 0 ? (
-                <div className="space-y-4">
-                    {commands.map((cmd) => {
-                        const cmdCfg = config.commands?.[cmd.name] || {
-                            enabled: true,
-                            aliases: [],
-                        };
-                        // Use cmd.enabled from the commands array, fallback to cmdCfg.enabled from config
-                        const isEnabled =
-                            cmd.enabled !== undefined
-                                ? cmd.enabled
-                                : cmdCfg.enabled !== false;
-                        const replyConfig = getReplyConfig(cmd.name);
-
-                        return (
-                            <div
-                                key={cmd.name}
-                                className="border border-zinc-700/50 rounded-lg p-4 space-y-4"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                            <Hash className="w-4 h-4 text-purple-400" />
-                                        </div>{" "}
-                                        <div>
-                                            <h4 className="text-base font-medium text-white">
-                                                {config.prefix || "!"}
-                                                {cmd.name}
-                                            </h4>
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-sm text-zinc-400">
+            <SettingGroup heading={t("commands.registeredCommands")}>
+                {commands.length > 0 ? (
+                    <div className="studio-command-stack">
+                        {commands.map((command) => {
+                            const commandConfig = config.commands?.[
+                                command.name
+                            ] || { enabled: true, aliases: [] };
+                            const enabled =
+                                command.enabled !== undefined
+                                    ? command.enabled
+                                    : commandConfig.enabled !== false;
+                            const aliases = Array.isArray(commandConfig.aliases)
+                                ? commandConfig.aliases
+                                : [];
+                            const replyConfig = getReplyConfig(command.name);
+                            const stats = performanceStats[command.name];
+                            return (
+                                <article
+                                    key={command.name}
+                                    className="studio-card studio-command-card"
+                                    aria-labelledby={`command-title-${command.name}`}
+                                >
+                                    <header className="studio-command-head">
+                                        <div className="studio-command-identity">
+                                            <span
+                                                className="studio-command-icon"
+                                                aria-hidden="true"
+                                            >
+                                                <Hash />
+                                            </span>
+                                            <div className="studio-command-copy">
+                                                <h3
+                                                    id={`command-title-${command.name}`}
+                                                >
+                                                    {prefix}
+                                                    {command.name}
+                                                </h3>
+                                                <p>
                                                     {t(
-                                                        `commands.${cmd.name}.description`
+                                                        `commands.${command.name}.description`
                                                     )}
                                                 </p>
-                                                {performanceStats[cmd.name] && (
-                                                    <div className="flex items-center gap-1 text-xs text-zinc-500">
-                                                        <Clock className="w-3 h-3" />
-                                                        <span>
-                                                            {performanceStats[
-                                                                cmd.name
-                                                            ].averageTime.toFixed(
-                                                                1
-                                                            )}
-                                                            ms avg
-                                                        </span>
-                                                    </div>
+                                                {stats && (
+                                                    <span className="studio-command-stat">
+                                                        <Clock
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            "commands.averageTime",
+                                                            {
+                                                                time: Number(
+                                                                    stats.averageTime
+                                                                ).toFixed(1),
+                                                            }
+                                                        )}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
-                                    <Toggle
-                                        checked={isEnabled}
-                                        onChange={(enabled) =>
-                                            onCommandToggle(cmd.name, enabled)
-                                        }
-                                    />
-                                </div>
+                                        <Toggle
+                                            id={`command-enabled-${command.name}`}
+                                            label={t("commands.enabled")}
+                                            aria-label={`${t("commands.enabled")} ${prefix}${command.name}`}
+                                            checked={enabled}
+                                            onCheckedChange={(checked) =>
+                                                onCommandToggle(
+                                                    command.name,
+                                                    checked
+                                                )
+                                            }
+                                            wrapperClassName="studio-command-toggle"
+                                        />
+                                    </header>
 
-                                <div className="space-y-4 pt-4 border-t border-zinc-700/30">
-                                    <div>
-                                        <label className="block text-sm font-medium text-zinc-200 mb-2">
-                                            {t("commands.aliases")}
-                                        </label>
-                                        <MultipleInput
-                                            values={cmdCfg.aliases}
-                                            onChange={(values: string[]) =>
+                                    <div className="studio-command-body">
+                                        <StringListEditor
+                                            id={`command-aliases-${command.name}`}
+                                            label={t("commands.aliases")}
+                                            helper={t("commands.aliasesDesc")}
+                                            placeholder={t("commands.addAlias")}
+                                            values={aliases}
+                                            onChange={(values) =>
                                                 handleAliasChange(
-                                                    cmd.name,
+                                                    command.name,
                                                     values
                                                 )
                                             }
-                                            validateItem={(
-                                                alias,
-                                                currentAliases
-                                            ) =>
+                                            maxLength={20}
+                                            validate={(candidate, current) =>
                                                 validateCommandAlias(
-                                                    alias,
-                                                    currentAliases,
-                                                    cmd.name
+                                                    candidate,
+                                                    current,
+                                                    command.name
                                                 )
                                             }
-                                            placeholder={t("commands.addAlias")}
-                                            maxLength={20}
-                                            minLength={1}
-                                            allowDuplicates={false}
+                                            addLabel={t(
+                                                "commands.addAliasAction"
+                                            )}
+                                            removeLabel={(alias) =>
+                                                t("commands.removeAlias", {
+                                                    name: alias,
+                                                })
+                                            }
                                         />
-                                    </div>
 
-                                    {replyConfig && (
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <MessageSquare className="w-4 h-4 text-blue-400" />
-                                                <h5 className="text-sm font-medium text-white">
-                                                    {t("commands.chatReplies")}
-                                                </h5>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex flex-col">
-                                                        <label className="text-sm font-medium text-zinc-200">
-                                                            {
-                                                                replyConfig.successLabel
-                                                            }
-                                                        </label>
-                                                        <span className="text-xs text-zinc-400">
-                                                            {t(
-                                                                "commands.sendConfirmationMessage"
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <Toggle
-                                                        checked={
-                                                            config[
-                                                                replyConfig
-                                                                    .successToggle
-                                                            ] || false
-                                                        }
-                                                        onChange={(enabled) =>
-                                                            handleReplyToggle(
-                                                                replyConfig.successToggle,
-                                                                enabled
-                                                            )
-                                                        }
+                                        {replyConfig && (
+                                            <div className="studio-command-replies">
+                                                <div className="studio-command-replies-head">
+                                                    <MessageSquare
+                                                        aria-hidden="true"
                                                     />
+                                                    <h4>
+                                                        {t(
+                                                            "commands.chatReplies"
+                                                        )}
+                                                    </h4>
                                                 </div>
 
+                                                <Toggle
+                                                    id={`command-${command.name}-reply-success`}
+                                                    label={
+                                                        replyConfig.successLabel
+                                                    }
+                                                    helper={t(
+                                                        "commands.sendConfirmationMessage"
+                                                    )}
+                                                    checked={
+                                                        config[
+                                                            replyConfig
+                                                                .successToggle
+                                                        ] || false
+                                                    }
+                                                    onCheckedChange={(
+                                                        checked
+                                                    ) =>
+                                                        handleReplyToggle(
+                                                            replyConfig.successToggle,
+                                                            checked
+                                                        )
+                                                    }
+                                                />
                                                 {config[
                                                     replyConfig.successToggle
                                                 ] && (
-                                                    <div className="pl-4 border-l-2 border-green-500/30">
-                                                        <Input
-                                                            value={
-                                                                config[
-                                                                    replyConfig
-                                                                        .successTemplate
-                                                                ] || ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleReplyTemplateChange(
-                                                                    replyConfig.successTemplate,
-                                                                    e.target
-                                                                        .value
-                                                                )
-                                                            }
-                                                            placeholder={
-                                                                replyConfig.successPlaceholder
-                                                            }
-                                                        />
-                                                        <p className="text-xs text-zinc-400 mt-1">
-                                                            {t(
-                                                                "commands.availableVariables"
-                                                            )}
-                                                            :{" "}
-                                                            <code className="bg-zinc-700 px-1 rounded text-zinc-300">
-                                                                {
-                                                                    replyConfig.variables
-                                                                }
-                                                            </code>
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex flex-col">
-                                                        <label className="text-sm font-medium text-zinc-200">
-                                                            {
-                                                                replyConfig.errorLabel
-                                                            }
-                                                        </label>
-                                                        <span className="text-xs text-zinc-400">
-                                                            {t(
-                                                                "commands.sendMessageOnFailure"
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <Toggle
-                                                        checked={
+                                                    <Input
+                                                        id={`command-${command.name}-success-template`}
+                                                        label={t(
+                                                            "commands.successTemplate"
+                                                        )}
+                                                        helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
+                                                        value={
                                                             config[
                                                                 replyConfig
-                                                                    .errorToggle
-                                                            ] || false
+                                                                    .successTemplate
+                                                            ] || ""
                                                         }
-                                                        onChange={(enabled) =>
-                                                            handleReplyToggle(
-                                                                replyConfig.errorToggle,
-                                                                enabled
+                                                        onChange={(event) =>
+                                                            handleReplyTemplateChange(
+                                                                replyConfig.successTemplate,
+                                                                event.target
+                                                                    .value
                                                             )
                                                         }
+                                                        placeholder={
+                                                            replyConfig.successPlaceholder
+                                                        }
                                                     />
-                                                </div>
+                                                )}
 
+                                                <Toggle
+                                                    id={`command-${command.name}-reply-error`}
+                                                    label={replyConfig.errorLabel}
+                                                    helper={t(
+                                                        "commands.sendMessageOnFailure"
+                                                    )}
+                                                    checked={
+                                                        config[
+                                                            replyConfig
+                                                                .errorToggle
+                                                        ] || false
+                                                    }
+                                                    onCheckedChange={(
+                                                        checked
+                                                    ) =>
+                                                        handleReplyToggle(
+                                                            replyConfig.errorToggle,
+                                                            checked
+                                                        )
+                                                    }
+                                                />
                                                 {config[
                                                     replyConfig.errorToggle
                                                 ] && (
-                                                    <div className="pl-4 border-l-2 border-red-500/30">
-                                                        <Input
-                                                            value={
-                                                                config[
-                                                                    replyConfig
-                                                                        .errorTemplate
-                                                                ] || ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                handleReplyTemplateChange(
-                                                                    replyConfig.errorTemplate,
-                                                                    e.target
-                                                                        .value
-                                                                )
-                                                            }
-                                                            placeholder={
-                                                                replyConfig.errorPlaceholder
-                                                            }
-                                                        />
-                                                    </div>
+                                                    <Input
+                                                        id={`command-${command.name}-error-template`}
+                                                        label={t(
+                                                            "commands.errorTemplate"
+                                                        )}
+                                                        helper={`${t("commands.availableVariables")}: ${replyConfig.errorVariables}`}
+                                                        value={
+                                                            config[
+                                                                replyConfig
+                                                                    .errorTemplate
+                                                            ] || ""
+                                                        }
+                                                        onChange={(event) =>
+                                                            handleReplyTemplateChange(
+                                                                replyConfig.errorTemplate,
+                                                                event.target
+                                                                    .value
+                                                            )
+                                                        }
+                                                        placeholder={
+                                                            replyConfig.errorPlaceholder
+                                                        }
+                                                    />
                                                 )}
-                                            </div>
 
-                                            {/* Volume Get Reply - Only for volume command */}
-                                            {replyConfig.getToggle && (
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex flex-col">
-                                                            <label className="text-sm font-medium text-zinc-200">
-                                                                {
-                                                                    replyConfig.getLabel
-                                                                }
-                                                            </label>
-                                                            <span className="text-xs text-zinc-400">
-                                                                {t(
-                                                                    "commands.sendCurrentVolume"
-                                                                )}
-                                                            </span>
-                                                        </div>
+                                                {replyConfig.getToggle && (
+                                                    <>
                                                         <Toggle
+                                                            id={`command-${command.name}-reply-get`}
+                                                            label={
+                                                                replyConfig.getLabel
+                                                            }
+                                                            helper={t(
+                                                                "commands.sendCurrentVolume"
+                                                            )}
                                                             checked={
                                                                 config[
                                                                     replyConfig
                                                                         .getToggle
                                                                 ] || false
                                                             }
-                                                            onChange={(
-                                                                enabled
+                                                            onCheckedChange={(
+                                                                checked
                                                             ) =>
                                                                 handleReplyToggle(
                                                                     replyConfig.getToggle,
-                                                                    enabled
+                                                                    checked
                                                                 )
                                                             }
                                                         />
-                                                    </div>
-
-                                                    {config[
-                                                        replyConfig.getToggle
-                                                    ] && (
-                                                        <div className="pl-4 border-l-2 border-blue-500/30">
+                                                        {config[
+                                                            replyConfig.getToggle
+                                                        ] && (
                                                             <Input
+                                                                id={`command-${command.name}-get-template`}
+                                                                label={t(
+                                                                    "commands.getTemplate"
+                                                                )}
+                                                                helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
                                                                 value={
                                                                     config[
                                                                         replyConfig
                                                                             .getTemplate
                                                                     ] || ""
                                                                 }
-                                                                onChange={(e) =>
+                                                                onChange={(
+                                                                    event
+                                                                ) =>
                                                                     handleReplyTemplateChange(
                                                                         replyConfig.getTemplate,
-                                                                        e.target
+                                                                        event
+                                                                            .target
                                                                             .value
                                                                     )
                                                                 }
@@ -463,39 +556,24 @@ export default function Commands({
                                                                     replyConfig.getPlaceholder
                                                                 }
                                                             />
-                                                            <p className="text-xs text-zinc-400 mt-1">
-                                                                {t(
-                                                                    "commands.availableVariables"
-                                                                )}
-                                                                :{" "}
-                                                                <code className="bg-zinc-700 px-1 rounded text-zinc-300">
-                                                                    {
-                                                                        replyConfig.variables
-                                                                    }
-                                                                </code>
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <div className="text-center py-8">
-                    <Hash className="w-12 h-12 mx-auto mb-3 text-zinc-500" />
-                    <h3 className="text-base font-medium text-white mb-2">
-                        {t("commands.noCommandsAvailable")}
-                    </h3>
-                    <p className="text-sm text-zinc-400">
-                        {t("commands.noCommandsDescription")}
-                    </p>
-                </div>
-            )}
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="studio-empty-state">
+                        <Hash aria-hidden="true" />
+                        <h3>{t("commands.noCommandsAvailable")}</h3>
+                        <p>{t("commands.noCommandsDescription")}</p>
+                    </div>
+                )}
+            </SettingGroup>
         </div>
     );
 }

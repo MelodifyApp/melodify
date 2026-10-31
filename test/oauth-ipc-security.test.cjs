@@ -114,6 +114,7 @@ function kickAuthHarness() {
         "@/core/config": { __esModule: true, default: configStub(values, writes) },
         "@/core/logging": { logInfo() {}, logError() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/shared/utils/pkce": {
             generateCodeVerifier: () => "verifier",
             generateCodeChallenge: () => "challenge",
@@ -175,6 +176,7 @@ function twitchAuthHarness(options = {}) {
         "@/core/config": { __esModule: true, default: configStub(values) },
         "@/core/logging": { logInfo() {}, logError() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/shared/utils/pkce": {
             generateCodeVerifier: () => "verifier",
             generateCodeChallenge: () => "challenge",
@@ -231,6 +233,7 @@ function spotifyAuthHarness(options = {}) {
         "@/core/config": { __esModule: true, default: configStub(values) },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/shared/constants": { SPOTIFY_REDIRECT_URI: "http://127.0.0.1:8888/callback" },
         "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/spotify/playback/player": {
@@ -436,7 +439,14 @@ test("Spotify callback completing after logout cannot save or announce authentic
 function kickIpcHarness() {
     const handlers = new Map();
     const writes = [];
+    const values = {};
     const stops = { auth: 0 };
+    const realFetch = global.fetch;
+    const fetchCalls = [];
+    global.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return { ok: true, status: 200 };
+    };
     const stubs = {
         electron: {
             ipcMain: {
@@ -447,10 +457,11 @@ function kickIpcHarness() {
         },
         "@/core/config": {
             __esModule: true,
-            default: configStub({}, writes),
+            default: configStub(values, writes),
         },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/features/kick/auth/server": {
             startKickAuthServer: async () => {},
             openKickAuthUrl() {},
@@ -479,13 +490,29 @@ function kickIpcHarness() {
         "@/shared/utils/windowSend": { sendToWindowIfAlive: () => true },
     };
     load(stubs, "src/features/kick/ipc/handlers.ts");
-    return { handlers, writes, stops };
+    return {
+        handlers,
+        writes,
+        values,
+        stops,
+        fetchCalls,
+        restoreFetch: () => {
+            global.fetch = realFetch;
+        },
+    };
 }
 
 function twitchIpcHarness() {
     const handlers = new Map();
     const writes = [];
+    const values = {};
     const stops = { auth: 0 };
+    const realFetch = global.fetch;
+    const fetchCalls = [];
+    global.fetch = async (url) => {
+        fetchCalls.push(String(url));
+        return { ok: true, status: 200 };
+    };
     const stubs = {
         electron: {
             ipcMain: {
@@ -494,9 +521,10 @@ function twitchIpcHarness() {
             },
             BrowserWindow: { fromWebContents: () => undefined },
         },
-        "@/core/config": { __esModule: true, default: configStub({}, writes) },
+        "@/core/config": { __esModule: true, default: configStub(values, writes) },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/features/twitch/auth/server": {
             startTwitchAuthServer: async () => {},
             openTwitchAuthUrl() {},
@@ -520,12 +548,22 @@ function twitchIpcHarness() {
         "@/shared/utils/windowSend": { sendToWindowIfAlive: () => true },
     };
     load(stubs, "src/features/twitch/ipc/handlers.ts");
-    return { handlers, writes, stops };
+    return {
+        handlers,
+        writes,
+        values,
+        stops,
+        fetchCalls,
+        restoreFetch: () => {
+            global.fetch = realFetch;
+        },
+    };
 }
 
 function spotifyIpcHarness() {
     const handlers = new Map();
     const writes = [];
+    const values = {};
     const stops = { auth: 0 };
     const credentials = [];
     const api = { setAccessToken() {}, setRefreshToken() {} };
@@ -547,9 +585,10 @@ function spotifyIpcHarness() {
         "ps-list": { __esModule: true, default: async () => [] },
         "child_process": { exec() {} },
         util: { promisify: () => async () => ({ stdout: "" }) },
-        "@/core/config": { __esModule: true, default: configStub({}, writes) },
+        "@/core/config": { __esModule: true, default: configStub(values, writes) },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
         "@/core/logging/utils": { redactSecrets: (value) => value },
+        "@/shared/utils/credentialVerification": require("../src/shared/utils/credentialVerification"),
         "@/features/spotify/playback/player": {
             getSpotifyApi: () => api,
             updateSpotifyClientCredentials: (id, secret) => credentials.push([id, secret]),
@@ -569,6 +608,7 @@ function spotifyIpcHarness() {
     return {
         handlers,
         writes,
+        values,
         stops,
         credentials,
         fetchCalls,
@@ -578,28 +618,111 @@ function spotifyIpcHarness() {
     };
 }
 
-test("kick:setSecrets ignores malformed payloads and writes only credentials", async () => {
+test("kick:setSecrets ignores malformed payloads and writes only verified credentials", async () => {
     const harness = kickIpcHarness();
-    const handler = harness.handlers.get("kick:setSecrets");
-    await assert.doesNotReject(async () => handler({}, null));
-    await assert.doesNotReject(async () =>
-        handler({}, { kickClientId: " id ", kickClientSecret: " secret ", canAnyonePlaySong: true })
-    );
-    assert.deepEqual(harness.writes, [
-        { kickClientId: "id", kickClientSecret: "secret" },
-    ]);
+    try {
+        const handler = harness.handlers.get("kick:setSecrets");
+        await assert.doesNotReject(async () => handler({}, null));
+        assert.deepEqual(await handler({}, { kickClientId: " id ", kickClientSecret: " secret ", canAnyonePlaySong: true }), { success: true });
+        assert.deepEqual(harness.writes, [
+            { kickClientId: "id", kickClientSecret: "secret" },
+        ]);
+        assert.deepEqual(harness.fetchCalls, ["https://id.kick.com/oauth/token"]);
+    } finally {
+        harness.restoreFetch();
+    }
 });
 
-test("twitch:setSecrets ignores malformed payloads and writes only credentials", async () => {
+test("twitch:setSecrets ignores malformed payloads and writes only verified credentials", async () => {
     const harness = twitchIpcHarness();
-    const handler = harness.handlers.get("twitch:setSecrets");
-    await assert.doesNotReject(async () => handler({}, null));
-    await assert.doesNotReject(async () =>
-        handler({}, { twitchClientId: " id ", twitchClientSecret: " secret ", canAnyonePlaySong: true })
-    );
-    assert.deepEqual(harness.writes, [
-        { twitchClientId: "id", twitchClientSecret: "secret" },
-    ]);
+    try {
+        const handler = harness.handlers.get("twitch:setSecrets");
+        await assert.doesNotReject(async () => handler({}, null));
+        assert.deepEqual(await handler({}, { twitchClientId: " id ", twitchClientSecret: " secret ", canAnyonePlaySong: true }), { success: true });
+        assert.deepEqual(harness.writes, [
+            { twitchClientId: "id", twitchClientSecret: "secret" },
+        ]);
+        assert.deepEqual(harness.fetchCalls, ["https://id.twitch.tv/oauth2/token"]);
+    } finally {
+        harness.restoreFetch();
+    }
+});
+
+test("kick and twitch verification channels return stable results without persisting", async () => {
+    for (const [name, endpoint] of [
+        ["kick", "https://id.kick.com/oauth/token"],
+        ["twitch", "https://id.twitch.tv/oauth2/token"],
+    ]) {
+        const harness = name === "kick" ? kickIpcHarness() : twitchIpcHarness();
+        try {
+            const handler = harness.handlers.get(`${name}:verifySecrets`);
+            assert.deepEqual(
+                await handler({}, { [`${name}ClientId`]: "id", [`${name}ClientSecret`]: "secret" }),
+                { success: true }
+            );
+            assert.deepEqual(harness.writes, [], "verification must not persist");
+            assert.deepEqual(harness.fetchCalls, [endpoint]);
+        } finally {
+            harness.restoreFetch();
+        }
+    }
+});
+
+test("verification failures do not persist and can use a stored secret", async () => {
+    for (const [name, id] of [
+        ["kick", "kick"],
+        ["twitch", "twitch"],
+    ]) {
+        const harness = name === "kick" ? kickIpcHarness() : twitchIpcHarness();
+        try {
+            const handler = harness.handlers.get(`${name}:verifySecrets`);
+            global.fetch = async () => ({ ok: false, status: 401 });
+            assert.deepEqual(
+                await handler({}, { [`${id}ClientId`]: "bad", [`${id}ClientSecret`]: "bad-secret" }),
+                { success: false, code: "invalid_credentials" }
+            );
+            assert.deepEqual(harness.writes, [], "failed verification must not persist");
+
+            const setHandler = harness.handlers.get(`${name}:setSecrets`);
+            assert.deepEqual(
+                await setHandler({}, { [`${id}ClientId`]: "bad", [`${id}ClientSecret`]: "bad-secret" }),
+                { success: false, code: "invalid_credentials" }
+            );
+            assert.deepEqual(harness.writes, [], "setSecrets must not persist unverified credentials");
+
+            harness.values[`${id}ClientId`] = "stored-id";
+            harness.values[`${id}ClientSecret`] = "stored-secret";
+            global.fetch = async () => ({ ok: true, status: 200 });
+            assert.deepEqual(await handler({}, { [`${id}ClientId`]: "stored-id" }), {
+                success: true,
+            });
+            assert.deepEqual(harness.writes, [], "verified stored credentials are not rewritten by verify");
+        } finally {
+            harness.restoreFetch();
+        }
+    }
+});
+
+test("spotify verification is separate from persistence", async () => {
+    const harness = spotifyIpcHarness();
+    try {
+        const verify = harness.handlers.get("spotify:verifySecrets");
+        assert.deepEqual(
+            await verify({}, { spotifyClientId: "id", spotifyClientSecret: "secret" }),
+            { success: true }
+        );
+        assert.deepEqual(harness.credentials, [], "verify must not update the playback client");
+        assert.equal(harness.fetchCalls.length, 1);
+
+        global.fetch = async () => ({ ok: false, status: 401 });
+        assert.deepEqual(
+            await verify({}, { spotifyClientId: "id", spotifyClientSecret: "bad" }),
+            { success: false, code: "invalid_credentials" }
+        );
+        assert.deepEqual(harness.credentials, []);
+    } finally {
+        harness.restoreFetch();
+    }
 });
 
 test("spotify:setSecrets rejects malformed payloads without throwing", async () => {

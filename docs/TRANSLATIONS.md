@@ -9,7 +9,7 @@ The translation system provides type-safe multilingual support with automatic va
 ## Supported Languages
 
 - 🇺🇸 **English** (`en`) - Reference language
-- �� **Turkish** (`tr`) - Türkçe
+- 🇹🇷 **Turkish** (`tr`) - Türkçe
 
 ## Architecture
 

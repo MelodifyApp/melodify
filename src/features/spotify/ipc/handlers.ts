@@ -13,6 +13,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { logInfo, logError, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
+import { verifyAppCredentials } from "../../../shared/utils/credentialVerification";
 
 const execAsync = promisify(exec);
 
@@ -130,61 +131,58 @@ ipcMain.handle("spotify:hasSecrets", () => {
     return !!spotifyClientId && !!spotifyClientSecret;
 });
 
-ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
+function readSpotifyCredentialPair(secrets: unknown): {
+    clientId: string;
+    clientSecret: string;
+} {
     const record =
         secrets && typeof secrets === "object" && !Array.isArray(secrets)
             ? (secrets as Record<string, unknown>)
             : null;
-    const spotifyClientId =
+    const clientId =
         typeof record?.spotifyClientId === "string"
             ? record.spotifyClientId.trim()
             : "";
-    const spotifyClientSecret =
+    const suppliedSecret =
         typeof record?.spotifyClientSecret === "string"
             ? record.spotifyClientSecret.trim()
             : "";
-    if (!spotifyClientId || !spotifyClientSecret) {
+    const storedId = String(Config.get("spotifyClientId") || "").trim();
+    const storedSecret = String(Config.get("spotifyClientSecret") || "").trim();
+    return {
+        clientId,
+        clientSecret:
+            suppliedSecret ||
+            (clientId && clientId === storedId ? storedSecret : ""),
+    };
+}
+
+ipcMain.handle("spotify:verifySecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readSpotifyCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
         return { success: false, code: "missing_credentials" };
     }
-    // Try to get a token using Client Credentials Flow to validate the credentials.
-    // Only stable failure codes are returned: never the service response, a
-    // token, or the supplied credentials.
-    const tokenUrl = "https://accounts.spotify.com/api/token";
-    const params = new URLSearchParams();
-    params.append("grant_type", "client_credentials");
-    try {
-        const response = await fetch(tokenUrl, {
-            method: "POST",
-            headers: {
-                Authorization:
-                    "Basic " +
-                    Buffer.from(
-                        `${spotifyClientId}:${spotifyClientSecret}`
-                    ).toString("base64"),
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: params.toString(),
-        });
-        if (!response.ok) {
-            const rejectedCredentials =
-                response.status === 400 ||
-                response.status === 401 ||
-                response.status === 403;
-            return {
-                success: false,
-                code: rejectedCredentials
-                    ? "invalid_credentials"
-                    : "verification_unavailable",
-            };
-        }
-        // Save secrets if valid
-        // Persist credentials and discard the singleton that may still hold
-        // the previous client ID/secret before OAuth starts.
-        updateSpotifyClientCredentials(spotifyClientId, spotifyClientSecret);
-        return { success: true };
-    } catch {
-        return { success: false, code: "verification_unavailable" };
+    return verifyAppCredentials("spotify", { clientId, clientSecret });
+});
+
+ipcMain.handle("spotify:setSecrets", async (_event, secrets) => {
+    const { clientId, clientSecret } = readSpotifyCredentialPair(secrets);
+    if (!clientId || !clientSecret) {
+        return { success: false, code: "missing_credentials" };
     }
+    // Verify once more before writing. Only stable failure codes are returned:
+    // never the service response, a token, or the supplied credentials.
+    const verification = await verifyAppCredentials("spotify", {
+        clientId,
+        clientSecret,
+    });
+    if (!verification.success) {
+        return verification;
+    }
+    // Persist credentials and discard the singleton that may still hold the
+    // previous client ID/secret before OAuth starts.
+    updateSpotifyClientCredentials(clientId, clientSecret);
+    return { success: true };
 });
 
 ipcMain.handle("spotify:hasSession", async () => {
@@ -197,8 +195,10 @@ ipcMain.handle("spotify:hasSession", async () => {
             (device: any) => device.is_active
         );
         return hasActiveDevice;
-    } catch (error) {
-        // Silently return false for API errors to avoid log spam
-        return false;
+    } catch {
+        // A provider/network failure is not proof that no device is active.
+        // Return null so callers can show unavailable instead of a false
+        // negative or a stale ready state.
+        return null;
     }
 });
