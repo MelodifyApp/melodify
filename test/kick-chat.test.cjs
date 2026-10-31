@@ -18,6 +18,7 @@ const {
     parseKickFrames,
     decodeKickEvent,
     createGuestChatClient,
+    kickLivenessDeadlineMs,
 } = require("../src/features/kick/chat/guestChat");
 const { createKickChatAdapter } = require("../src/features/kick/chat/adapter");
 const {
@@ -189,6 +190,42 @@ function ackAllSubscriptions(socket) {
             data: JSON.stringify({ id: frame.id, subscribe: {} }),
         });
     }
+}
+
+function completeSocketHandshake(socket) {
+    socket.emit("open");
+    const connectFrame = socket.frames().find((frame) => frame.connect);
+    assert.ok(connectFrame, "expected a Centrifugo connect frame");
+    socket.emit("message", {
+        data: JSON.stringify({
+            id: connectFrame.id,
+            connect: { expires: true, ttl: 2700, ping: 25 },
+        }),
+    });
+    ackAllSubscriptions(socket);
+}
+
+function messagePush(content, offset) {
+    const pub = {
+        data: JSON.stringify({
+            event: "App\\Events\\ChatMessageEvent",
+            data: JSON.stringify({
+                sender: { username: "viewer_x", identity: { badges: [] } },
+                content,
+            }),
+        }),
+    };
+    if (offset !== undefined) pub.offset = offset;
+    return {
+        id: 9,
+        push: { channel: MESSAGE_CHANNEL, pub },
+    };
+}
+
+function emitPush(socket, content, offset) {
+    socket.emit("message", {
+        data: JSON.stringify(messagePush(content, offset)),
+    });
 }
 
 /** Starts the client and completes the full handshake (both acks). */
@@ -527,7 +564,7 @@ test("client stop closes the socket, clears timers, and ignores stale callbacks"
     assert.equal(h.timers.pending().length, 0);
 });
 
-test("client refreshes its guest session before expiry without overlapping readers", async () => {
+test("client refreshes its guest session and closes the old reader only after replacement readiness", async () => {
     const h = makeClient();
     const first = await startConnected(h);
     const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
@@ -537,27 +574,186 @@ test("client refreshes its guest session before expiry without overlapping reade
     refresh.fn();
     await flush();
 
-    assert.equal(first.closed, true);
+    assert.equal(first.closed, false, "the old reader stays authoritative during renewal");
     assert.equal(h.sockets().length, 2);
     const second = h.socket();
     assert.notEqual(second, first);
     assert.equal(h.states[h.states.length - 1], "connected");
 
-    second.emit("open");
-    const connectFrame = second.frames().find((frame) => frame.connect);
-    second.emit("message", {
-        data: JSON.stringify({
-            id: connectFrame.id,
-            connect: { expires: true, ttl: 2700, ping: 25 },
-        }),
-    });
-    for (const frame of second.subscribeFrames()) {
-        second.emit("message", {
-            data: JSON.stringify({ id: frame.id, subscribe: {} }),
-        });
-    }
+    completeSocketHandshake(second);
+    assert.equal(first.closed, true);
     assert.equal(h.states[h.states.length - 1], "connected");
     assert.equal(h.sockets().length, 2);
+    h.client.stop();
+});
+
+test("old reader events remain authoritative while renewal is negotiating", async () => {
+    const h = makeClient();
+    const first = await startConnected(h);
+    const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
+    assert.ok(refresh);
+
+    refresh.fired = true;
+    refresh.fn();
+    await flush();
+    assert.equal(first.closed, false);
+    assert.equal(h.sockets().length, 2);
+
+    emitPush(first, "during-renewal", 1001);
+    assert.equal(h.events.length, 1);
+    assert.equal(h.events[0].message, "during-renewal");
+    assert.equal(
+        h.states.filter((state) => state === "reconnecting").length,
+        0,
+        "renewal must not report a disconnect while the old reader is active"
+    );
+    h.client.stop();
+});
+
+test("successful renewal swaps atomically and bounds duplicate overlap delivery", async () => {
+    const h = makeClient();
+    const first = await startConnected(h);
+    const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
+    refresh.fired = true;
+    refresh.fn();
+    await flush();
+
+    const second = h.socket();
+    assert.notEqual(second, first);
+    // Both readers can see the same publication during the overlap. The old
+    // reader is authoritative now and the candidate must not emit early.
+    emitPush(first, "overlap", 2002);
+    emitPush(second, "overlap", 2002);
+    assert.equal(h.events.length, 1);
+    assert.equal(h.events[0].message, "overlap");
+
+    completeSocketHandshake(second);
+    assert.equal(first.closed, true);
+    assert.equal(h.events.length, 1, "handoff must not replay the buffered duplicate");
+
+    emitPush(second, "after-handoff", 2003);
+    assert.equal(h.events.length, 2);
+    assert.equal(h.events[1].message, "after-handoff");
+    h.client.stop();
+});
+
+test("a failed renewal keeps the old reader authoritative and retries later", async () => {
+    const base = createFetchHarness();
+    let connectionCalls = 0;
+    const fetchImpl = async (url, init) => {
+        if (String(url).endsWith("/realtime/connection")) {
+            connectionCalls += 1;
+            if (connectionCalls === 2) throw new Error("renewal unavailable");
+        }
+        return base(url, init);
+    };
+    const h = makeClient({ fetchImpl });
+    const first = await startConnected(h);
+    const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
+    refresh.fired = true;
+    refresh.fn();
+    await flush();
+
+    assert.equal(first.closed, false);
+    assert.equal(h.sockets().length, 1);
+    assert.equal(
+        h.states.filter((state) => state === "reconnecting").length,
+        0
+    );
+    const retry = h.timers.pending().find((timer) => timer.ms === 30_000);
+    assert.ok(retry, "a failed renewal should schedule a bounded retry");
+    emitPush(first, "still-authoritative", 1501);
+    assert.equal(h.events.length, 1);
+    h.client.stop();
+});
+
+test("stop during renewal negotiation closes the old reader and ignores the late session", async () => {
+    const base = createFetchHarness();
+    let connectionCalls = 0;
+    let releaseRenewal = null;
+    const fetchImpl = async (url, init) => {
+        if (String(url).endsWith("/realtime/connection")) {
+            connectionCalls += 1;
+            if (connectionCalls === 2) {
+                return new Promise((resolve) => {
+                    releaseRenewal = () =>
+                        resolve(jsonResponse(NEGOTIATED_CONNECTION));
+                });
+            }
+        }
+        return base(url, init);
+    };
+    const h = makeClient({ fetchImpl });
+    const first = await startConnected(h);
+    const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
+    refresh.fired = true;
+    refresh.fn();
+    await flush();
+    assert.ok(releaseRenewal, "expected the renewal negotiation to be pending");
+
+    h.client.stop();
+    assert.equal(first.closed, true);
+    assert.equal(h.timers.pending().length, 0);
+    assert.equal(h.states[h.states.length - 1], "stopped");
+
+    releaseRenewal();
+    await flush();
+    assert.equal(h.sockets().length, 1, "no late candidate may open after stop");
+    assert.equal(h.events.length, 0);
+    assert.equal(h.timers.pending().length, 0);
+});
+
+test("protocol ping interval expires a silently stalled reader", async () => {
+    assert.equal(kickLivenessDeadlineMs(25), 55_000);
+    assert.equal(kickLivenessDeadlineMs(undefined), 55_000);
+
+    const h = makeClient();
+    const socket = await startConnected(h);
+    const liveness = h.timers.pending().find((timer) => timer.ms === 55_000);
+    assert.ok(liveness, "expected a protocol-derived liveness deadline");
+
+    socket.emit("message", { data: "{}" });
+    assert.equal(liveness.cleared, true, "a received frame resets the deadline");
+    const refreshed = h.timers.pending().find((timer) => timer.ms === 55_000);
+    assert.ok(refreshed);
+    assert.notEqual(refreshed.id, liveness.id);
+
+    refreshed.fired = true;
+    refreshed.fn();
+    await flush();
+
+    assert.equal(socket.closed, true);
+    assert.equal(h.states[h.states.length - 1], "reconnecting");
+    assert.ok(
+        h.timers.pending().some((timer) => timer.ms >= 1_000),
+        "the stalled reader should schedule a bounded reconnect"
+    );
+    h.client.stop();
+});
+
+test("logout/stop during handover closes both readers and leaves no owned timer", async () => {
+    const h = makeClient();
+    const first = await startConnected(h);
+    const refresh = h.timers.pending().find((timer) => timer.ms > 60_000);
+    refresh.fired = true;
+    refresh.fn();
+    await flush();
+    const second = h.socket();
+    assert.notEqual(second, first);
+
+    h.client.stop();
+    assert.equal(first.closed, true);
+    assert.equal(second.closed, true);
+    assert.equal(h.timers.pending().length, 0);
+    assert.equal(h.states[h.states.length - 1], "stopped");
+
+    emitPush(first, "late-old", 3003);
+    emitPush(second, "late-candidate", 3004);
+    second.emit("open");
+    second.emit("error", {});
+    assert.equal(h.events.length, 0);
+    assert.equal(h.sockets().length, 2);
+    assert.equal(h.timers.pending().length, 0);
 });
 
 test("a failed initial negotiation retries with backoff and never reports connected", async () => {

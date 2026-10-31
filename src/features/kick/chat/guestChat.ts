@@ -103,6 +103,28 @@ const NEGOTIATION_TIMEOUT_MS = 15_000;
 const DEFAULT_SESSION_TTL_SECONDS = 2700;
 /** Refresh this long before the advertised guest session expiry. */
 const REFRESH_MARGIN_SECONDS = 300;
+/** Centrifugo's default ping interval when the connect reply omits one. */
+const DEFAULT_PING_SECONDS = 25;
+/** Allow two missed server pings plus a small scheduling margin. */
+const LIVENESS_MARGIN_MS = 5_000;
+/** Retry a failed renewal while the authoritative old reader stays up. */
+const HANDOVER_RETRY_MS = 30_000;
+/** Bound duplicate bookkeeping to one small overlapping handover window. */
+const DEDUPE_LIMIT = 128;
+
+/**
+ * The server's connect reply advertises its ping cadence. A reader that misses
+ * two advertised pings is no longer treated as live.
+ */
+export function kickLivenessDeadlineMs(pingSeconds?: number): number {
+    const ping =
+        typeof pingSeconds === "number" &&
+        Number.isFinite(pingSeconds) &&
+        pingSeconds > 0
+            ? pingSeconds
+            : DEFAULT_PING_SECONDS;
+    return Math.max(2_000, Math.round(ping * 2_000 + LIVENESS_MARGIN_MS));
+}
 
 const REQUEST_HEADERS: Record<string, string> = {
     Accept: "application/json",
@@ -258,6 +280,22 @@ interface GuestSession {
     channelTokens: Map<string, string>;
 }
 
+interface GuestReader {
+    gen: number;
+    role: "active" | "candidate";
+    socket: KickGuestSocket;
+    alive: boolean;
+    completed: boolean;
+    subscriptionsRequested: boolean;
+    ttlSeconds: number;
+    pingSeconds: number;
+    subscriptionIds: Map<number, string>;
+    channelTokens: Map<string, string>;
+    handshakeTimer: unknown | null;
+    livenessTimer: unknown | null;
+    pendingEvents: Array<{ key: string; event: KickGuestEvent }>;
+}
+
 async function postJson(
     fetchImpl: KickGuestFetch,
     path: string,
@@ -378,18 +416,32 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
     let running = false;
     let generation = 0;
     let cycle = 0;
-    let socket: KickGuestSocket | null = null;
+    let activeReader: GuestReader | null = null;
+    let candidateReader: GuestReader | null = null;
     let negotiationAbort: AbortController | null = null;
     let negotiationTimer: unknown | null = null;
-    let handshakeTimer: unknown | null = null;
     let refreshTimer: unknown | null = null;
     let reconnectTimer: unknown | null = null;
     let reconnectAttempt = 0;
     let connected = false;
+    let renewalInFlight = false;
+    const handoverSeen = new Map<string, true>();
 
     const isCurrent = (gen: number): boolean => running && gen === generation;
     const isCurrentCycle = (gen: number, cycleId: number): boolean =>
-        isCurrent(gen) && cycleId === cycle;
+        running && cycleId === cycle && gen === generation;
+    const isActiveReader = (reader: GuestReader): boolean =>
+        running &&
+        reader.alive &&
+        reader.role === "active" &&
+        activeReader === reader &&
+        reader.gen === generation;
+    const isCandidateReader = (reader: GuestReader): boolean =>
+        running &&
+        reader.alive &&
+        reader.role === "candidate" &&
+        candidateReader === reader &&
+        reader.gen === generation + 1;
 
     const emitState = (state: KickGuestState): void => {
         try {
@@ -423,23 +475,68 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
         reconnectTimer = null;
         clearTimer(negotiationTimer);
         negotiationTimer = null;
-        clearTimer(handshakeTimer);
-        handshakeTimer = null;
     }
 
-    function teardownSocket(): void {
-        if (!socket) return;
-        const current = socket;
-        socket = null;
+    function stopReader(reader: GuestReader | null): void {
+        if (!reader) return;
+        reader.alive = false;
+        clearTimer(reader.handshakeTimer);
+        reader.handshakeTimer = null;
+        clearTimer(reader.livenessTimer);
+        reader.livenessTimer = null;
+        reader.pendingEvents.length = 0;
         try {
-            current.close();
+            reader.socket.close();
         } catch {
             /* ignore */
         }
     }
 
+    function clearHandoverState(): void {
+        handoverSeen.clear();
+    }
+
+    function cancelCandidate(): void {
+        const candidate = candidateReader;
+        candidateReader = null;
+        renewalInFlight = false;
+        if (candidate) stopReader(candidate);
+        clearHandoverState();
+    }
+
+    function closeActiveReader(): void {
+        const current = activeReader;
+        activeReader = null;
+        if (current) stopReader(current);
+    }
+
+    function rememberHandoverKey(key: string): void {
+        if (handoverSeen.size >= DEDUPE_LIMIT) {
+            const oldest = handoverSeen.keys().next().value;
+            if (oldest !== undefined) handoverSeen.delete(oldest);
+        }
+        handoverSeen.set(key, true);
+    }
+
+    function publicationKey(
+        channel: string,
+        pub: Record<string, unknown>,
+        event: KickGuestEvent
+    ): string {
+        const offset = pub.offset;
+        if (typeof offset === "string" || typeof offset === "number") {
+            return `${channel}|offset:${String(offset)}`;
+        }
+        if (event.kind === "message") {
+            return `${channel}|message|${event.username}|${event.message}`;
+        }
+        return `${channel}|reward|${event.username}|${event.rewardTitle}|${event.userInput}`;
+    }
+
     function scheduleRefresh(gen: number, ttlSeconds: number): void {
         clearTimer(refreshTimer);
+        refreshTimer = null;
+        if (!isCurrent(gen) || candidateReader) return;
         const ttl =
             Number.isFinite(ttlSeconds) && ttlSeconds > 60
                 ? ttlSeconds
@@ -447,17 +544,51 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
         const delaySeconds = Math.max(30, ttl - REFRESH_MARGIN_SECONDS);
         refreshTimer = timers.setTimeout(() => {
             refreshTimer = null;
-            if (!isCurrent(gen)) return;
-            // Planned renewal: drop the old socket only once the replacement
-            // session has been negotiated, so two readers never overlap.
-            generation += 1;
-            void runCycle(generation);
+            startRenewal(gen);
         }, delaySeconds * 1000);
     }
 
-    function handleFailure(gen: number): void {
+    function scheduleHandoverRetry(gen: number): void {
+        renewalInFlight = false;
+        if (!isCurrent(gen) || !activeReader || candidateReader) return;
+        clearTimer(refreshTimer);
+        refreshTimer = timers.setTimeout(() => {
+            refreshTimer = null;
+            startRenewal(gen);
+        }, HANDOVER_RETRY_MS);
+    }
+
+    function startRenewal(gen: number): void {
+        if (
+            !isCurrent(gen) ||
+            !activeReader ||
+            candidateReader ||
+            renewalInFlight
+        ) {
+            return;
+        }
+        renewalInFlight = true;
+        clearTimer(refreshTimer);
+        refreshTimer = null;
+        clearHandoverState();
+        void runCycle(gen, "renewal");
+    }
+
+    function scheduleReconnect(gen: number): void {
         if (!isCurrent(gen)) return;
-        teardownSocket();
+        // Invalidate any in-flight negotiation before replacing the reader.
+        cycle += 1;
+        const abort = negotiationAbort;
+        negotiationAbort = null;
+        if (abort) {
+            try {
+                abort.abort();
+            } catch {
+                /* ignore */
+            }
+        }
+        cancelCandidate();
+        closeActiveReader();
         connected = false;
         clearOwnedTimers();
         reconnectAttempt += 1;
@@ -468,6 +599,7 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
             return;
         }
         emitState("reconnecting");
+        if (!isCurrent(gen)) return;
         const delay = Math.min(
             MAX_RECONNECT_DELAY_MS,
             1000 * 2 ** (reconnectAttempt - 1)
@@ -475,47 +607,252 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
         reconnectTimer = timers.setTimeout(() => {
             reconnectTimer = null;
             if (!isCurrent(gen)) return;
-            void runCycle(gen);
+            void runCycle(gen, "normal");
         }, delay);
     }
 
-    function openSocket(gen: number, session: GuestSession): void {
-        if (!isCurrent(gen)) return;
-        teardownSocket();
-        const created = createSocket(session.url);
-        socket = created;
+    function armLiveness(reader: GuestReader): void {
+        clearTimer(reader.livenessTimer);
+        reader.livenessTimer = null;
+        if (
+            !reader.alive ||
+            reader.role !== "active" ||
+            activeReader !== reader
+        ) {
+            return;
+        }
+        reader.livenessTimer = timers.setTimeout(() => {
+            reader.livenessTimer = null;
+            if (!isActiveReader(reader)) return;
+            scheduleReconnect(reader.gen);
+        }, kickLivenessDeadlineMs(reader.pingSeconds));
+    }
 
-        let handled = false;
-        let subscriptionsRequested = false;
-        let ttlSeconds = DEFAULT_SESSION_TTL_SECONDS;
-        const subscriptionIds = new Map<number, string>();
+    function completeReader(reader: GuestReader): void {
+        if (!reader.alive || reader.completed) return;
+        clearTimer(reader.handshakeTimer);
+        reader.handshakeTimer = null;
+        if (reader.role === "candidate") {
+            promoteCandidate(reader);
+            return;
+        }
+        if (!isActiveReader(reader)) return;
+        reader.completed = true;
+        if (!connected) {
+            connected = true;
+            reconnectAttempt = 0;
+            emitState("connected");
+        }
+        armLiveness(reader);
+        scheduleRefresh(reader.gen, reader.ttlSeconds);
+    }
+
+    /**
+     * The candidate becomes authoritative and the old reader is closed in one
+     * synchronous swap. No publication is rejected while the candidate is
+     * negotiating; candidate events are buffered and de-duplicated on swap.
+     */
+    function promoteCandidate(reader: GuestReader): void {
+        if (!isCandidateReader(reader)) {
+            stopReader(reader);
+            return;
+        }
+        const old = activeReader;
+        candidateReader = null;
+        renewalInFlight = false;
+        generation = reader.gen;
+        reader.role = "active";
+        reader.completed = true;
+        activeReader = reader;
+        if (old) stopReader(old);
+        connected = true;
+        reconnectAttempt = 0;
+
+        for (const pending of reader.pendingEvents) {
+            if (
+                !running ||
+                !reader.alive ||
+                activeReader !== reader
+            ) {
+                break;
+            }
+            if (handoverSeen.has(pending.key)) continue;
+            rememberHandoverKey(pending.key);
+            emitEvent(pending.event);
+        }
+        reader.pendingEvents.length = 0;
+        clearHandoverState();
+        armLiveness(reader);
+        scheduleRefresh(reader.gen, reader.ttlSeconds);
+    }
+
+    function failReader(reader: GuestReader): void {
+        if (!reader.alive) return;
+        const wasCandidate = candidateReader === reader;
+        const wasActive =
+            activeReader === reader &&
+            reader.gen === generation &&
+            running;
+        reader.alive = false;
+        if (wasCandidate) {
+            candidateReader = null;
+            renewalInFlight = false;
+            stopReader(reader);
+            clearHandoverState();
+            scheduleHandoverRetry(generation);
+            return;
+        }
+        if (wasActive) {
+            activeReader = null;
+            stopReader(reader);
+            scheduleReconnect(reader.gen);
+            return;
+        }
+        stopReader(reader);
+    }
+
+    function handleFrame(
+        reader: GuestReader,
+        event: { data?: unknown }
+    ): void {
+        if (!reader.alive) return;
+        const readerLive = (): boolean =>
+            isActiveReader(reader) || isCandidateReader(reader);
+        if (!readerLive()) return;
+        if (reader.role === "active" && reader.completed) {
+            armLiveness(reader);
+        }
+
+        for (const frame of parseKickFrames(String(event?.data ?? ""))) {
+            if (!reader.alive || !readerLive()) return;
+
+            // Centrifugo application-level ping: answer with an empty pong.
+            if (Object.keys(frame).length === 0) {
+                try {
+                    reader.socket.send("{}");
+                } catch {
+                    /* ignore; a broken socket will error/close next */
+                }
+                continue;
+            }
+
+            if (frame.error || frame.disconnect) {
+                failReader(reader);
+                return;
+            }
+
+            if (frame.id === CONNECT_FRAME_ID && frame.connect) {
+                if (reader.completed || reader.subscriptionsRequested) {
+                    continue;
+                }
+                reader.subscriptionsRequested = true;
+                const ack = frame.connect as Record<string, unknown>;
+                if (typeof ack.ttl === "number" && Number.isFinite(ack.ttl)) {
+                    reader.ttlSeconds = ack.ttl;
+                }
+                if (
+                    typeof ack.ping === "number" &&
+                    Number.isFinite(ack.ping) &&
+                    ack.ping > 0
+                ) {
+                    reader.pingSeconds = ack.ping;
+                }
+                for (const [id, channel] of reader.subscriptionIds) {
+                    const request: Record<string, unknown> = { channel };
+                    const channelToken = reader.channelTokens.get(channel);
+                    if (channelToken) request.token = channelToken;
+                    try {
+                        reader.socket.send(
+                            JSON.stringify({ id, subscribe: request })
+                        );
+                    } catch {
+                        failReader(reader);
+                        return;
+                    }
+                }
+                continue;
+            }
+
+            if (
+                typeof frame.id === "number" &&
+                frame.subscribe &&
+                reader.subscriptionIds.delete(frame.id) &&
+                reader.subscriptionIds.size === 0
+            ) {
+                completeReader(reader);
+                continue;
+            }
+
+            const push = frame.push;
+            if (push && typeof push === "object" && !Array.isArray(push)) {
+                const pushRecord = push as Record<string, unknown>;
+                const pub = pushRecord.pub;
+                if (pub && typeof pub === "object" && !Array.isArray(pub)) {
+                    const pubRecord = pub as Record<string, unknown>;
+                    const body = decodeJsonBody(pubRecord.data);
+                    if (!body) continue;
+                    const decoded = decodeKickEvent(body);
+                    if (!decoded) continue;
+                    const channel =
+                        typeof pushRecord.channel === "string"
+                            ? pushRecord.channel
+                            : "";
+                    const key = publicationKey(channel, pubRecord, decoded);
+                    if (isActiveReader(reader)) {
+                        if (candidateReader) rememberHandoverKey(key);
+                        emitEvent(decoded);
+                    } else if (
+                        isCandidateReader(reader) &&
+                        reader.pendingEvents.length < DEDUPE_LIMIT
+                    ) {
+                        reader.pendingEvents.push({ key, event: decoded });
+                    }
+                }
+            }
+        }
+    }
+
+    function openReader(
+        gen: number,
+        session: GuestSession,
+        role: "active" | "candidate"
+    ): void {
+        const created = createSocket(session.url);
+        const reader: GuestReader = {
+            gen,
+            role,
+            socket: created,
+            alive: true,
+            completed: false,
+            subscriptionsRequested: false,
+            ttlSeconds: DEFAULT_SESSION_TTL_SECONDS,
+            pingSeconds: DEFAULT_PING_SECONDS,
+            subscriptionIds: new Map(),
+            channelTokens: session.channelTokens,
+            handshakeTimer: null,
+            livenessTimer: null,
+            pendingEvents: [],
+        };
         channels.forEach((channel, index) =>
-            subscriptionIds.set(index + 2, channel)
+            reader.subscriptionIds.set(index + 2, channel)
         );
 
-        const fail = (): void => {
-            if (!isCurrent(gen) || handled) return;
-            handled = true;
-            clearTimer(handshakeTimer);
-            handshakeTimer = null;
-            handleFailure(gen);
-        };
+        if (role === "candidate") {
+            if (candidateReader) stopReader(candidateReader);
+            candidateReader = reader;
+        } else {
+            if (activeReader) stopReader(activeReader);
+            activeReader = reader;
+        }
 
-        const completeConnection = (): void => {
-            clearTimer(handshakeTimer);
-            handshakeTimer = null;
-            if (!connected) {
-                connected = true;
-                reconnectAttempt = 0;
-                emitState("connected");
-            }
-            scheduleRefresh(gen, ttlSeconds);
-        };
-
-        handshakeTimer = timers.setTimeout(() => fail(), CONNECT_TIMEOUT_MS);
+        reader.handshakeTimer = timers.setTimeout(
+            () => failReader(reader),
+            CONNECT_TIMEOUT_MS
+        );
 
         created.addEventListener("open", () => {
-            if (!isCurrent(gen) || handled) return;
+            if (!reader.alive) return;
+            if (!isActiveReader(reader) && !isCandidateReader(reader)) return;
             try {
                 created.send(
                     JSON.stringify({
@@ -524,79 +861,25 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
                     })
                 );
             } catch {
-                fail();
+                failReader(reader);
             }
         });
-
-        created.addEventListener("message", (event) => {
-            if (!isCurrent(gen) || handled) return;
-            for (const frame of parseKickFrames(String(event?.data ?? ""))) {
-                if (!isCurrent(gen) || handled) return;
-
-                // Centrifugo application-level ping: answer with an empty pong.
-                if (Object.keys(frame).length === 0) {
-                    try {
-                        created.send("{}");
-                    } catch {
-                        /* ignore; a broken socket will error/close next */
-                    }
-                    continue;
-                }
-
-                if (frame.error || frame.disconnect) {
-                    fail();
-                    return;
-                }
-
-                if (frame.id === CONNECT_FRAME_ID && frame.connect) {
-                    if (subscriptionsRequested) continue;
-                    subscriptionsRequested = true;
-                    const ack = frame.connect as Record<string, unknown>;
-                    if (typeof ack.ttl === "number" && Number.isFinite(ack.ttl)) {
-                        ttlSeconds = ack.ttl;
-                    }
-                    for (const [id, channel] of subscriptionIds) {
-                        const request: Record<string, unknown> = { channel };
-                        const channelToken = session.channelTokens.get(channel);
-                        if (channelToken) request.token = channelToken;
-                        try {
-                            created.send(JSON.stringify({ id, subscribe: request }));
-                        } catch {
-                            fail();
-                            return;
-                        }
-                    }
-                    continue;
-                }
-
-                if (typeof frame.id === "number" && frame.subscribe) {
-                    if (subscriptionIds.delete(frame.id) && subscriptionIds.size === 0) {
-                        completeConnection();
-                    }
-                    continue;
-                }
-
-                const push = frame.push;
-                if (push && typeof push === "object" && !Array.isArray(push)) {
-                    const pub = (push as Record<string, unknown>).pub;
-                    if (pub && typeof pub === "object" && !Array.isArray(pub)) {
-                        const body = decodeJsonBody(
-                            (pub as Record<string, unknown>).data
-                        );
-                        if (body) {
-                            const decoded = decodeKickEvent(body);
-                            if (decoded) emitEvent(decoded);
-                        }
-                    }
-                }
-            }
-        });
-
-        created.addEventListener("error", () => fail());
-        created.addEventListener("close", () => fail());
+        created.addEventListener("message", (event) =>
+            handleFrame(reader, event)
+        );
+        created.addEventListener("error", () => failReader(reader));
+        created.addEventListener("close", () => failReader(reader));
     }
 
-    async function runCycle(gen: number): Promise<void> {
+    async function runCycle(
+        gen: number,
+        mode: "normal" | "renewal" = "normal"
+    ): Promise<void> {
+        if (!isCurrent(gen)) return;
+        if (mode === "renewal" && (!activeReader || candidateReader)) {
+            renewalInFlight = false;
+            return;
+        }
         cycle += 1;
         const cycleId = cycle;
         const abort = new AbortController();
@@ -611,7 +894,13 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
             } catch {
                 /* ignore */
             }
-            if (isCurrentCycle(gen, cycleId)) handleFailure(gen);
+            if (cycleId !== cycle || !running || gen !== generation) return;
+            if (mode === "renewal") {
+                renewalInFlight = false;
+                scheduleHandoverRetry(gen);
+            } else {
+                scheduleReconnect(gen);
+            }
         }, NEGOTIATION_TIMEOUT_MS);
         negotiationTimer = myNegotiationTimer;
         try {
@@ -622,11 +911,20 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
                 isStale
             );
             if (!session || isStale()) return;
-            openSocket(gen, session);
+            if (mode === "renewal") {
+                openReader(gen + 1, session, "candidate");
+            } else {
+                openReader(gen, session, "active");
+            }
         } catch {
             if (isStale()) return;
             settled = true;
-            handleFailure(gen);
+            if (mode === "renewal") {
+                renewalInFlight = false;
+                scheduleHandoverRetry(gen);
+            } else {
+                scheduleReconnect(gen);
+            }
         } finally {
             if (negotiationTimer === myNegotiationTimer) {
                 clearTimer(myNegotiationTimer);
@@ -642,23 +940,25 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
             running = true;
             reconnectAttempt = 0;
             connected = false;
+            renewalInFlight = false;
             generation += 1;
             const gen = generation;
             emitState("connecting");
-            await runCycle(gen);
+            await runCycle(gen, "normal");
         },
         stop(): void {
             const hadActivity =
                 running ||
-                socket !== null ||
+                activeReader !== null ||
+                candidateReader !== null ||
                 negotiationAbort !== null ||
                 negotiationTimer !== null ||
-                handshakeTimer !== null ||
                 refreshTimer !== null ||
                 reconnectTimer !== null;
             running = false;
             if (!hadActivity) return;
             generation += 1;
+            renewalInFlight = false;
             clearOwnedTimers();
             const abort = negotiationAbort;
             negotiationAbort = null;
@@ -669,7 +969,9 @@ export function createGuestChatClient(options: KickGuestOptions): KickGuestClien
                     /* ignore */
                 }
             }
-            teardownSocket();
+            cancelCandidate();
+            closeActiveReader();
+            clearHandoverState();
             connected = false;
             reconnectAttempt = 0;
             emitState("stopped");
