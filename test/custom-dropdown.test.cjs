@@ -371,8 +371,8 @@ test("Settings consumers use the custom Select and preserve value/draft updates"
         ],
         "src/features/settings/components/sections/Requests.tsx": [
             "Select",
-            "onTitleChange(value)",
-            "options={state.titles",
+            "onSelect(reward)",
+            "options={state.rewards",
             "${pickerId}-status",
         ],
         "src/features/settings/components/sections/Logs.tsx": [

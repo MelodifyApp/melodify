@@ -1,6 +1,7 @@
 import {
-    mapRewardTitles,
+    mapRewardOptions,
     rewardFailureReason,
+    rewardTitlesFromOptions,
     unavailableRewardTitles,
     type RewardFetch,
     type RewardTitlesResult,
@@ -17,7 +18,7 @@ export interface KickRewardRequest {
 /**
  * Reads the broadcaster's channel rewards with the official Kick API
  * (`channel:rewards:read`). Read-only: no create, update or delete calls are
- * made, and only titles leave this function.
+ * made, and only reward IDs/titles leave this function.
  */
 export async function fetchKickRewardTitles(
     input: KickRewardRequest
@@ -35,7 +36,12 @@ export async function fetchKickRewardTitles(
                 rewardFailureReason(response.status)
             );
         }
-        return { status: "ok", titles: mapRewardTitles(await response.json()) };
+        const rewards = mapRewardOptions(await response.json());
+        return {
+            status: "ok",
+            rewards,
+            titles: rewardTitlesFromOptions(rewards),
+        };
     } catch {
         return unavailableRewardTitles("provider-error");
     }

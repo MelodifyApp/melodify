@@ -191,7 +191,7 @@
     font-weight: 650;
 }
 
-.studio-home-queue-count {
+.studio-home-queue-coming-soon {
     flex: none;
     padding: 3px 9px;
     border: 1px solid var(--studio-line);

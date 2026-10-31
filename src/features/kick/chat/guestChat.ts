@@ -33,6 +33,7 @@ export interface KickGuestMessageEvent {
 export interface KickGuestRewardEvent {
     kind: "reward";
     username: string;
+    rewardId?: string;
     rewardTitle: string;
     userInput: string;
     raw: Record<string, unknown>;
@@ -210,6 +211,27 @@ function readString(value: unknown): string | null {
     return typeof value === "string" && value.trim() ? value : null;
 }
 
+function readRewardId(body: Record<string, unknown>): string | null {
+    for (const candidate of [body.reward_id, body.rewardId]) {
+        if (typeof candidate === "string" || typeof candidate === "number") {
+            const id = String(candidate).trim();
+            if (id) return id;
+        }
+    }
+    const reward =
+        body.reward && typeof body.reward === "object" && !Array.isArray(body.reward)
+            ? (body.reward as Record<string, unknown>)
+            : null;
+    if (reward) {
+        const id = reward.id;
+        if (typeof id === "string" || typeof id === "number") {
+            const normalized = String(id).trim();
+            if (normalized) return normalized;
+        }
+    }
+    return null;
+}
+
 /**
  * Decodes a Centrifugo publication payload into a validated event.
  * Handles double-encoded `data` fields and returns null for unknown or
@@ -260,9 +282,11 @@ export function decodeKickEvent(payload: unknown): KickGuestEvent | null {
         if (!username || !rewardTitle) return null;
         const userInput =
             typeof body.user_input === "string" ? body.user_input.trim() : "";
+        const rewardId = readRewardId(body);
         return {
             kind: "reward",
             username,
+            ...(rewardId ? { rewardId } : {}),
             rewardTitle,
             userInput,
             raw: body,

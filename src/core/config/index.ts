@@ -43,7 +43,9 @@ interface AppConfig {
     canAnyonePlaySong?: boolean;
     prefix?: string;
     rewardTitle?: string;
+    rewardId?: string;
     twitchRewardTitle?: string;
+    twitchRewardId?: string;
 
     // Twitch Common
     twitchUsername?: string;
@@ -191,6 +193,8 @@ const defaultConfig: AppConfig = {
     replyOnVolumeError: false,
     replyOnVolumeGet: true,
     twitchRewardTitle: "Song Request",
+    rewardId: "",
+    twitchRewardId: "",
     allowedBadges: ["og", "vip", "subscriber"],
     customModerators: [],
     saveCurrentSongToFile: false,

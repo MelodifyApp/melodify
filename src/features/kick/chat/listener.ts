@@ -14,6 +14,7 @@ import {
     createKickChatAdapter,
     type KickChatAdapter,
 } from "@/features/kick/chat/adapter";
+import { rewardMatchesConfigured } from "@/shared/rewards/rewardTitles";
 import { sendToWindowIfAlive } from "./windowSend";
 
 // Kick chat reading runs over the negotiated anonymous guest transport
@@ -58,10 +59,21 @@ async function handleGuestMessage(event: KickGuestMessageEvent): Promise<void> {
 
 function handleGuestReward(event: KickGuestRewardEvent): void {
     try {
-        // Reward redemptions keep the existing title filter and permission
-        // behavior; chat commands are unaffected.
-        const configuredRewardTitle = Config.get("rewardTitle") || "Song Request";
-        if (configuredRewardTitle !== event.rewardTitle) return;
+        // Stable provider IDs win when configured; legacy title-only configs
+        // keep the existing exact-title gate. Chat commands are unaffected.
+        const configuredRewardId = Config.get("rewardId");
+        const configuredRewardTitle =
+            Config.get("rewardTitle") || "Song Request";
+        if (
+            !rewardMatchesConfigured({
+                configuredId: configuredRewardId,
+                configuredTitle: configuredRewardTitle,
+                eventId: event.rewardId,
+                eventTitle: event.rewardTitle,
+            })
+        ) {
+            return;
+        }
 
         const songQuery = event.userInput;
         const ctx: CommandContext = {

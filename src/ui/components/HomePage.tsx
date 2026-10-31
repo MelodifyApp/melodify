@@ -304,12 +304,12 @@ export default function HomePage({
                             <h2 id="home-queue-title">
                                 {t("home.queueTitle")}
                             </h2>
-                            <span className="studio-home-queue-count">
-                                {t("home.queueCount", { count: 0 })}
+                            <span className="studio-home-queue-coming-soon">
+                                {t("home.queueComingSoon")}
                             </span>
                         </div>
                         <p className="studio-home-queue-empty">
-                            {t("home.queueEmpty")}
+                            {t("home.queueComingSoonCopy")}
                         </p>
                     </section>
                 </main>

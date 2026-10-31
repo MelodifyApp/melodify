@@ -7,6 +7,7 @@ import { commandManager } from "@/core/ipc/handlers";
 import { twitchClient } from "@/features/twitch/api/client";
 import { executeSongRequest } from "@/core/commands/songRequest";
 import { decodeTwitchChatContext } from "./context";
+import { rewardMatchesConfigured } from "@/shared/rewards/rewardTitles";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
 export type TwitchReadinessState =
@@ -493,8 +494,17 @@ async function handleChannelPointRedemption(
         const rewardTitle = event.reward?.title;
         const configuredRewardTitle =
             Config.get("twitchRewardTitle") || "Song Request";
+        const configuredRewardId = Config.get("twitchRewardId");
 
-        if (!username || !rewardTitle || rewardTitle !== configuredRewardTitle) {
+        if (
+            !username ||
+            !rewardMatchesConfigured({
+                configuredId: configuredRewardId,
+                configuredTitle: configuredRewardTitle,
+                eventId: event.reward?.id,
+                eventTitle: rewardTitle,
+            })
+        ) {
             return;
         }
 

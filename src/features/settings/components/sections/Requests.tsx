@@ -12,11 +12,15 @@ import {
     SettingGroup,
     Toggle,
 } from "@/ui/components/studio";
-import type { RewardUnavailableReason } from "@/shared/rewards/rewardTitles";
+import {
+    resolveRewardSelection,
+    type RewardOption,
+    type RewardUnavailableReason,
+} from "@/shared/rewards/rewardTitles";
 import { validateField } from "../validation";
 import {
-    rewardPickerValue,
     REWARD_CONFIG_KEYS,
+    REWARD_ID_CONFIG_KEYS,
     type RewardPlatform,
 } from "../../rewardPicker";
 import { useRewardTitles } from "../useRewardTitles";
@@ -36,7 +40,9 @@ interface RewardPickerProps {
     label: string;
     helper: string;
     title: string;
+    rewardId: string;
     onTitleChange: (title: string) => void;
+    onSelect: (reward: RewardOption) => void;
 }
 
 function RewardListStatus({
@@ -93,13 +99,37 @@ function RewardPicker({
     label,
     helper,
     title,
+    rewardId,
     onTitleChange,
+    onSelect,
 }: RewardPickerProps) {
     const { t } = useTranslation();
     const state = useRewardTitles(platform);
     const pickerId = `requests-${platform}-reward-picker`;
     const canChoose = state.status === "ready";
-    const selected = rewardPickerValue(title, state.titles);
+    const resolution =
+        state.status === "ready"
+            ? resolveRewardSelection(rewardId, title, state.rewards)
+            : null;
+    const selected =
+        resolution?.status === "selected" && resolution.source === "id"
+            ? resolution.option.id
+            : "";
+    const titleCounts = new Map<string, number>();
+    for (const reward of state.rewards) {
+        titleCounts.set(
+            reward.title,
+            (titleCounts.get(reward.title) || 0) + 1
+        );
+    }
+    const reselectKey =
+        resolution?.status === "reselect"
+            ? resolution.reason === "duplicate-title"
+                ? "requests.rewardReselectDuplicate"
+                : resolution.reason === "missing-title"
+                  ? "requests.rewardReselectMissingTitle"
+                  : "requests.rewardReselectMissingId"
+            : null;
 
     return (
         <div className="studio-reward" role="group" aria-label={label}>
@@ -122,16 +152,29 @@ function RewardPicker({
                     }
                     helper={t("requests.rewardPickerHint")}
                     value={selected}
-                    options={state.titles.map((option) => ({
-                        value: option,
-                        label: option,
+                    options={state.rewards.map((reward) => ({
+                        value: reward.id,
+                        label:
+                            (titleCounts.get(reward.title) || 0) > 1
+                                ? t("requests.rewardOptionWithId", {
+                                      title: reward.title,
+                                      id: reward.id,
+                                  })
+                                : reward.title,
                     }))}
                     placeholder={t("requests.selectReward")}
                     onChange={(value) => {
-                        if (value) onTitleChange(value);
+                        const reward = state.rewards.find(
+                            (candidate) => candidate.id === value
+                        );
+                        if (reward) onSelect(reward);
                     }}
                     disabled={!canChoose}
-                    aria-describedby={`${pickerId}-status`}
+                    aria-describedby={
+                        reselectKey
+                            ? `${pickerId}-status ${pickerId}-reselect`
+                            : `${pickerId}-status`
+                    }
                 />
             </div>
             <div className="studio-reward-footer">
@@ -154,6 +197,17 @@ function RewardPicker({
                     {t("requests.refreshRewards")}
                 </Button>
             </div>
+            {reselectKey && (
+                <p
+                    id={`${pickerId}-reselect`}
+                    className="studio-reward-status"
+                    data-tone="warning"
+                    role="status"
+                    aria-live="polite"
+                >
+                    {t(reselectKey)}
+                </p>
+            )}
         </div>
     );
 }
@@ -391,18 +445,42 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                     label={t("requests.kickRewardTitle")}
                     helper={t("requests.kickRewardHelper")}
                     title={rewardTitleOrDefault(config.rewardTitle)}
-                    onTitleChange={(title) =>
-                        handleInputChange(REWARD_CONFIG_KEYS.kick, title)
-                    }
+                    rewardId={String(config.rewardId || "")}
+                    onTitleChange={(title) => {
+                        onConfigChange(REWARD_ID_CONFIG_KEYS.kick, "");
+                        handleInputChange(REWARD_CONFIG_KEYS.kick, title);
+                    }}
+                    onSelect={(reward) => {
+                        onConfigChange(REWARD_ID_CONFIG_KEYS.kick, reward.id);
+                        handleInputChange(
+                            REWARD_CONFIG_KEYS.kick,
+                            reward.title
+                        );
+                    }}
                 />
                 <RewardPicker
                     platform="twitch"
                     label={t("requests.twitchRewardTitle")}
                     helper={t("requests.twitchRewardHelper")}
                     title={rewardTitleOrDefault(config.twitchRewardTitle)}
-                    onTitleChange={(title) =>
-                        handleInputChange(REWARD_CONFIG_KEYS.twitch, title)
-                    }
+                    rewardId={String(config.twitchRewardId || "")}
+                    onTitleChange={(title) => {
+                        onConfigChange(REWARD_ID_CONFIG_KEYS.twitch, "");
+                        handleInputChange(
+                            REWARD_CONFIG_KEYS.twitch,
+                            title
+                        );
+                    }}
+                    onSelect={(reward) => {
+                        onConfigChange(
+                            REWARD_ID_CONFIG_KEYS.twitch,
+                            reward.id
+                        );
+                        handleInputChange(
+                            REWARD_CONFIG_KEYS.twitch,
+                            reward.title
+                        );
+                    }}
                 />
             </SettingGroup>
 

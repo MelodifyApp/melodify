@@ -273,7 +273,8 @@ test("Home uses the accepted queue/connection composition and themed actions", (
     );
     const homeCss = readSource("src/ui/components/homeStudio.css");
     assert.match(home, /home\.queueTitle/);
-    assert.match(home, /home\.queueCount/);
+    assert.match(home, /home\.queueComingSoon/);
+    assert.doesNotMatch(home, /home\.queueCount|home\.queueEmpty/);
     assert.match(home, /home\.connections\.title/);
     assert.match(home, /HomeConnectionsDialog/);
     assert.match(homeCss, /studio-home-queue/);

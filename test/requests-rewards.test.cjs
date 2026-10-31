@@ -120,7 +120,11 @@ function loadRewardGate(provider, configValues, options = {}) {
             return {
                 fetchTwitchRewardTitles: async (input) => {
                     calls.push(input);
-                    return { status: "ok", titles: ["Song Request"] };
+                    return {
+                        status: "ok",
+                        rewards: [{ id: "twitch-1", title: "Song Request" }],
+                        titles: ["Song Request"],
+                    };
                 },
             };
         }
@@ -128,7 +132,11 @@ function loadRewardGate(provider, configValues, options = {}) {
             return {
                 fetchKickRewardTitles: async (input) => {
                     calls.push(input);
-                    return { status: "ok", titles: ["Song Request"] };
+                    return {
+                        status: "ok",
+                        rewards: [{ id: "kick-1", title: "Song Request" }],
+                        titles: ["Song Request"],
+                    };
                 },
             };
         }
@@ -171,7 +179,7 @@ const rewardPicker = load("src/features/settings/rewardPicker.ts");
 const requestsView = load("src/features/settings/components/requestsView.ts");
 const draft = load("src/features/settings/components/draftState.ts");
 
-test("Twitch reward reads use the documented Helix endpoint and map titles only", async () => {
+test("Twitch reward reads use the documented Helix endpoint and keep IDs with titles", async () => {
     const calls = [];
     const result = await twitchRewards.fetchTwitchRewardTitles({
         broadcasterId: "broadcaster-1",
@@ -193,6 +201,11 @@ test("Twitch reward reads use the documented Helix endpoint and map titles only"
 
     assert.deepEqual(result, {
         status: "ok",
+        rewards: [
+            { id: "1", title: "Song Request" },
+            { id: "3", title: "Song Request" },
+            { id: "2", title: "VIP Song" },
+        ],
         titles: ["Song Request", "VIP Song"],
     });
     assert.equal(calls.length, 1);
@@ -209,7 +222,7 @@ test("Twitch reward reads use the documented Helix endpoint and map titles only"
     assert.equal(JSON.stringify(result).includes("cost"), false);
 });
 
-test("Kick reward reads use the official rewards endpoint and map titles only", async () => {
+test("Kick reward reads use the official rewards endpoint and keep IDs with titles", async () => {
     const calls = [];
     const result = await kickRewards.fetchKickRewardTitles({
         accessToken: "kick-token",
@@ -228,6 +241,11 @@ test("Kick reward reads use the official rewards endpoint and map titles only", 
 
     assert.deepEqual(result, {
         status: "ok",
+        rewards: [
+            { id: "2", title: "Music Request" },
+            { id: "1", title: "Song Request" },
+            { id: "3", title: "Song Request" },
+        ],
         titles: ["Music Request", "Song Request"],
     });
     assert.equal(calls.length, 1);
@@ -371,6 +389,7 @@ test("reward gate skips provider reads without stored credentials or a session",
     );
     assert.deepEqual(await twitchReady.module.listTwitchRewardTitles(), {
         status: "ok",
+        rewards: [{ id: "twitch-1", title: "Song Request" }],
         titles: ["Song Request"],
     });
     assert.equal(twitchReady.calls.length, 1);
@@ -385,6 +404,7 @@ test("reward gate skips provider reads without stored credentials or a session",
     );
     assert.deepEqual(await kickReady.module.listKickRewardTitles(), {
         status: "ok",
+        rewards: [{ id: "kick-1", title: "Song Request" }],
         titles: ["Song Request"],
     });
     assert.equal(kickReady.calls.length, 1);
@@ -394,26 +414,56 @@ test("reward gate skips provider reads without stored credentials or a session",
 test("picker state distinguishes loading, empty, ready and unavailable results", () => {
     assert.deepEqual(rewardPicker.toRewardPickerState(undefined), {
         status: "unavailable",
+        rewards: [],
         titles: [],
         reason: "provider-error",
     });
     assert.deepEqual(
-        rewardPicker.toRewardPickerState({ status: "ok", titles: [] }),
-        { status: "empty", titles: [] }
+        rewardPicker.toRewardPickerState({ status: "ok", rewards: [] }),
+        { status: "empty", rewards: [], titles: [] }
     );
     assert.deepEqual(
         rewardPicker.toRewardPickerState({
             status: "ok",
-            titles: ["Song Request", "Song Request", " VIP "],
+            rewards: [
+                { id: "1", title: "Song Request" },
+                { id: "2", title: "Song Request" },
+                { id: "3", title: " VIP " },
+            ],
         }),
-        { status: "ready", titles: ["Song Request", "VIP"] }
+        {
+            status: "ready",
+            rewards: [
+                { id: "1", title: "Song Request" },
+                { id: "2", title: "Song Request" },
+                { id: "3", title: "VIP" },
+            ],
+            titles: ["Song Request", "VIP"],
+        }
     );
     assert.deepEqual(
         rewardPicker.toRewardPickerState({
             status: "unavailable",
             reason: "missing-scope",
         }),
-        { status: "unavailable", titles: [], reason: "missing-scope" }
+        {
+            status: "unavailable",
+            rewards: [],
+            titles: [],
+            reason: "missing-scope",
+        }
+    );
+    assert.deepEqual(
+        rewardPicker.toRewardPickerState({
+            status: "ok",
+            titles: ["Song Request"],
+        }),
+        {
+            status: "unavailable",
+            rewards: [],
+            titles: [],
+            reason: "provider-error",
+        }
     );
 });
 
@@ -427,20 +477,27 @@ test("reward drafts stay isolated per platform and discard restores both", () =>
     let state = draft.createDraftState(
         {
             rewardTitle: "Song Request",
+            rewardId: "kick-1",
             twitchRewardTitle: "Song Request",
+            twitchRewardId: "twitch-1",
             saveCurrentSongToFile: true,
         },
         []
     );
     state = draft.editDraftConfig(state, "twitchRewardTitle", "VIP Song");
+    state = draft.editDraftConfig(state, "twitchRewardId", "twitch-2");
     assert.equal(state.draftConfig.rewardTitle, "Song Request");
+    assert.equal(state.draftConfig.rewardId, "kick-1");
     assert.equal(state.draftConfig.twitchRewardTitle, "VIP Song");
+    assert.equal(state.draftConfig.twitchRewardId, "twitch-2");
     state = draft.editDraftConfig(state, "saveCurrentSongToFile", false);
     assert.equal(draft.settingsAreDirty(state), true);
 
     const discarded = draft.discardDraft(state);
     assert.equal(discarded.draftConfig.rewardTitle, "Song Request");
+    assert.equal(discarded.draftConfig.rewardId, "kick-1");
     assert.equal(discarded.draftConfig.twitchRewardTitle, "Song Request");
+    assert.equal(discarded.draftConfig.twitchRewardId, "twitch-1");
     assert.equal(discarded.draftConfig.saveCurrentSongToFile, true);
 });
 
@@ -479,6 +536,13 @@ test("Requests uses Studio primitives, conditional file controls and matching re
     assert.match(source, /t\("requests\.chooseFilePath"\)/);
     assert.match(source, /t\("requests\.kickRewardTitle"\)/);
     assert.match(source, /t\("requests\.twitchRewardTitle"\)/);
+    assert.match(source, /REWARD_ID_CONFIG_KEYS\.kick/);
+    assert.match(source, /REWARD_ID_CONFIG_KEYS\.twitch/);
+    assert.match(source, /REWARD_ID_CONFIG_KEYS\.kick,\s*reward\.id/);
+    assert.match(source, /REWARD_ID_CONFIG_KEYS\.kick,\s*""/);
+    assert.match(source, /resolution\.source === "id"/);
+    assert.match(source, /rewardReselectDuplicate/);
+    assert.match(source, /reselectKey/);
     assert.match(source, /saveCurrentSongToFile/);
 });
 
@@ -487,6 +551,9 @@ test("Requests renders Studio groups, hides the path until file output is on, an
         saveCurrentSongToFile: true,
         currentSongFilePath: "C:\\Users\\Example\\current-song.txt",
         rewardTitle: "Song Request",
+        rewardId: "reward-1",
+        twitchRewardTitle: "Song Request",
+        twitchRewardId: "reward-2",
         customModerators: ["modmira"],
     });
     assert.match(visible, /studio-settings-api/);
@@ -530,6 +597,21 @@ test("read-only reward handlers are allowlisted and gated before provider reads"
         readSource("src/features/twitch/auth/server.ts"),
         /channel:read:redemptions/,
         "Twitch authorization must keep the redemption read scope"
+    );
+    assert.match(
+        readSource("src/features/kick/chat/listener.ts"),
+        /rewardId[\s\S]*rewardMatchesConfigured/,
+        "Kick must gate redemptions by the saved provider ID"
+    );
+    assert.match(
+        readSource("src/features/twitch/chat/listener.ts"),
+        /twitchRewardId[\s\S]*rewardMatchesConfigured/,
+        "Twitch must gate redemptions by the saved provider ID"
+    );
+    assert.match(
+        readSource("src/features/twitch/chat/listener.ts"),
+        /event\.reward\?\.id/,
+        "Twitch must pass the redemption reward ID into the gate"
     );
 });
 

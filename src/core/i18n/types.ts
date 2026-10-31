@@ -100,8 +100,8 @@ export interface TranslationKeys {
         acceptedRequests: string;
         requestSummary: string;
         queueTitle: string;
-        queueCount: string;
-        queueEmpty: string;
+        queueComingSoon: string;
+        queueComingSoonCopy: string;
         acceptedRequestsLabel: string;
         lastRequest: string;
         requestSource: string;
@@ -217,6 +217,10 @@ export interface TranslationKeys {
         chooseTwitchReward: string;
         selectReward: string;
         rewardPickerHint: string;
+        rewardOptionWithId: string;
+        rewardReselectDuplicate: string;
+        rewardReselectMissingTitle: string;
+        rewardReselectMissingId: string;
         rewardListLoading: string;
         rewardListEmpty: string;
         rewardListReady: string;

@@ -296,6 +296,7 @@ test("decodeKickEvent decodes a double-encoded reward and trims user input", () 
     const event = decodeKickEvent({
         event: "App\\Events\\RewardRedeemedEvent",
         data: JSON.stringify({
+            reward_id: "reward-1",
             reward_title: "Song Request",
             username: "viewer_y",
             user_input: "  Some Song  ",
@@ -304,8 +305,19 @@ test("decodeKickEvent decodes a double-encoded reward and trims user input", () 
     assert.ok(event, "expected the reward to decode");
     assert.equal(event.kind, "reward");
     assert.equal(event.username, "viewer_y");
+    assert.equal(event.rewardId, "reward-1");
     assert.equal(event.rewardTitle, "Song Request");
     assert.equal(event.userInput, "Some Song");
+
+    const nested = decodeKickEvent({
+        event: "RewardRedeemedEvent",
+        data: {
+            reward: { id: 42, title: "Song Request" },
+            reward_title: "Song Request",
+            username: "viewer_y",
+        },
+    });
+    assert.equal(nested.rewardId, "42");
 });
 
 test("decodeKickEvent tolerates a reward without user input", () => {

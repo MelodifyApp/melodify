@@ -1,19 +1,31 @@
-import type { RewardUnavailableReason } from "@/shared/rewards/rewardTitles";
+import {
+    normalizeRewardOptions,
+    rewardTitlesFromOptions,
+    type RewardOption,
+    type RewardUnavailableReason,
+} from "@/shared/rewards/rewardTitles";
 
 export type RewardPlatform = "kick" | "twitch";
 
-/** The config key each platform's picker may update. */
+/** The title config key each platform's picker may update. */
 export const REWARD_CONFIG_KEYS: Record<RewardPlatform, string> = {
     kick: "rewardTitle",
     twitch: "twitchRewardTitle",
 };
 
+/** The stable provider ID config key stored alongside each title. */
+export const REWARD_ID_CONFIG_KEYS: Record<RewardPlatform, string> = {
+    kick: "rewardId",
+    twitch: "twitchRewardId",
+};
+
 export type RewardPickerState =
-    | { status: "loading"; titles: string[] }
-    | { status: "ready"; titles: string[] }
-    | { status: "empty"; titles: string[] }
+    | { status: "loading"; rewards: RewardOption[]; titles: string[] }
+    | { status: "ready"; rewards: RewardOption[]; titles: string[] }
+    | { status: "empty"; rewards: RewardOption[]; titles: string[] }
     | {
           status: "unavailable";
+          rewards: RewardOption[];
           titles: string[];
           reason: RewardUnavailableReason;
       };
@@ -31,12 +43,17 @@ const REASONS: readonly RewardUnavailableReason[] = [
  */
 export function toRewardPickerState(result: unknown): RewardPickerState {
     if (!result || typeof result !== "object") {
-        return { status: "unavailable", titles: [], reason: "provider-error" };
+        return {
+            status: "unavailable",
+            rewards: [],
+            titles: [],
+            reason: "provider-error",
+        };
     }
 
     const candidate = result as {
         status?: unknown;
-        titles?: unknown;
+        rewards?: unknown;
         reason?: unknown;
     };
     if (candidate.status === "unavailable") {
@@ -45,23 +62,27 @@ export function toRewardPickerState(result: unknown): RewardPickerState {
         )
             ? (candidate.reason as RewardUnavailableReason)
             : "provider-error";
-        return { status: "unavailable", titles: [], reason };
+        return {
+            status: "unavailable",
+            rewards: [],
+            titles: [],
+            reason,
+        };
     }
-    if (candidate.status !== "ok" || !Array.isArray(candidate.titles)) {
-        return { status: "unavailable", titles: [], reason: "provider-error" };
+    if (candidate.status !== "ok" || !Array.isArray(candidate.rewards)) {
+        return {
+            status: "unavailable",
+            rewards: [],
+            titles: [],
+            reason: "provider-error",
+        };
     }
 
-    const titles = [
-        ...new Set(
-            candidate.titles
-                .filter((title): title is string => typeof title === "string")
-                .map((title) => title.trim())
-                .filter(Boolean)
-        ),
-    ];
-    return titles.length
-        ? { status: "ready", titles }
-        : { status: "empty", titles: [] };
+    const rewards = normalizeRewardOptions(candidate.rewards);
+    const titles = rewardTitlesFromOptions(rewards);
+    return rewards.length
+        ? { status: "ready", rewards, titles }
+        : { status: "empty", rewards: [], titles: [] };
 }
 
 /**

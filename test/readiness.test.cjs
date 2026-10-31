@@ -333,6 +333,9 @@ function twitchHarness(options = {}) {
             "@/core/commands/songRequest": {
                 executeSongRequest: async () => {},
             },
+            "@/shared/rewards/rewardTitles": {
+                rewardMatchesConfigured: () => false,
+            },
             "@/shared/utils/windowSend": {
                 sendToWindowIfAlive: (_window, channel) => {
                     sent.push(channel);

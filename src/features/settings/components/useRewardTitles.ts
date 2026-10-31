@@ -10,7 +10,11 @@ const CHANNELS: Record<RewardPlatform, string> = {
     twitch: "twitch:listRewardTitles",
 };
 
-const LOADING: RewardPickerState = { status: "loading", titles: [] };
+const LOADING: RewardPickerState = {
+    status: "loading",
+    rewards: [],
+    titles: [],
+};
 
 /**
  * Reads one platform's reward titles through the main process. The two
@@ -22,7 +26,11 @@ export function useRewardTitles(platform: RewardPlatform) {
 
     const reload = useCallback(async () => {
         const id = ++requestId.current;
-        setState((current) => ({ status: "loading", titles: current.titles }));
+        setState((current) => ({
+            status: "loading",
+            rewards: current.rewards,
+            titles: current.titles,
+        }));
         try {
             const result = await window.electronAPI.invoke(CHANNELS[platform]);
             if (id === requestId.current) setState(toRewardPickerState(result));
@@ -30,6 +38,7 @@ export function useRewardTitles(platform: RewardPlatform) {
             if (id === requestId.current) {
                 setState({
                     status: "unavailable",
+                    rewards: [],
                     titles: [],
                     reason: "provider-error",
                 });

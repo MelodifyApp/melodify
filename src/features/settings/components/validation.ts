@@ -244,6 +244,8 @@ export const validateField = (
             break;
         case "rewardTitle":
         case "twitchRewardTitle":
+        case "rewardId":
+        case "twitchRewardId":
             if (typeof value === "string" && value) {
                 return null;
             }

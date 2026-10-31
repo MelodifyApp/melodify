@@ -1,6 +1,7 @@
 import {
-    mapRewardTitles,
+    mapRewardOptions,
     rewardFailureReason,
+    rewardTitlesFromOptions,
     unavailableRewardTitles,
     type RewardFetch,
     type RewardTitlesResult,
@@ -19,7 +20,7 @@ export interface TwitchRewardRequest {
 /**
  * Reads the broadcaster's custom rewards with the existing
  * `channel:read:redemptions` user token. Read-only: no create, update or
- * delete calls are made, and only titles leave this function.
+ * delete calls are made, and only reward IDs/titles leave this function.
  */
 export async function fetchTwitchRewardTitles(
     input: TwitchRewardRequest
@@ -41,7 +42,12 @@ export async function fetchTwitchRewardTitles(
                 rewardFailureReason(response.status)
             );
         }
-        return { status: "ok", titles: mapRewardTitles(await response.json()) };
+        const rewards = mapRewardOptions(await response.json());
+        return {
+            status: "ok",
+            rewards,
+            titles: rewardTitlesFromOptions(rewards),
+        };
     } catch {
         return unavailableRewardTitles("provider-error");
     }

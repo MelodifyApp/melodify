@@ -356,8 +356,9 @@ test("Home renders a real latest-request summary and a connections rail", () => 
     assert.match(html, /home\.noRequestsYet/);
     assert.match(html, /home\.noRequestsCopy/);
     assert.match(html, /home\.queueTitle/);
-    assert.match(html, /home\.queueCount/);
-    assert.match(html, /home\.queueEmpty/);
+    assert.match(html, /home\.queueComingSoon/);
+    assert.match(html, /home\.queueComingSoonCopy/);
+    assert.doesNotMatch(html, /home\.queueCount|home\.queueEmpty/);
     assert.match(html, /home\.acceptedRequests/);
     assert.match(html, /home\.connections\.title/);
     assert.match(html, /home\.connections\.music/);
@@ -419,8 +420,8 @@ test("Home connection labels exist in English and Turkish", () => {
         "home.acceptedRequests",
         "home.requestSummary",
         "home.queueTitle",
-        "home.queueCount",
-        "home.queueEmpty",
+        "home.queueComingSoon",
+        "home.queueComingSoonCopy",
         "home.acceptedRequestsLabel",
         "home.lastRequest",
         "home.requestSource",
@@ -465,4 +466,13 @@ test("Home connection labels exist in English and Turkish", () => {
         assert.equal(typeof read(en, key), "string", `en missing ${key}`);
         assert.equal(typeof read(tr, key), "string", `tr missing ${key}`);
     }
+});
+
+test("Home queue presents a localized Coming soon state without a fake count", () => {
+    assert.equal(en.home.queueComingSoon, "Coming soon");
+    assert.equal(tr.home.queueComingSoon, "Yakında");
+    assert.match(en.home.queueComingSoonCopy, /future update/i);
+    assert.match(tr.home.queueComingSoonCopy, /gelecekteki bir güncellemeyle/i);
+    assert.equal("queueCount" in en.home, false);
+    assert.equal("queueEmpty" in en.home, false);
 });
