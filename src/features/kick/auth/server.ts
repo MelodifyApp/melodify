@@ -1,6 +1,5 @@
 import express from "express";
 import { BrowserWindow, shell, ipcMain } from "electron";
-import { randomUUID } from "node:crypto";
 import {
     generateCodeChallenge,
     generateCodeVerifier,
@@ -13,6 +12,7 @@ import { redactSecrets } from "@/core/logging/utils";
 import { kickClient } from "@/features/kick/api/client";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { loopbackHostForRedirect } from "@/shared/utils/loopbackHost";
+import { oauthFlows } from "@/shared/utils/oauthFlowStore";
 
 const redirectUri =
     Config.get("kickRedirectUri") || "http://localhost:8889/callback";
@@ -20,7 +20,6 @@ const port = 8889;
 
 let serverInstance: Server | null = null;
 let serverStarting = false;
-let expectedOAuthState: string | null = null;
 let authGeneration = 0;
 
 export async function startKickAuthServer(
@@ -36,28 +35,21 @@ export async function startKickAuthServer(
 
     serverStarting = true;
     authGeneration += 1;
+    oauthFlows.cancel("kick");
 
     const app = express();
 
     return new Promise((resolve, reject) => {
         app.get("/callback", async (req, res) => {
-            const expectedState = expectedOAuthState;
-            expectedOAuthState = null;
-            if (!expectedState || req.query.state !== expectedState) {
+            const flow = oauthFlows.take("kick", req.query.state);
+            if (flow === "missing" || flow === "mismatch" || flow === "expired") {
                 logError(
-                    "Kick auth callback rejected: OAuth state mismatch",
+                    `Kick auth callback rejected: OAuth flow ${flow}`,
                     "kickAuthServer:callback"
                 );
                 res.status(400).send(
-                    "❌ Authentication failed: invalid OAuth state"
+                    "❌ Authentication failed: invalid or expired OAuth state"
                 );
-                sendToWindowIfAlive(window, "kick:authenticationFailed");
-                ipcMain.emit("kick:authComplete");
-                if (serverInstance) {
-                    serverInstance.close();
-                    serverInstance = null;
-                }
-                serverStarting = false;
                 return;
             }
 
@@ -85,7 +77,7 @@ export async function startKickAuthServer(
             }
 
             try {
-                const codeVerifier = Config.get("codeVerifier");
+                const codeVerifier = flow.flow.codeVerifier;
                 if (!codeVerifier) {
                     throw new Error("Missing code verifier");
                 }
@@ -237,14 +229,12 @@ export async function startKickAuthServer(
 
 export function openKickAuthUrl() {
     const codeVerifier = generateCodeVerifier();
+    const flow = oauthFlows.begin("kick", { codeVerifier });
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const scopes = "chat:write user:read channel:read channel:rewards:read";
 
-    Config.set({ codeVerifier });
-
     const kickClientId = Config.get("kickClientId");
-    expectedOAuthState = randomUUID();
-    const state = expectedOAuthState;
+    const state = flow.state;
 
     const url =
         `https://id.kick.com/oauth/authorize?` +
@@ -260,7 +250,7 @@ export function openKickAuthUrl() {
 }
 
 export function stopKickAuthServer(): void {
-    expectedOAuthState = null;
+    oauthFlows.cancel("kick");
     authGeneration += 1;
     if (serverInstance) {
         logInfo("Stopping Kick auth server");

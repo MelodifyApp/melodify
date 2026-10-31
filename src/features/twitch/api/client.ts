@@ -49,6 +49,12 @@ class TwitchClient {
             twitchAccessToken: undefined,
             twitchRefreshToken: undefined,
             twitchExpiresAt: undefined,
+            // A token invalidation ends this account's identity too. Keeping a
+            // stale broadcaster ID would make a later different-account login
+            // silently reuse the old broadcaster.
+            twitchUsername: undefined,
+            twitchUserId: undefined,
+            twitchBotUserId: undefined,
         });
     }
 

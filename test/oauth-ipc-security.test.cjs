@@ -87,6 +87,8 @@ function kickAuthHarness() {
         kickRedirectUri: "http://localhost:8889/callback",
         codeVerifier: "verifier",
     };
+    const { createOAuthFlowStore } = require("../src/shared/utils/oauthFlowStore");
+    const flowStore = createOAuthFlowStore();
     const capture = {
         url: null,
         exchange: [],
@@ -119,6 +121,7 @@ function kickAuthHarness() {
             generateCodeVerifier: () => "verifier",
             generateCodeChallenge: () => "challenge",
         },
+        "@/shared/utils/oauthFlowStore": { oauthFlows: flowStore },
         "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/kick/chat/listener": { listenToChat() {} },
         "@/features/kick/api/client": { kickClient: client },
@@ -138,6 +141,8 @@ function twitchAuthHarness(options = {}) {
         twitchClientSecret: "client-secret",
         codeVerifier: "verifier",
     };
+    const { createOAuthFlowStore } = require("../src/shared/utils/oauthFlowStore");
+    const flowStore = createOAuthFlowStore();
     const capture = {
         url: null,
         updates: [],
@@ -181,6 +186,7 @@ function twitchAuthHarness(options = {}) {
             generateCodeVerifier: () => "verifier",
             generateCodeChallenge: () => "challenge",
         },
+        "@/shared/utils/oauthFlowStore": { oauthFlows: flowStore },
         "@/shared/constants": { TWITCH_REDIRECT_URI: "http://localhost:8890/callback" },
         "@/shared/utils/loopbackHost": require("../src/shared/utils/loopbackHost"),
         "@/features/twitch/chat/listener": { listenToChat() {} },
@@ -228,7 +234,7 @@ function spotifyAuthHarness(options = {}) {
         getMe: async () => ({ body: { display_name: "sample" } }),
     };
     const stubs = {
-        express: expressStub(capture, { invokeListenCallback: false }),
+        express: expressStub(capture),
         electron: { BrowserWindow: {} },
         "@/core/config": { __esModule: true, default: configStub(values) },
         "@/core/logging": { logInfo() {}, logError() {}, logWarn() {}, logDebug() {} },
@@ -316,25 +322,25 @@ test("Twitch callback accepts the matching OAuth state", async () => {
     }
 });
 
-test("Spotify callback rejects a mismatched OAuth state before the grant", () => {
+test("Spotify callback rejects a mismatched OAuth state before the grant", async () => {
     const harness = spotifyAuthHarness();
-    const state = harness.startSpotifyAuthServer({});
+    const state = await harness.startSpotifyAuthServer({});
     assert.equal(typeof state, "string", "server must return the expected state");
 
     const res = response();
-    return harness.capture.handler(
+    await harness.capture.handler(
         { query: { code: "code", state: "attacker-state" } },
         res
-    ).then(() => {
-        assert.equal(res.statusCode, 400);
-        assert.equal(harness.capture.grants.length, 0);
-    });
+    );
+    assert.equal(res.statusCode, 400);
+    assert.equal(harness.capture.grants.length, 0);
 });
 
-test("Spotify auth start is idempotent while a server is already running", () => {
+test("Spotify auth start is idempotent while a server is already running", async () => {
     const harness = spotifyAuthHarness();
-    harness.startSpotifyAuthServer({});
-    harness.startSpotifyAuthServer({});
+    await harness.startSpotifyAuthServer({});
+    const second = await harness.startSpotifyAuthServer({});
+    assert.equal(second, null);
     assert.equal(harness.capture.listenCalls, 1);
 });
 
@@ -352,7 +358,7 @@ test("callback servers bind to the loopback host from their redirect URI", async
     }
 
     const spotify = spotifyAuthHarness();
-    spotify.startSpotifyAuthServer({});
+    await spotify.startSpotifyAuthServer({});
     assert.equal(spotify.capture.hosts[0], "127.0.0.1");
 });
 
@@ -417,7 +423,7 @@ test("Twitch callback completing after logout cannot save or announce authentica
 test("Spotify callback completing after logout cannot save or announce authentication", async () => {
     const gate = deferred();
     const harness = spotifyAuthHarness({ grantGate: gate });
-    const state = harness.startSpotifyAuthServer({});
+    const state = await harness.startSpotifyAuthServer({});
 
     const res = response();
     const callback = harness.capture.handler(

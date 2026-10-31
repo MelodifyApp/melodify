@@ -37,7 +37,6 @@ interface AppConfig {
     twitchExpiresAt?: number;
 
     // Common
-    codeVerifier?: string;
     username?: string;
     userId?: string;
     chatroomId?: string;

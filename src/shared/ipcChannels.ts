@@ -116,6 +116,7 @@ export const LISTEN_CHANNELS: readonly string[] = Object.freeze([
     "tray:debug",
     // Spotify
     "spotify:authenticated",
+    "spotify:authState",
     // Kick
     "kick:authenticated",
     "kick:chatConnected",

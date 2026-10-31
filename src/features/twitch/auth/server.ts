@@ -1,6 +1,5 @@
 import express from "express";
 import { BrowserWindow, shell, ipcMain } from "electron";
-import { randomUUID } from "node:crypto";
 import {
     generateCodeChallenge,
     generateCodeVerifier,
@@ -14,12 +13,12 @@ import { twitchClient } from "@/features/twitch/api/client";
 import { TWITCH_REDIRECT_URI } from "@/shared/constants";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { loopbackHostForRedirect } from "@/shared/utils/loopbackHost";
+import { oauthFlows } from "@/shared/utils/oauthFlowStore";
 
 const port = 8890;
 
 let serverInstance: Server | null = null;
 let serverStarting = false;
-let expectedOAuthState: string | null = null;
 let authGeneration = 0;
 
 export async function startTwitchAuthServer(
@@ -38,28 +37,21 @@ export async function startTwitchAuthServer(
 
     serverStarting = true;
     authGeneration += 1;
+    oauthFlows.cancel("twitch");
 
     const app = express();
 
     return new Promise((resolve, reject) => {
         app.get("/callback", async (req, res) => {
-            const expectedState = expectedOAuthState;
-            expectedOAuthState = null;
-            if (!expectedState || req.query.state !== expectedState) {
+            const flow = oauthFlows.take("twitch", req.query.state);
+            if (flow === "missing" || flow === "mismatch" || flow === "expired") {
                 logError(
-                    "Twitch auth callback rejected: OAuth state mismatch",
+                    `Twitch auth callback rejected: OAuth flow ${flow}`,
                     "twitchAuthServer:callback"
                 );
                 res.status(400).send(
-                    "❌ Authentication failed: invalid OAuth state"
+                    "❌ Authentication failed: invalid or expired OAuth state"
                 );
-                sendToWindowIfAlive(window, "twitch:authenticationFailed");
-                ipcMain.emit("twitch:authComplete");
-                if (serverInstance) {
-                    serverInstance.close();
-                    serverInstance = null;
-                }
-                serverStarting = false;
                 return;
             }
 
@@ -93,7 +85,7 @@ export async function startTwitchAuthServer(
             try {
                 const clientId = Config.get("twitchClientId");
                 const clientSecret = Config.get("twitchClientSecret");
-                const codeVerifier = Config.get("codeVerifier");
+                const codeVerifier = flow.flow.codeVerifier;
 
                 if (!clientId || !clientSecret) {
                     throw new Error("Missing Twitch client ID or secret");
@@ -185,10 +177,9 @@ export async function startTwitchAuthServer(
                 const botUserId = user.id;
                 const twitchUsername = user.login;
 
-                // Bot user ID is the authenticated user (the one logging in)
-                // Broadcaster user ID defaults to the same user, but can be different if configured
-                const broadcasterUserId =
-                    Config.get("twitchUserId") || botUserId;
+                // The authenticated account is the broadcaster for this login.
+                // Never reuse a previous account's stale broadcaster identity.
+                const broadcasterUserId = botUserId;
 
                 Config.set({
                     twitchBotUserId: botUserId,
@@ -273,15 +264,13 @@ export async function startTwitchAuthServer(
 
 export function openTwitchAuthUrl() {
     const codeVerifier = generateCodeVerifier();
+    const flow = oauthFlows.begin("twitch", { codeVerifier });
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const scopes =
         "user:bot user:read:chat user:write:chat channel:read:subscriptions channel:read:redemptions";
 
-    Config.set({ codeVerifier });
-
     const twitchClientId = Config.get("twitchClientId");
-    expectedOAuthState = randomUUID();
-    const state = expectedOAuthState;
+    const state = flow.state;
 
     const url =
         `https://id.twitch.tv/oauth2/authorize?` +
@@ -297,7 +286,7 @@ export function openTwitchAuthUrl() {
 }
 
 export function stopTwitchAuthServer(): void {
-    expectedOAuthState = null;
+    oauthFlows.cancel("twitch");
     authGeneration += 1;
     if (serverInstance) {
         logInfo("Stopping Twitch auth server");

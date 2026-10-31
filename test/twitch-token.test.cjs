@@ -8,6 +8,7 @@ function fixture() {
         twitchClientId: "test-id", twitchClientSecret: "test-secret",
         twitchAccessToken: "expired-access", twitchRefreshToken: "saved-refresh",
         twitchExpiresAt: Date.now() - 1000, twitchUsername: "sample-streamer",
+        twitchUserId: "old-broadcaster", twitchBotUserId: "old-bot",
     };
     const calls = [];
     const writes = [];
@@ -114,6 +115,9 @@ test("explicitly invalid refresh token clears tokens and requires sign-in", asyn
     assert.deepEqual(await f.handlers.get("twitch:checkAuth")({ sender: {} }), { authenticated: false });
     assert.equal(f.values.twitchRefreshToken, undefined);
     assert.equal(f.values.twitchAccessToken, undefined);
+    assert.equal(f.values.twitchUserId, undefined);
+    assert.equal(f.values.twitchBotUserId, undefined);
+    assert.equal(f.values.twitchUsername, undefined);
     assert.equal(f.chat.started, 0);
 });
 

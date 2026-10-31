@@ -17,7 +17,7 @@ import { verifyAppCredentials } from "../../../shared/utils/credentialVerificati
 
 const execAsync = promisify(exec);
 
-ipcMain.on("spotify:auth", (event) => {
+ipcMain.on("spotify:auth", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     logDebug("IPC spotify:auth", redactSecrets({ sender: !!event.sender }));
     if (!window) {
@@ -36,14 +36,19 @@ ipcMain.on("spotify:auth", (event) => {
         return;
     }
 
-    const state = startSpotifyAuthServer(window);
-    if (!state) {
-        return;
-    }
+    try {
+        // Do not open the browser until listen() has bound the callback port.
+        const state = await startSpotifyAuthServer(window);
+        if (!state) {
+            return;
+        }
 
-    const authURL = spotifyApi.createAuthorizeURL(scopes, state);
-    logDebug("Opening Spotify auth URL", redactSecrets({ authURL }));
-    shell.openExternal(authURL);
+        const authURL = spotifyApi.createAuthorizeURL(scopes, state);
+        logDebug("Opening Spotify auth URL", redactSecrets({ authURL }));
+        shell.openExternal(authURL);
+    } catch (error) {
+        logError(error, "spotify:auth");
+    }
 });
 
 ipcMain.handle("spotify:getUserData", async () => {
