@@ -63,6 +63,42 @@ try {
 const manager = {
     checkGlobalCooldown: () => false,
     checkUserCooldown: () => false,
+    reserveSongRequestAdmission(username) {
+        const globalBlocked = this.checkGlobalCooldown();
+        const userBlocked = this.checkUserCooldown(username);
+        if (globalBlocked || userBlocked) {
+            let remainingTime = 0;
+            if (globalBlocked) {
+                remainingTime = Math.max(
+                    remainingTime,
+                    this.getRemainingCooldownTime(this.getGlobalCooldownEnd())
+                );
+            }
+            if (userBlocked) {
+                remainingTime = Math.max(
+                    remainingTime,
+                    this.getRemainingCooldownTime(
+                        this.getUserCooldownEnd(username)
+                    )
+                );
+            }
+            return {
+                admitted: false,
+                remainingTime,
+                commit() {},
+                release() {},
+            };
+        }
+        return {
+            admitted: true,
+            remainingTime: 0,
+            commit: () => {
+                this.setGlobalCooldown();
+                this.setUserCooldown(username);
+            },
+            release() {},
+        };
+    },
     setGlobalCooldown() { effects.globalCooldown++; },
     setUserCooldown() { effects.userCooldown++; },
 };

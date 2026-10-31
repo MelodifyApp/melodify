@@ -8,7 +8,12 @@ import {
     type SongRequestFailureReason,
     type SongRequestOutcome,
 } from "../../shared/songRequestOutcome";
-import { type CommandContext, type CommandManager, isModerator } from "./manager";
+import {
+    type CommandContext,
+    type CommandManager,
+    type SongRequestAdmission,
+    isModerator,
+} from "./manager";
 
 function formatTemplate(
     template: string,
@@ -93,53 +98,30 @@ export async function executeSongRequest(
         }
     }
 
-    let longestRemainingTime = 0;
-    let isOnCooldown = false;
-
-    if (commandManager && commandManager.checkGlobalCooldown()) {
-        const globalRemainingTime = commandManager.getRemainingCooldownTime(
-            commandManager.getGlobalCooldownEnd()
-        );
-        longestRemainingTime = Math.max(
-            longestRemainingTime,
-            globalRemainingTime
-        );
-        isOnCooldown = true;
-    }
-
-    if (commandManager && commandManager.checkUserCooldown(ctx.username)) {
-        const userCooldownEnd = commandManager.getUserCooldownEnd(ctx.username);
-        if (userCooldownEnd) {
-            const userRemainingTime = commandManager.getRemainingCooldownTime(
-                userCooldownEnd
-            );
-            longestRemainingTime = Math.max(
-                longestRemainingTime,
-                userRemainingTime
-            );
-            isOnCooldown = true;
+    let admission: SongRequestAdmission | undefined;
+    if (commandManager) {
+        admission = commandManager.reserveSongRequestAdmission(ctx.username);
+        if (!admission.admitted) {
+            let cooldownMessage = songRequestErrorMessage("cooldown");
+            if (Config.get("replyOnCooldown") && sendReply) {
+                cooldownMessage = formatTemplate(
+                    Config.get("cooldownMessageTemplate") ||
+                        "Please wait {time} seconds before requesting another song.",
+                    { time: admission.remainingTime }
+                );
+            }
+            // Enforce and record the cooldown even when chat notifications are
+            // disabled/unavailable or the reply transport fails.
+            const result = reject("cooldown", cooldownMessage);
+            if (Config.get("replyOnCooldown") && sendReply) {
+                await sendReply(`@${ctx.username} ${cooldownMessage}`);
+            }
+            return result;
         }
-    }
-
-    if (isOnCooldown) {
-        let cooldownMessage = songRequestErrorMessage("cooldown");
-        if (Config.get("replyOnCooldown") && sendReply) {
-            cooldownMessage = formatTemplate(
-                Config.get("cooldownMessageTemplate") ||
-                    "Please wait {time} seconds before requesting another song.",
-                { time: longestRemainingTime }
-            );
-        }
-        // Enforce and record the cooldown even when chat notifications are
-        // disabled/unavailable or the reply transport fails.
-        const result = reject("cooldown", cooldownMessage);
-        if (Config.get("replyOnCooldown") && sendReply) {
-            await sendReply(`@${ctx.username} ${cooldownMessage}`);
-        }
-        return result;
     }
 
     if (!query) {
+        admission?.release();
         const result = reject("empty-query");
         if (Config.get("replyOnSongRequestError") && sendReply) {
             await sendReply(
@@ -154,6 +136,7 @@ export async function executeSongRequest(
         playbackOutcome = await playSong(query, ctx.username);
     } catch (error) {
         logError(error, "songRequest:playSong");
+        admission?.release();
         playbackOutcome = {
             status: "failure" as const,
             reason: "unknown" as const,
@@ -162,6 +145,7 @@ export async function executeSongRequest(
     }
 
     if (playbackOutcome.status === "failure") {
+        admission?.release();
         const result = reject(
             playbackOutcome.reason,
             playbackOutcome.error
@@ -179,11 +163,7 @@ export async function executeSongRequest(
 
     const songInfo = playbackOutcome.song;
 
-    if (commandManager) {
-        commandManager.setGlobalCooldown();
-        commandManager.setUserCooldown(ctx.username);
-    }
-
+    admission?.commit();
     logSongRequest(songInfo.title, songInfo.artist, ctx.username);
     incrementSongRequestCount(songInfo);
 

@@ -602,6 +602,7 @@ function spotifyIpcHarness() {
             checkSpotifyAccessToken: async () => true,
             startSpotifyTokenRefreshInterval: async () => {},
             stopSpotifyTokenAutoRefresh() {},
+            resetSpotifyApi() {},
         },
         "@/features/spotify/auth/server": {
             startSpotifyAuthServer: () => "state",

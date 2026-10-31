@@ -25,9 +25,20 @@ import {
 import { verifyAppCredentials } from "../../../shared/utils/credentialVerification";
 
 let authInProgress = false;
+// Bumped on explicit logout and auth completion. Async identity/chat/timer
+// continuations capture this value and abandon their work if it changed.
+let kickSessionEpoch = 0;
 
 function resetAuthState() {
     authInProgress = false;
+}
+
+function currentKickSessionEpoch(): number {
+    return kickSessionEpoch;
+}
+
+function isCurrentKickSession(epoch: number): boolean {
+    return epoch === kickSessionEpoch;
 }
 
 /**
@@ -77,6 +88,7 @@ ipcMain.on("kick:auth", async (event) => {
 // Handler for auth completion notification from auth server
 ipcMain.on("kick:authComplete", () => {
     logDebug("Auth completion notification received");
+    kickSessionEpoch += 1;
     resetAuthState();
 });
 
@@ -100,8 +112,23 @@ ipcMain.handle("kick:findChatroom", async (event, data: unknown) => {
         return null;
     }
 
+    const epoch = currentKickSessionEpoch();
     const chatroomResult = await kickClient.findChatroom(username);
+    if (!isCurrentKickSession(epoch)) {
+        logDebug(
+            "Ignored late kick:findChatroom result after session change",
+            "kick:findChatroom"
+        );
+        return null;
+    }
     const userProfileResult = await kickClient.getUserProfile(username);
+    if (!isCurrentKickSession(epoch)) {
+        logDebug(
+            "Ignored late kick:findChatroom profile after session change",
+            "kick:findChatroom"
+        );
+        return null;
+    }
 
     if (!userProfileResult) {
         logError("Failed to fetch user profile", "kick:findChatroom");
@@ -114,6 +141,9 @@ ipcMain.handle("kick:findChatroom", async (event, data: unknown) => {
     }
 
     const { chatroomId } = chatroomResult;
+    if (!isCurrentKickSession(epoch)) {
+        return null;
+    }
     Config.set({ username, chatroomId, userId: userId.toString() });
     logInfo(
         "kick:findChatroom set config",
@@ -141,6 +171,7 @@ ipcMain.on("kick:sendMessage", async (event, message: unknown) => {
 
 ipcMain.handle("kick:checkAuth", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
+    const epoch = currentKickSessionEpoch();
 
     if (!kickClient.hasTokens()) {
         handleKickAuthUnavailable("No Kick OAuth tokens");
@@ -152,13 +183,26 @@ ipcMain.handle("kick:checkAuth", async (event) => {
         handleKickAuthUnavailable("Kick OAuth token refresh failed");
         return { authenticated: false };
     }
+    if (!isCurrentKickSession(epoch)) {
+        return { authenticated: false };
+    }
 
     try {
         const channels = await kickClient.getChannels();
+        if (!isCurrentKickSession(epoch)) {
+            logDebug(
+                "Ignored late kick:checkAuth channels after session change",
+                "kick:checkAuth"
+            );
+            return { authenticated: false };
+        }
         const username = channels[0]?.slug || "";
         const userId = channels[0]?.broadcaster_user_id;
 
         if (username) {
+            if (!isCurrentKickSession(epoch)) {
+                return { authenticated: false };
+            }
             Config.set({
                 username,
                 userId: userId ? userId.toString() : undefined,
@@ -168,18 +212,31 @@ ipcMain.handle("kick:checkAuth", async (event) => {
         let chatroomId = Config.get("chatroomId");
         if (!chatroomId && username) {
             const chatroomResult = await kickClient.findChatroom(username);
+            if (!isCurrentKickSession(epoch)) {
+                logDebug(
+                    "Ignored late kick:checkAuth chatroom after session change",
+                    "kick:checkAuth"
+                );
+                return { authenticated: false };
+            }
             if (chatroomResult?.chatroomId) {
                 chatroomId = chatroomResult.chatroomId;
                 Config.set({ chatroomId });
             }
         }
 
+        if (!isCurrentKickSession(epoch)) {
+            return { authenticated: false };
+        }
         if (chatroomId) {
             listenToChat(window ?? undefined);
         } else {
             stopListeningToChat(window ?? undefined);
         }
 
+        if (!isCurrentKickSession(epoch)) {
+            return { authenticated: false };
+        }
         startKickTokenAutoRefresh(window ?? undefined);
         return { authenticated: true, username };
     } catch (error) {
@@ -192,6 +249,7 @@ ipcMain.handle("kick:checkAuth", async (event) => {
 ipcMain.handle("kick:retryChat", async (event) => {
     logInfo("IPC kick:retryChat called");
     const window = BrowserWindow.fromWebContents(event.sender);
+    const epoch = currentKickSessionEpoch();
 
     if (!kickClient.hasTokens()) {
         handleKickAuthUnavailable("No Kick OAuth tokens");
@@ -203,10 +261,16 @@ ipcMain.handle("kick:retryChat", async (event) => {
         handleKickAuthUnavailable("Kick OAuth token refresh failed");
         return { authenticated: false };
     }
+    if (!isCurrentKickSession(epoch)) {
+        return { authenticated: false };
+    }
 
     let username = Config.get("username") || "";
     if (!username) {
         const channels = await kickClient.getChannels();
+        if (!isCurrentKickSession(epoch)) {
+            return { authenticated: false };
+        }
         username = channels[0]?.slug || "";
         const userId = channels[0]?.broadcaster_user_id;
         if (username) {
@@ -220,15 +284,24 @@ ipcMain.handle("kick:retryChat", async (event) => {
     let chatroomId = Config.get("chatroomId");
     if (!chatroomId && username) {
         const chatroomResult = await kickClient.findChatroom(username);
+        if (!isCurrentKickSession(epoch)) {
+            return { authenticated: false };
+        }
         if (chatroomResult?.chatroomId) {
             chatroomId = chatroomResult.chatroomId;
             Config.set({ chatroomId });
         }
     }
 
+    if (!isCurrentKickSession(epoch)) {
+        return { authenticated: false };
+    }
     stopListeningToChat(window ?? undefined);
     if (chatroomId) {
         listenToChat(window ?? undefined);
+    }
+    if (!isCurrentKickSession(epoch)) {
+        return { authenticated: false };
     }
     startKickTokenAutoRefresh(window ?? undefined);
 
@@ -237,6 +310,7 @@ ipcMain.handle("kick:retryChat", async (event) => {
 
 ipcMain.on("kick:logout", (event) => {
     logInfo("IPC kick:logout called");
+    kickSessionEpoch += 1;
     const window = BrowserWindow.fromWebContents(event.sender);
 
     // Stop all Kick-related services

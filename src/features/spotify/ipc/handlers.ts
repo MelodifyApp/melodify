@@ -8,6 +8,7 @@ import {
     startSpotifyTokenRefreshInterval,
     stopSpotifyTokenAutoRefresh,
     startSongFileSaving,
+    resetSpotifyApi,
 } from "@/features/spotify/playback/player";
 import { startSpotifyAuthServer, stopSpotifyAuthServer } from "@/features/spotify/auth/server";
 import { exec } from "child_process";
@@ -105,14 +106,15 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
 ipcMain.on("spotify:logout", () => {
     stopSpotifyAuthServer();
     stopSpotifyTokenAutoRefresh();
-    const spotifyApi = getSpotifyApi();
     Config.set({
         spotifyAccessToken: undefined,
         spotifyRefreshToken: undefined,
         spotifyExpiresAt: undefined,
     });
-    spotifyApi.setAccessToken("");
-    spotifyApi.setRefreshToken("");
+    // Invalidate the player-level refresh generation and discard the cached
+    // client. A provider response that was already in flight must not restore
+    // the cleared session or report success.
+    resetSpotifyApi();
     logInfo("spotify:logout called");
 });
 

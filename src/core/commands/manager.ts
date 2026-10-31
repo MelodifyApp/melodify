@@ -42,6 +42,13 @@ interface SavedCommandConfig {
     aliases?: string[];
 }
 
+export interface SongRequestAdmission {
+    admitted: boolean;
+    remainingTime: number;
+    commit(): void;
+    release(): void;
+}
+
 /**
  * Persistent command config can be corrupted by hand-editing. Accept only
  * well-typed values so registration never throws or registers junk aliases.
@@ -96,6 +103,11 @@ export class CommandManager {
     // Cooldown tracking - prevents command spam
     private globalCooldownEnd = 0;
     private userCooldowns: Map<string, number> = new Map(); // username -> cooldown end time
+    // Admissions are reserved synchronously before the provider await. A
+    // reservation blocks a concurrent request even before cooldown timestamps
+    // are committed on success.
+    private activeGlobalAdmission: symbol | null = null;
+    private activeUserAdmissions: Map<string, symbol> = new Map();
 
     // Performance tracking
     private performanceStats: Map<
@@ -533,6 +545,118 @@ export class CommandManager {
     }
 
     // Cooldown management methods
+    /**
+     * Synchronously reserve one song-request admission. The caller must
+     * commit after queue success or release on every failure path.
+     */
+    public reserveSongRequestAdmission(username: string): SongRequestAdmission {
+        const userKey = username.toLowerCase();
+        const globalEnabled = Boolean(Config.get("globalCooldownEnabled"));
+        const userEnabled = Boolean(Config.get("perUserCooldownEnabled"));
+        let blocked = false;
+        let remainingTime = 0;
+
+        if (globalEnabled) {
+            if (this.activeGlobalAdmission !== null) {
+                blocked = true;
+                remainingTime = Math.max(
+                    remainingTime,
+                    this.configuredCooldownSeconds("globalCooldownSeconds", 30)
+                );
+            } else if (this.checkGlobalCooldown()) {
+                blocked = true;
+                remainingTime = Math.max(
+                    remainingTime,
+                    this.getRemainingCooldownTime(this.globalCooldownEnd)
+                );
+            }
+        }
+
+        if (userEnabled) {
+            if (this.activeUserAdmissions.has(userKey)) {
+                blocked = true;
+                remainingTime = Math.max(
+                    remainingTime,
+                    this.configuredCooldownSeconds(
+                        "perUserCooldownSeconds",
+                        60
+                    )
+                );
+            } else if (this.checkUserCooldown(username)) {
+                const userCooldownEnd =
+                    this.getUserCooldownEnd(username);
+                if (userCooldownEnd) {
+                    remainingTime = Math.max(
+                        remainingTime,
+                        this.getRemainingCooldownTime(userCooldownEnd)
+                    );
+                }
+                blocked = true;
+            }
+        }
+
+        if (blocked) {
+            return {
+                admitted: false,
+                remainingTime,
+                commit: () => undefined,
+                release: () => undefined,
+            };
+        }
+
+        const token = Symbol("song-request-admission");
+        if (globalEnabled) this.activeGlobalAdmission = token;
+        if (userEnabled) this.activeUserAdmissions.set(userKey, token);
+        let settled = false;
+
+        return {
+            admitted: true,
+            remainingTime: 0,
+            commit: () => {
+                if (settled) return;
+                settled = true;
+                if (
+                    globalEnabled &&
+                    this.activeGlobalAdmission === token
+                ) {
+                    this.activeGlobalAdmission = null;
+                }
+                if (
+                    userEnabled &&
+                    this.activeUserAdmissions.get(userKey) === token
+                ) {
+                    this.activeUserAdmissions.delete(userKey);
+                }
+                this.setGlobalCooldown();
+                this.setUserCooldown(username);
+            },
+            release: () => {
+                if (settled) return;
+                settled = true;
+                if (
+                    globalEnabled &&
+                    this.activeGlobalAdmission === token
+                ) {
+                    this.activeGlobalAdmission = null;
+                }
+                if (
+                    userEnabled &&
+                    this.activeUserAdmissions.get(userKey) === token
+                ) {
+                    this.activeUserAdmissions.delete(userKey);
+                }
+            },
+        };
+    }
+
+    private configuredCooldownSeconds(
+        key: "globalCooldownSeconds" | "perUserCooldownSeconds",
+        fallback: number
+    ): number {
+        const parsed = parseInt(Config.get(key) || String(fallback));
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
     public checkGlobalCooldown(): boolean {
         const globalCooldownEnabled = Config.get("globalCooldownEnabled");
         if (!globalCooldownEnabled) return false;
