@@ -69,6 +69,12 @@ const SONG_REQUESTS_DIR = app
     ? path.join(userDataDirectory, "song-requests")
     : path.join(process.cwd(), "song-requests");
 
+// Per-file recovery state. A corrupt file is preserved next to the original;
+// if quarantine itself cannot be created, later writes use a recovered file
+// instead of silently overwriting the only copy.
+const historyPathOverrides = new Map<string, string>();
+let historyTempSequence = 0;
+
 /**
  * File naming strategy for organized log storage
  * Format: YYYY-MM-DD_sessionId.log for easy chronological sorting
@@ -240,6 +246,153 @@ function appendLogToFile(entry: LogEntry) {
     }
 }
 
+function activeHistoryPath(filePath: string): string {
+    return historyPathOverrides.get(filePath) ?? filePath;
+}
+
+function isSongRequestEntry(value: unknown): value is SongRequestEntry {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return false;
+    }
+    const entry = value as Record<string, unknown>;
+    return (
+        typeof entry.title === "string" &&
+        typeof entry.artist === "string" &&
+        typeof entry.requestedBy === "string" &&
+        typeof entry.timestamp === "number" &&
+        typeof entry.session === "string"
+    );
+}
+
+function nextQuarantinePath(filePath: string): string {
+    const directory = path.dirname(filePath);
+    const extension = path.extname(filePath);
+    const base = path.basename(filePath, extension);
+    let index = 0;
+    let candidate = "";
+    do {
+        const suffix =
+            index === 0 ? String(Date.now()) : `${Date.now()}-${index}`;
+        candidate = path.join(
+            directory,
+            `${base}.corrupt-${suffix}${extension}`
+        );
+        index += 1;
+    } while (fs.existsSync(candidate) && index < 1_000);
+    return candidate;
+}
+
+/**
+ * Preserves a corrupt history file beside the original and returns the path
+ * future writes should use. Rename is preferred; copy is the fallback when the
+ * original cannot be moved. If neither works, an alternate write path is used
+ * so the original corrupt bytes are never silently overwritten.
+ */
+function quarantineHistoryFile(
+    filePath: string,
+    context: "session" | "daily"
+): string {
+    const quarantinePath = nextQuarantinePath(filePath);
+    const details = {
+        file: path.basename(filePath),
+        quarantine: path.basename(quarantinePath),
+    };
+    try {
+        fs.renameSync(filePath, quarantinePath);
+        logWarn(`Quarantined corrupt ${context} history`, details);
+        return filePath;
+    } catch (renameError) {
+        try {
+            fs.copyFileSync(filePath, quarantinePath);
+            logWarn(`Quarantined corrupt ${context} history`, details);
+            return filePath;
+        } catch (copyError) {
+            const extension = path.extname(filePath);
+            const base = filePath.slice(0, filePath.length - extension.length);
+            const recoveredPath = `${base}.recovered-${Date.now()}${extension}`;
+            historyPathOverrides.set(filePath, recoveredPath);
+            logError(
+                copyError,
+                `Failed to quarantine corrupt ${context} history; preserved the original and using ${path.basename(recoveredPath)}`
+            );
+            return recoveredPath;
+        }
+    }
+}
+
+function readHistoryEntries(
+    filePath: string,
+    context: "session" | "daily"
+): SongRequestEntry[] {
+    const activePath = activeHistoryPath(filePath);
+    if (!fs.existsSync(activePath)) return [];
+    const raw = fs.readFileSync(activePath, "utf8");
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (error) {
+        logWarn(
+            `Corrupt ${context} history could not be parsed`,
+            { file: path.basename(activePath), error: "invalid-json" }
+        );
+        const writePath = quarantineHistoryFile(activePath, context);
+        if (writePath !== activePath) {
+            historyPathOverrides.set(filePath, writePath);
+        }
+        return [];
+    }
+    if (!Array.isArray(parsed) || !parsed.every(isSongRequestEntry)) {
+        logWarn(
+            `Corrupt ${context} history has an invalid shape`,
+            { file: path.basename(activePath), error: "invalid-shape" }
+        );
+        const writePath = quarantineHistoryFile(activePath, context);
+        if (writePath !== activePath) {
+            historyPathOverrides.set(filePath, writePath);
+        }
+        return [];
+    }
+    return parsed;
+}
+
+/** Write a complete JSON snapshot through a unique temp file + atomic rename. */
+function writeHistoryAtomic(
+    filePath: string,
+    entries: SongRequestEntry[]
+): void {
+    const directory = path.dirname(filePath);
+    if (!fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+    }
+    historyTempSequence += 1;
+    const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${historyTempSequence}`;
+    try {
+        fs.writeFileSync(tempPath, JSON.stringify(entries, null, 2), "utf8");
+        fs.renameSync(tempPath, filePath);
+    } catch (error) {
+        try {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch {
+            /* leave the orphan temp file rather than hiding the write error */
+        }
+        throw error;
+    }
+}
+
+function appendHistoryEntry(
+    filePath: string,
+    entry: SongRequestEntry,
+    context: "session" | "daily"
+): void {
+    try {
+        const entries = readHistoryEntries(filePath, context);
+        entries.push(entry);
+        writeHistoryAtomic(activeHistoryPath(filePath), entries);
+    } catch (error) {
+        logError(error, `Failed to save ${context} song request history`);
+    }
+}
+
 /**
  * Specialized song request logging system
  * Maintains separate tracking for music requests with dual storage:
@@ -268,65 +421,32 @@ export function logSongRequest(
         `Song request: ${title} by ${artist} (requested by ${requestedBy})`
     );
 
-    try {
-        // Ensure song requests directory exists
-        if (!fs.existsSync(SONG_REQUESTS_DIR)) {
-            fs.mkdirSync(SONG_REQUESTS_DIR, { recursive: true });
-        }
-
-        // Session-specific song request file
-        const sessionFilePath = getSongRequestsFilePath();
-        let sessionRequests: SongRequestEntry[] = [];
-        if (fs.existsSync(sessionFilePath)) {
-            const data = fs.readFileSync(sessionFilePath, "utf-8");
-            sessionRequests = JSON.parse(data);
-        }
-        sessionRequests.push(entry);
-        fs.writeFileSync(
-            sessionFilePath,
-            JSON.stringify(sessionRequests, null, 2)
-        );
-
-        // Daily aggregate file for cross-session analytics
-        const dailyFilePath = getDailySongRequestsFilePath();
-        let dailyRequests: SongRequestEntry[] = [];
-        if (fs.existsSync(dailyFilePath)) {
-            const data = fs.readFileSync(dailyFilePath, "utf-8");
-            dailyRequests = JSON.parse(data);
-        }
-        dailyRequests.push(entry);
-        fs.writeFileSync(dailyFilePath, JSON.stringify(dailyRequests, null, 2));
-    } catch (error) {
-        logError(error, "Failed to save song request");
-    }
+    // Each file owns its recovery/write outcome: a corrupt session file must
+    // not prevent the daily aggregate from being written, and vice versa.
+    appendHistoryEntry(getSongRequestsFilePath(), entry, "session");
+    appendHistoryEntry(getDailySongRequestsFilePath(), entry, "daily");
 }
 
 // Get song requests for a specific date
 export function getSongRequestsForDate(date: string): SongRequestEntry[] {
+    const dailyFile = path.join(SONG_REQUESTS_DIR, `${date}_daily.json`);
     try {
-        const dailyFile = path.join(SONG_REQUESTS_DIR, `${date}_daily.json`);
-        if (fs.existsSync(dailyFile)) {
-            const content = fs.readFileSync(dailyFile, "utf8");
-            return JSON.parse(content);
-        }
+        return readHistoryEntries(dailyFile, "daily");
     } catch (error) {
         logError(error, `Failed to get song requests for date ${date}`);
+        return [];
     }
-    return [];
 }
 
 // Get song requests for current session
 export function getSongRequestsForSession(): SongRequestEntry[] {
+    const sessionFile = getSongRequestsFilePath();
     try {
-        const sessionFile = getSongRequestsFilePath();
-        if (fs.existsSync(sessionFile)) {
-            const content = fs.readFileSync(sessionFile, "utf8");
-            return JSON.parse(content);
-        }
+        return readHistoryEntries(sessionFile, "session");
     } catch (error) {
         logError(error, "Failed to get song requests for current session");
+        return [];
     }
-    return [];
 }
 
 export function logInfo(message: string, meta?: any) {
