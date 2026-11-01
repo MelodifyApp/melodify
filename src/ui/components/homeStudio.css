@@ -21,7 +21,7 @@
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: 26px 28px;
     display: flex;
     flex-direction: column;
@@ -46,18 +46,21 @@
 }
 
 .studio-home-main::-webkit-scrollbar,
+.studio-home-queue-list::-webkit-scrollbar,
 .studio-home-rail::-webkit-scrollbar,
 .studio-home-dialog-body::-webkit-scrollbar {
     width: 8px;
 }
 
 .studio-home-main::-webkit-scrollbar-track,
+.studio-home-queue-list::-webkit-scrollbar-track,
 .studio-home-rail::-webkit-scrollbar-track,
 .studio-home-dialog-body::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .studio-home-main::-webkit-scrollbar-thumb,
+.studio-home-queue-list::-webkit-scrollbar-thumb,
 .studio-home-rail::-webkit-scrollbar-thumb,
 .studio-home-dialog-body::-webkit-scrollbar-thumb {
     background-color: var(--studio-control-line);
@@ -77,6 +80,7 @@
 }
 
 .studio-home-now-playing {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 18px;
@@ -177,7 +181,9 @@
 .studio-home-queue {
     display: flex;
     flex-direction: column;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
     padding: 18px;
     border: 1px solid var(--studio-line);
     border-radius: 12px;
@@ -190,6 +196,11 @@
     gap: 0;
     margin: 0;
     padding: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--studio-control-line) transparent;
 }
 
 .studio-home-queue-item {
