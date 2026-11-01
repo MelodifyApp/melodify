@@ -629,6 +629,112 @@ test("Secrets section hook gates verification and save, and keeps drafts on fail
     assert.equal(api.getStatus("spotify"), "unverified");
 });
 
+test("a pending provider save preserves another provider's newer draft", async () => {
+    const { run } = loadHook(
+        "src/features/settings/useSecretsSection.ts",
+        "useSecretsSection"
+    );
+    let resolveSave;
+    const statuses = { spotify: "verified" };
+    const stored = [];
+    const props = {
+        validate: () => null,
+        onClientIdChange() {},
+        statuses,
+        onStatusChange: (serviceId, status) => {
+            statuses[serviceId] = status;
+        },
+        onResetStatus: (serviceId) => {
+            delete statuses[serviceId];
+        },
+        verify: async (serviceId, drafts) => ({ ok: true, drafts }),
+        save: (serviceId, drafts) =>
+            new Promise((resolve) => {
+                resolveSave = resolve;
+            }),
+        config: { spotifyClientId: "spotify-id" },
+        storedSecrets: {},
+        storedClientIds: {},
+        onStoredSecretChange: (serviceId, isStored) => {
+            stored.push([serviceId, isStored]);
+        },
+    };
+
+    let api = run(props);
+    api.editField("spotify", "spotifyClientSecret", "spotify-draft", true);
+    api = run(props);
+    await api.verifyService("spotify");
+    api = run(props);
+    const pending = api.saveService("spotify");
+    assert.equal(typeof resolveSave, "function");
+
+    api.editField("kick", "kickClientSecret", "kick-new-draft", true);
+    api = run(props);
+    resolveSave({
+        ok: true,
+        drafts: { spotifyClientSecret: "spotify-draft" },
+    });
+    await pending;
+    api = run(props);
+
+    assert.deepEqual(api.drafts, { kickClientSecret: "kick-new-draft" });
+    assert.deepEqual(stored, [["spotify", true]]);
+});
+
+test("a failed provider save leaves every current secret draft untouched", async () => {
+    const { run } = loadHook(
+        "src/features/settings/useSecretsSection.ts",
+        "useSecretsSection"
+    );
+    let resolveSave;
+    const statuses = { spotify: "verified" };
+    const stored = [];
+    const props = {
+        validate: () => null,
+        onClientIdChange() {},
+        statuses,
+        onStatusChange: (serviceId, status) => {
+            statuses[serviceId] = status;
+        },
+        onResetStatus: (serviceId) => {
+            delete statuses[serviceId];
+        },
+        verify: async (serviceId, drafts) => ({ ok: true, drafts }),
+        save: (serviceId, drafts) =>
+            new Promise((resolve) => {
+                resolveSave = resolve;
+            }),
+        config: { spotifyClientId: "spotify-id" },
+        storedSecrets: {},
+        storedClientIds: {},
+        onStoredSecretChange: (serviceId, isStored) => {
+            stored.push([serviceId, isStored]);
+        },
+    };
+
+    let api = run(props);
+    api.editField("spotify", "spotifyClientSecret", "spotify-draft", true);
+    api = run(props);
+    await api.verifyService("spotify");
+    api = run(props);
+    const pending = api.saveService("spotify");
+    api.editField("kick", "kickClientSecret", "kick-new-draft", true);
+    api = run(props);
+    resolveSave({
+        ok: false,
+        error: "failed",
+        drafts: { spotifyClientSecret: "spotify-draft" },
+    });
+    await pending;
+    api = run(props);
+
+    assert.deepEqual(api.drafts, {
+        spotifyClientSecret: "spotify-draft",
+        kickClientSecret: "kick-new-draft",
+    });
+    assert.deepEqual(stored, []);
+});
+
 test("a persistence save failure keeps the draft and does not mark the pair stored", async () => {
     const { run } = loadHook(
         "src/features/settings/useSecretsSection.ts",

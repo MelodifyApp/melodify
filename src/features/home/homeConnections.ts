@@ -11,8 +11,56 @@ export type HomeConnectionState =
     | "connect"
     | "connected"
     | "attention"
+    | "pending"
+    | "auth-error"
     | "unavailable";
 export type HomeConnectionTone = "ok" | "warn" | "error" | "muted";
+
+export type SpotifyAuthPhase =
+    | "idle"
+    | "starting"
+    | "pending"
+    | "success"
+    | "cancelled"
+    | "timeout"
+    | "bind-error"
+    | "failed";
+
+export interface SpotifyAuthViewState {
+    state: SpotifyAuthPhase;
+    reason: string | null;
+    canRetry: boolean;
+}
+
+export function emptySpotifyAuthState(): SpotifyAuthViewState {
+    return { state: "idle", reason: null, canRetry: true };
+}
+
+/** Normalizes the main-process spotify:authState payload without raw text. */
+export function readSpotifyAuthState(value: unknown): SpotifyAuthViewState {
+    if (!isRecord(value)) return emptySpotifyAuthState();
+    const phases: readonly SpotifyAuthPhase[] = [
+        "idle",
+        "starting",
+        "pending",
+        "success",
+        "cancelled",
+        "timeout",
+        "bind-error",
+        "failed",
+    ];
+    if (
+        typeof value.state !== "string" ||
+        !phases.includes(value.state as SpotifyAuthPhase)
+    ) {
+        return emptySpotifyAuthState();
+    }
+    return {
+        state: value.state as SpotifyAuthPhase,
+        reason: typeof value.reason === "string" ? value.reason : null,
+        canRetry: value.canRetry === true,
+    };
+}
 
 export interface HomeConnectionFlags {
     spotify: {
@@ -39,6 +87,7 @@ export interface HomeConnectionView {
     id: HomeConnectionId;
     state: HomeConnectionState;
     tone: HomeConnectionTone;
+    authPhase?: SpotifyAuthPhase;
 }
 
 export interface PresenceReadResult {
@@ -48,6 +97,7 @@ export interface PresenceReadResult {
 
 export interface HomeConnectionsBridge {
     invoke(channel: string, data?: unknown): Promise<unknown>;
+    send?(channel: string, data?: unknown): void;
     on?(
         channel: string,
         listener: (...args: unknown[]) => void
@@ -123,21 +173,28 @@ export function applyPresenceReads(
 
 function view(
     id: HomeConnectionId,
-    state: HomeConnectionState
+    state: HomeConnectionState,
+    authPhase?: SpotifyAuthPhase
 ): HomeConnectionView {
     const tone: HomeConnectionTone =
         state === "connected"
             ? "ok"
             : state === "loading"
               ? "muted"
-              : state === "unavailable"
+              : state === "unavailable" || state === "auth-error"
                 ? "error"
                 : "warn";
-    return { id, state, tone };
+    return {
+        id,
+        state,
+        tone,
+        ...(authPhase ? { authPhase } : {}),
+    };
 }
 
 export function deriveHomeConnections(
-    flags: HomeConnectionFlags
+    flags: HomeConnectionFlags,
+    spotifyAuth: SpotifyAuthViewState = emptySpotifyAuthState()
 ): Record<HomeConnectionId, HomeConnectionView> {
     const spotify = flags.spotify;
     let spotifyView: HomeConnectionView;
@@ -157,6 +214,33 @@ export function deriveHomeConnections(
         spotifyView = view("spotify", "setup");
     } else {
         spotifyView = view("spotify", "connect");
+    }
+
+    if (
+        spotify.hasSecrets === true &&
+        spotify.authenticated === false &&
+        !spotify.error
+    ) {
+        if (
+            spotifyAuth.state === "starting" ||
+            spotifyAuth.state === "pending"
+        ) {
+            spotifyView = view(
+                "spotify",
+                "pending",
+                spotifyAuth.state
+            );
+        } else if (
+            spotifyAuth.state === "bind-error" ||
+            spotifyAuth.state === "failed" ||
+            spotifyAuth.state === "timeout"
+        ) {
+            spotifyView = view(
+                "spotify",
+                "auth-error",
+                spotifyAuth.state
+            );
+        }
     }
 
     const chatView = (
@@ -241,6 +325,8 @@ export function homeConnectionMessageKey(
             return "home.connections.needsSetup";
         case "connect":
             return "home.connections.connect";
+        case "pending":
+            return "home.connections.connecting";
         case "connected":
             return connection.id === "spotify"
                 ? "home.connections.ready"
@@ -249,6 +335,10 @@ export function homeConnectionMessageKey(
             return connection.id === "spotify"
                 ? "home.connections.openSpotify"
                 : "home.connections.connectChat";
+        case "auth-error":
+            return connection.authPhase === "timeout"
+                ? "home.connections.authTimeout"
+                : "home.connections.authFailed";
         case "unavailable":
             return "home.connections.unavailable";
     }
@@ -284,9 +374,9 @@ export async function readHomePresence(
         shouldCheckSpotifyPresence(flags)
             ? readPresenceValue(bridge, "spotify:hasSession")
             : undefined,
-        flags.kick.authenticated
-            ? readPresenceValue(bridge, "kick:isListeningToChat")
-            : undefined,
+        // Kick guest reading is independent of OAuth. Read the reader presence
+        // even when the authenticated session is absent or failed.
+        readPresenceValue(bridge, "kick:isListeningToChat"),
         flags.twitch.authenticated
             ? readPresenceValue(bridge, "twitch:isListeningToChat")
             : undefined,
@@ -332,9 +422,9 @@ export async function loadHomeConnections(
         spotifyAuth.value
             ? readPresenceValue(bridge, "spotify:hasSession")
             : { value: false, error: false },
-        kickAuth.value
-            ? readPresenceValue(bridge, "kick:isListeningToChat")
-            : { value: false, error: false },
+        // Kick guest reading is independent of OAuth. Read the reader presence
+        // even when the authenticated session is absent or failed.
+        readPresenceValue(bridge, "kick:isListeningToChat"),
         twitchAuth.value
             ? readPresenceValue(bridge, "twitch:isListeningToChat")
             : { value: false, error: false },

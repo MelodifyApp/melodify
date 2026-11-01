@@ -67,3 +67,64 @@ test("stable equality ignores object key order and protects nested values", () =
     assert.equal(draft.configIsDirty(b), true);
 });
 
+test("a deferred save preserves edits made after the click and the submitted command baseline", async () => {
+    let resolveSave;
+    const savedConfig = new Promise((resolve) => {
+        resolveSave = resolve;
+    });
+    const initial = draft.createDraftState(
+        {
+            prefix: "!",
+            commands: {
+                volume: { enabled: true, aliases: ["v"] },
+                sr: { enabled: true },
+            },
+        },
+        [
+            { name: "volume", enabled: true, aliases: ["v"] },
+            { name: "sr", enabled: true },
+        ]
+    );
+    let submitted = draft.editDraftConfig(initial, "prefix", "?");
+    submitted = draft.toggleDraftCommand(submitted, "volume", false);
+    const patch = draft.buildConfigSavePatch(submitted);
+
+    // The user keeps editing while config:save is pending.
+    let later = draft.editDraftConfig(submitted, "prefix", "!!");
+    later = draft.toggleDraftCommand(later, "volume", true);
+
+    resolveSave({
+        prefix: "?",
+        commands: {
+            volume: { enabled: false, aliases: ["v"] },
+            sr: { enabled: true },
+        },
+    });
+    const acknowledged = draft.commitAcknowledgedDraft(
+        later,
+        await savedConfig,
+        patch
+    );
+
+    assert.equal(acknowledged.baselineConfig.prefix, "?");
+    assert.equal(acknowledged.draftConfig.prefix, "!!");
+    assert.equal(draft.settingsAreDirty(acknowledged), true);
+    assert.equal(
+        acknowledged.baselineConfig.commands.volume.enabled,
+        false
+    );
+    assert.equal(
+        acknowledged.baselineCommands.find(
+            (command) => command.name === "volume"
+        ).enabled,
+        false
+    );
+    assert.equal(
+        acknowledged.draftCommands.find(
+            (command) => command.name === "volume"
+        ).enabled,
+        true
+    );
+    assert.equal(draft.commandsAreDirty(acknowledged), true);
+});
+

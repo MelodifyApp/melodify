@@ -3,10 +3,13 @@ import {
     applyPresenceReads,
     deriveHomeConnections,
     emptyHomeConnectionFlags,
+    emptySpotifyAuthState,
     loadHomeConnections,
     readHomePresence,
+    readSpotifyAuthState,
     type HomeConnectionsBridge,
     type HomeConnectionFlags,
+    type SpotifyAuthViewState,
 } from "./homeConnections";
 
 const PRESENCE_INTERVAL_MS = 10_000;
@@ -20,12 +23,20 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
     const [flags, setFlags] = useState<HomeConnectionFlags>(
         emptyHomeConnectionFlags
     );
+    const [spotifyAuth, setSpotifyAuth] = useState<SpotifyAuthViewState>(
+        emptySpotifyAuthState
+    );
     const alive = useRef(true);
     const flagsRef = useRef(flags);
+    const spotifyAuthRef = useRef(spotifyAuth);
 
     useEffect(() => {
         flagsRef.current = flags;
     }, [flags]);
+
+    useEffect(() => {
+        spotifyAuthRef.current = spotifyAuth;
+    }, [spotifyAuth]);
 
     useEffect(() => {
         alive.current = true;
@@ -47,6 +58,24 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
         setFlags((current) => applyPresenceReads(current, reads));
     }, [bridge]);
 
+    const beginSpotifyAuth = useCallback(() => {
+        if (!bridge?.send) return;
+        if (
+            spotifyAuthRef.current.state === "starting" ||
+            spotifyAuthRef.current.state === "pending"
+        ) {
+            return;
+        }
+        const starting: SpotifyAuthViewState = {
+            state: "starting",
+            reason: null,
+            canRetry: false,
+        };
+        spotifyAuthRef.current = starting;
+        setSpotifyAuth(starting);
+        bridge.send("spotify:auth");
+    }, [bridge]);
+
     useEffect(() => {
         if (!bridge) return;
         void refreshAll();
@@ -57,6 +86,20 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
         const refreshOnChange = () => {
             void refreshAll();
         };
+        const onSpotifyAuthState = (payload: unknown) => {
+            const next = readSpotifyAuthState(payload);
+            spotifyAuthRef.current = next;
+            setSpotifyAuth(next);
+            if (
+                next.state === "success" ||
+                next.state === "failed" ||
+                next.state === "bind-error" ||
+                next.state === "timeout"
+            ) {
+                void refreshAll();
+            }
+        };
+        bridge.on?.("spotify:authState", onSpotifyAuthState);
         const channels = [
             "spotify:authenticated",
             "kick:authenticated",
@@ -74,6 +117,7 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
 
         return () => {
             clearInterval(interval);
+            bridge.removeListener?.("spotify:authState", onSpotifyAuthState);
             for (const channel of channels) {
                 bridge.removeListener?.(channel, refreshOnChange);
             }
@@ -81,7 +125,8 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
     }, [bridge, refreshAll, refreshPresence]);
 
     return {
-        views: deriveHomeConnections(flags),
+        views: deriveHomeConnections(flags, spotifyAuth),
         refreshAll,
+        beginSpotifyAuth,
     };
 }

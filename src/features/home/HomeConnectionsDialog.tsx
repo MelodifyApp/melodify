@@ -39,6 +39,11 @@ function actionFor(
             return { key: "home.connections.actionSetUp" };
         case "connect":
             return { key: "home.connections.actionConnect" };
+        case "pending":
+            return {
+                key: "home.connections.connecting",
+                disabled: true,
+            };
         case "connected":
             return { key: "home.connections.actionDisconnect" };
         case "attention":
@@ -48,6 +53,8 @@ function actionFor(
                         ? "home.connections.actionRefresh"
                         : "home.connections.actionReconnect",
             };
+        case "auth-error":
+            return { key: "home.connections.actionRetry" };
         case "unavailable":
             return { key: "home.connections.actionRefresh" };
     }
@@ -58,11 +65,13 @@ export default function HomeConnectionsDialog({
     onClose,
     onRefresh,
     onOpenSettings,
+    onSpotifyAuth,
 }: {
     views: Record<HomeConnectionId, HomeConnectionView>;
     onClose: () => void;
     onRefresh: () => void | Promise<void>;
     onOpenSettings: () => void;
+    onSpotifyAuth?: () => void;
 }) {
     const { t } = useTranslation();
     const dialogRef = useRef<HTMLElement>(null);
@@ -125,11 +134,22 @@ export default function HomeConnectionsDialog({
             onOpenSettings();
             return;
         }
+        if (view.state === "pending") {
+            return;
+        }
         if (view.state === "unavailable" || view.state === "loading") {
             void onRefresh();
             return;
         }
+        if (view.state === "auth-error") {
+            onSpotifyAuth?.();
+            return;
+        }
         if (view.state === "connect") {
+            if (view.id === "spotify") {
+                onSpotifyAuth?.();
+                return;
+            }
             window.electronAPI.send(`${view.id}:auth`);
         } else if (view.state === "connected") {
             window.electronAPI.send(`${view.id}:logout`);

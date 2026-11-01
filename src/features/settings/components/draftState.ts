@@ -211,29 +211,102 @@ export function commitDraft(state: SettingsDraftState): SettingsDraftState {
     };
 }
 
+function hasOwn(record: ConfigRecord, key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+    return stableStringify(left) === stableStringify(right);
+}
+
 /**
- * Commits the sanitized effective config returned by config:save. This keeps
- * displayed baselines aligned with normalized persisted values (trimmed lists,
- * aliases, cooldown strings, etc.) instead of retaining the raw draft text.
+ * Commits the acknowledged save without replacing edits made while the save
+ * was pending. Only keys present in the submitted patch get a new baseline;
+ * the current draft value is adopted only when it still matches the submitted
+ * value. The command baseline comes from the acknowledged command config, not
+ * from a later unsent command draft.
  */
 export function commitAcknowledgedDraft(
     state: SettingsDraftState,
-    effectiveConfig: ConfigRecord
+    effectiveConfig: ConfigRecord,
+    acknowledgedPatch: ConfigRecord
 ): SettingsDraftState {
-    const normalized = withoutApiIds(clone(effectiveConfig));
-    if (
-        !Object.prototype.hasOwnProperty.call(
-            normalized,
-            "currentSongFilePath"
-        )
-    ) {
-        normalized.currentSongFilePath = state.draftConfig.currentSongFilePath;
+    const effective = isPlainObject(effectiveConfig) ? effectiveConfig : {};
+    const patch = isPlainObject(acknowledgedPatch) ? acknowledgedPatch : {};
+    const baselineConfig = clone(state.baselineConfig);
+    const draftConfig = clone(state.draftConfig);
+    let baselineCommands = clone(state.baselineCommands);
+    let draftCommands = clone(state.draftCommands);
+
+    for (const key of Object.keys(patch)) {
+        if (key === "commands" || LOCAL_ONLY_DRAFT_KEYS.has(key)) continue;
+        const acknowledgedValue = hasOwn(effective, key)
+            ? clone(effective[key])
+            : clone(patch[key]);
+        baselineConfig[key] = acknowledgedValue;
+        if (sameValue(draftConfig[key], patch[key])) {
+            draftConfig[key] = clone(acknowledgedValue);
+        }
     }
+
+    if (hasOwn(patch, "commands")) {
+        const acknowledgedCommands = isPlainObject(effective.commands)
+            ? effective.commands
+            : patch.commands;
+        const commandMap = isPlainObject(acknowledgedCommands)
+            ? acknowledgedCommands
+            : {};
+        baselineConfig.commands = clone(commandMap);
+
+        const lateCommandEdit = !sameValue(
+            draftConfig.commands,
+            patch.commands
+        );
+        if (!lateCommandEdit) {
+            draftConfig.commands = clone(commandMap);
+        }
+
+        const sourceCommands = state.draftCommands.length
+            ? state.draftCommands
+            : state.baselineCommands;
+        const acknowledgedCommandList = sourceCommands.map((command) => {
+            const name = String(command.name || "");
+            const acknowledged = isPlainObject(commandMap[name])
+                ? commandMap[name]
+                : null;
+            const next = clone(command);
+            if (
+                acknowledged &&
+                typeof acknowledged.enabled === "boolean"
+            ) {
+                next.enabled = acknowledged.enabled;
+            }
+            if (acknowledged && Array.isArray(acknowledged.aliases)) {
+                next.aliases = clone(acknowledged.aliases);
+            }
+            return next;
+        });
+        baselineCommands = clone(acknowledgedCommandList);
+        if (!lateCommandEdit) {
+            draftCommands = clone(acknowledgedCommandList);
+        }
+    }
+
+    if (
+        !hasOwn(effective, "currentSongFilePath") &&
+        !hasOwn(patch, "currentSongFilePath")
+    ) {
+        baselineConfig.currentSongFilePath =
+            state.draftConfig.currentSongFilePath;
+        draftConfig.currentSongFilePath =
+            state.draftConfig.currentSongFilePath;
+    }
+
     return {
-        baselineConfig: clone(normalized),
-        draftConfig: clone(normalized),
-        baselineCommands: clone(state.draftCommands),
-        draftCommands: clone(state.draftCommands),
+        baselineConfig,
+        draftConfig,
+        baselineCommands,
+        draftCommands,
     };
 }
 

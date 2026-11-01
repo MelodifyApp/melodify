@@ -184,9 +184,12 @@ export function useSecretsSection({
         setSaving((prev) => ({ ...prev, [serviceId]: true }));
         const result = await save(serviceId, drafts);
         setSaving((prev) => ({ ...prev, [serviceId]: false }));
-        setDrafts(result.drafts);
 
         if (result.ok) {
+            // The response may have been computed from a pre-await snapshot.
+            // Clear only this provider from the latest drafts so another
+            // provider edit made while the request was pending survives.
+            setDrafts((current) => clearSecretDrafts(current, serviceId));
             onStatusChange(serviceId, "verified");
             onStoredSecretChange(serviceId, true);
         } else if (result.error === "persistence") {

@@ -12,7 +12,6 @@ import {
     buildConfigSavePatch,
     acknowledgeSongFilePath,
     commitAcknowledgedDraft,
-    commitDraft,
     createDraftState,
     credentialDraftsFromConfig,
     discardDraft,
@@ -189,13 +188,19 @@ export default function Settings({ onClose, theme = "graphite", active = true, r
                 return;
             }
 
-            setDrafts((current) =>
-                result.config &&
-                typeof result.config === "object" &&
-                !Array.isArray(result.config)
-                    ? commitAcknowledgedDraft(current, result.config)
-                    : commitDraft(current)
-            );
+            setDrafts((current) => {
+                const acknowledgedConfig =
+                    result.config &&
+                    typeof result.config === "object" &&
+                    !Array.isArray(result.config)
+                        ? result.config
+                        : patch;
+                return commitAcknowledgedDraft(
+                    current,
+                    acknowledgedConfig,
+                    patch
+                );
+            });
             if (languageChanged) {
                 void i18n.changeLanguage(
                     String(drafts.draftConfig.language)

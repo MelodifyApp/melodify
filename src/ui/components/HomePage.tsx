@@ -89,7 +89,8 @@ export default function HomePage({
 
     const bridge =
         typeof window !== "undefined" ? window.electronAPI : undefined;
-    const { views, refreshAll } = useHomeConnections(bridge);
+    const { views, refreshAll, beginSpotifyAuth } =
+        useHomeConnections(bridge);
     const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
     const previousConnectionStates =
         useRef<HomeConnectionStateMap | null>(null);
@@ -410,6 +411,7 @@ export default function HomePage({
                     onClose={closeConnections}
                     onRefresh={refreshAll}
                     onOpenSettings={openSettingsFromConnections}
+                    onSpotifyAuth={beginSpotifyAuth}
                 />
             )}
         </StudioTheme>

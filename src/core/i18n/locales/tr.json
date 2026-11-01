@@ -124,6 +124,9 @@
             "manage": "Bağlantıları yönet",
             "setUp": "Bağlantıları ayarla",
             "checking": "Kontrol ediliyor",
+            "connecting": "Bağlanıyor…",
+            "authFailed": "Bağlantı başarısız",
+            "authTimeout": "Bağlantı zaman aşımına uğradı",
             "announcement": "{{service}} durumu: {{status}}",
             "ready": "Hazır",
             "listening": "Dinliyor",
@@ -138,6 +141,7 @@
             "actionDisconnect": "Bağlantıyı kes",
             "actionReconnect": "Yeniden bağlan",
             "actionRefresh": "Yenile",
+            "actionRetry": "Yeniden dene",
             "refreshStatus": "Durumu yenile"
         }
     },

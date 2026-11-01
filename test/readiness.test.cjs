@@ -186,6 +186,7 @@ test("Spotify presence ticks stay truthful after ready", async () => {
     let providerIndex = 0;
     const bridge = {
         invoke: async (channel) => {
+            if (channel === "kick:isListeningToChat") return false;
             assert.equal(channel, "spotify:hasSession");
             const result = providerTicks[providerIndex];
             providerIndex += 1;

@@ -441,7 +441,12 @@ test("acknowledged save adopts the normalized effective config", async () => {
         },
         [{ name: "sr", enabled: true, aliases: [" Song "] }]
     );
-    state = draft.commitAcknowledgedDraft(state, result.config);
+    state = draft.editDraftConfig(state, "prefix", "?");
+    state = draft.commitAcknowledgedDraft(state, result.config, {
+        prefix: "?",
+        customModerators: [" Mod "],
+        commands: { sr: { aliases: [" Song "] } },
+    });
     assert.deepEqual(state.baselineConfig.customModerators, ["Mod"]);
     assert.deepEqual(state.draftConfig.customModerators, ["Mod"]);
     assert.deepEqual(state.baselineConfig.commands, {

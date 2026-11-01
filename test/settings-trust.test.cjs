@@ -467,7 +467,12 @@ test("Settings commits only after config:save acknowledgment and exposes load re
     );
     assert.match(source, /invoke\(\s*"config:save"/);
     assert.match(source, /if \(result\?\.ok !== true\)/);
-    assert.match(source, /commitDraft\(current\)/);
+    assert.match(
+        source,
+        /commitAcknowledgedDraft\(\s*current,\s*acknowledgedConfig,\s*patch\s*\)/
+    );
+    assert.match(source, /acknowledgedConfig\s*=\s*[\s\S]*result\.config/);
+    assert.doesNotMatch(source, /commitDraft\(current\)/);
     assert.match(source, /config:reload/);
     assert.match(source, /settings\.loadFailedTitle/);
     assert.doesNotMatch(source, /send\("config:set"/);

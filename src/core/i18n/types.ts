@@ -127,6 +127,9 @@ export interface TranslationKeys {
             manage: string;
             setUp: string;
             checking: string;
+            connecting: string;
+            authFailed: string;
+            authTimeout: string;
             ready: string;
             listening: string;
             openSpotify: string;
@@ -140,6 +143,7 @@ export interface TranslationKeys {
             actionDisconnect: string;
             actionReconnect: string;
             actionRefresh: string;
+            actionRetry: string;
             refreshStatus: string;
         };
     };

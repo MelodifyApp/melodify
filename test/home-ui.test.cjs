@@ -323,11 +323,12 @@ test("Home connections mark a failed provider as unavailable", async () => {
     assert.equal(views.twitch.tone, "error");
 });
 
-test("Home connections skip presence checks without an authenticated session", async () => {
+test("Home reads Kick guest presence even without an authenticated session", async () => {
     const calls = [];
     const bridge = {
         invoke: async (channel) => {
             calls.push(channel);
+            if (channel === "kick:isListeningToChat") return true;
             if (channel.endsWith("hasSecrets")) return false;
             if (channel.endsWith("checkAuth")) {
                 return { authenticated: false };
@@ -339,14 +340,177 @@ test("Home connections skip presence checks without an authenticated session", a
     assert.deepEqual(calls.sort(), [
         "kick:checkAuth",
         "kick:hasSecrets",
+        "kick:isListeningToChat",
         "spotify:checkAuth",
         "spotify:hasSecrets",
         "twitch:checkAuth",
         "twitch:hasSecrets",
     ]);
     assert.equal(flags.spotify.authenticated, false);
-    assert.equal(flags.kick.listening, false);
+    assert.equal(flags.kick.authenticated, false);
+    assert.equal(flags.kick.listening, true);
     assert.equal(flags.twitch.listening, false);
+    const views = homeConnections.deriveHomeConnections(flags);
+    assert.equal(views.kick.state, "connected");
+    const html = renderComponent(
+        "src/features/home/HomeConnectionsDialog.tsx",
+        {
+            views,
+            onClose() {},
+            onRefresh() {},
+            onOpenSettings() {},
+            onSpotifyAuth() {},
+        }
+    );
+    assert.match(html, /home\.connections\.listening/);
+    assert.match(html, /home\.connections\.actionDisconnect/);
+});
+
+test("Home periodic presence reads Kick independently of OAuth", async () => {
+    const calls = [];
+    const bridge = {
+        invoke: async (channel) => {
+            calls.push(channel);
+            if (channel === "kick:isListeningToChat") return true;
+            throw new Error(`unexpected ${channel}`);
+        },
+    };
+    const flags = {
+        spotify: {
+            hasSecrets: false,
+            authenticated: false,
+            hasSession: false,
+            error: false,
+        },
+        kick: {
+            hasSecrets: true,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+        twitch: {
+            hasSecrets: false,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+    };
+    const reads = await homeConnections.readHomePresence(bridge, flags);
+    assert.deepEqual(reads.kick, { value: true, error: false });
+    assert.deepEqual(calls, ["kick:isListeningToChat"]);
+});
+
+test("Home surfaces Spotify auth pending, failure, timeout and retry states", () => {
+    const flags = {
+        spotify: {
+            hasSecrets: true,
+            authenticated: false,
+            hasSession: false,
+            error: false,
+        },
+        kick: {
+            hasSecrets: false,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+        twitch: {
+            hasSecrets: false,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+    };
+
+    const pending = homeConnections.deriveHomeConnections(flags, {
+        state: "pending",
+        reason: null,
+        canRetry: false,
+    });
+    assert.equal(pending.spotify.state, "pending");
+    assert.equal(
+        homeConnections.homeConnectionMessageKey(pending.spotify),
+        "home.connections.connecting"
+    );
+
+    const failed = homeConnections.deriveHomeConnections(flags, {
+        state: "bind-error",
+        reason: "bind-failed",
+        canRetry: true,
+    });
+    assert.equal(failed.spotify.state, "auth-error");
+    assert.equal(
+        homeConnections.homeConnectionMessageKey(failed.spotify),
+        "home.connections.authFailed"
+    );
+
+    const timeout = homeConnections.deriveHomeConnections(flags, {
+        state: "timeout",
+        reason: "timeout",
+        canRetry: true,
+    });
+    assert.equal(
+        homeConnections.homeConnectionMessageKey(timeout.spotify),
+        "home.connections.authTimeout"
+    );
+    assert.deepEqual(
+        homeConnections.readSpotifyAuthState({
+            state: "bind-error",
+            reason: "bind-failed",
+            canRetry: true,
+        }),
+        {
+            state: "bind-error",
+            reason: "bind-failed",
+            canRetry: true,
+        }
+    );
+    assert.equal(
+        homeConnections.readSpotifyAuthState({
+            state: "unknown",
+            reason: "raw detail",
+        }).state,
+        "idle"
+    );
+
+    const connectedFlags = {
+        ...flags,
+        spotify: { ...flags.spotify, authenticated: true, hasSession: true },
+    };
+    assert.equal(
+        homeConnections.deriveHomeConnections(connectedFlags, {
+            state: "failed",
+            reason: "exchange-failed",
+            canRetry: true,
+        }).spotify.state,
+        "connected"
+    );
+
+    const html = renderComponent(
+        "src/features/home/HomeConnectionsDialog.tsx",
+        {
+            views: failed,
+            onClose() {},
+            onRefresh() {},
+            onOpenSettings() {},
+            onSpotifyAuth() {},
+        }
+    );
+    assert.match(html, /home\.connections\.authFailed/);
+    assert.match(html, /home\.connections\.actionRetry/);
+
+    const pendingHtml = renderComponent(
+        "src/features/home/HomeConnectionsDialog.tsx",
+        {
+            views: pending,
+            onClose() {},
+            onRefresh() {},
+            onOpenSettings() {},
+            onSpotifyAuth() {},
+        }
+    );
+    assert.match(pendingHtml, /home\.connections\.connecting/);
+    assert.match(pendingHtml, /disabled/);
 });
 
 test("Home renders a real latest-request summary and a connections rail", () => {
@@ -398,15 +562,22 @@ test("Home keeps real song-request and update sources and omits demo queue rows"
     const dialog = readSource(
         "src/features/home/HomeConnectionsDialog.tsx"
     );
+    const store = readSource("src/features/home/useHomeConnections.ts");
     assert.match(source, /songRequest:getCount/);
     assert.match(source, /songRequest:completed/);
     assert.match(source, /useUpdateStatus/);
     assert.match(source, /StudioTheme/);
     assert.match(source, /HomeConnectionsDialog/);
+    assert.match(source, /onSpotifyAuth/);
     assert.match(dialog, /:auth/);
     assert.match(dialog, /:logout/);
+    assert.match(dialog, /onSpotifyAuth/);
     assert.match(dialog, /kick:retryChat/);
     assert.match(dialog, /twitch:stopListening/);
+    assert.match(store, /spotify:authState/);
+    assert.match(store, /beginSpotifyAuth/);
+    assert.match(store, /spotifyAuthRef\.current\.state === "starting"/);
+    assert.match(store, /spotifyAuthRef\.current\.state === "pending"/);
     assert.doesNotMatch(source, /Midnight City|M83|QUEUE/);
     assert.doesNotMatch(dialog, /Midnight City|M83/);
 });
@@ -434,6 +605,9 @@ test("Home connection labels exist in English and Turkish", () => {
         "home.connections.manage",
         "home.connections.setUp",
         "home.connections.checking",
+        "home.connections.connecting",
+        "home.connections.authFailed",
+        "home.connections.authTimeout",
         "home.connections.ready",
         "home.connections.listening",
         "home.connections.openSpotify",
@@ -447,6 +621,7 @@ test("Home connection labels exist in English and Turkish", () => {
         "home.connections.actionDisconnect",
         "home.connections.actionReconnect",
         "home.connections.actionRefresh",
+        "home.connections.actionRetry",
         "home.connections.refreshStatus",
         "home.timeNow",
         "home.timeMinutes",

@@ -124,6 +124,9 @@
             "manage": "Manage connections",
             "setUp": "Set up connections",
             "checking": "Checking",
+            "connecting": "Connecting…",
+            "authFailed": "Connection failed",
+            "authTimeout": "Connection timed out",
             "announcement": "{{service}} status: {{status}}",
             "ready": "Ready",
             "listening": "Listening",
@@ -138,6 +141,7 @@
             "actionDisconnect": "Disconnect",
             "actionReconnect": "Reconnect",
             "actionRefresh": "Refresh",
+            "actionRetry": "Retry",
             "refreshStatus": "Refresh status"
         }
     },
