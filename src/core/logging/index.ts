@@ -17,6 +17,36 @@ import { redactSecrets, redactLogText } from "./utils";
 import { resolveUserDataDirectory } from "@/core/config/userDataDirectory";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 
+// Console writes are best-effort. A detached development app can outlive the
+// launcher's stdout pipe; EPIPE must not become an uncaught Electron error.
+let stdioBroken = false;
+
+function markBrokenStdio(error: unknown): void {
+    if (
+        typeof error === "object" &&
+        error !== null &&
+        (error as NodeJS.ErrnoException).code === "EPIPE"
+    ) {
+        stdioBroken = true;
+    }
+}
+
+for (const stream of [process.stdout, process.stderr]) {
+    stream?.on("error", markBrokenStdio);
+}
+
+function safeConsole(
+    method: "log" | "warn" | "error" | "info" | "debug",
+    ...args: unknown[]
+): void {
+    if (stdioBroken) return;
+    try {
+        console[method](...args);
+    } catch (error) {
+        markBrokenStdio(error);
+    }
+}
+
 // Log levels and their visual styling for console output
 const LEVELS = {
     info: { label: "INFO", color: chalk.cyan },
@@ -127,7 +157,7 @@ function sendLogToRenderers(entry: LogEntry) {
         });
     } catch (error) {
         // Avoid recursive logging errors
-        console.error("Failed to send log to renderers:", error);
+        safeConsole("error", "Failed to send log to renderers:", error);
     }
 }
 
@@ -163,7 +193,7 @@ function cleanupOldLogs() {
         removeExpiredLogEntries(LOG_DIR, thirtyDaysAgo);
         removeExpiredLogEntries(SONG_REQUESTS_DIR, thirtyDaysAgo);
     } catch (error) {
-        console.error("Failed to cleanup old logs:", error);
+        safeConsole("error", "Failed to cleanup old logs:", error);
     }
 }
 
@@ -188,7 +218,7 @@ function initializeSessionLog() {
         }
         fs.appendFileSync(getLogFilePath(), sessionHeader + "\n");
     } catch (error) {
-        console.error("Failed to initialize session log:", error);
+        safeConsole("error", "Failed to initialize session log:", error);
     }
 }
 
@@ -214,7 +244,7 @@ function log(level: LogLevel, message: string, meta?: any) {
     if (logs.length > MAX_LOGS) logs.shift();
 
     // Styled console output for immediate visibility
-    console.log(formatLog(entry));
+    safeConsole("log", formatLog(entry));
 
     // Real-time streaming to UI components
     sendLogToRenderers(entry);
@@ -242,7 +272,7 @@ function appendLogToFile(entry: LogEntry) {
         fs.appendFileSync(getLogFilePath(), logLine);
     } catch (error) {
         // Fallback to console if file writing fails
-        console.error("Failed to append log to file:", error);
+        safeConsole("error", "Failed to append log to file:", error);
     }
 }
 
