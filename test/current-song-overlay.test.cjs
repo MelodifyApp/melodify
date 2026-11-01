@@ -194,6 +194,7 @@ test("one overlay scheduler writes changes, stops fully, and does not leave a ti
 
         const timerAtStop = timers.active()[0];
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
         assert.equal(timers.active().length, 0);
         timerAtStop.fired = true;
         timerAtStop.callback();
@@ -203,6 +204,7 @@ test("one overlay scheduler writes changes, stops fully, and does not leave a ti
         player.startSongFileSaving();
         await flush();
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
         assert.equal(timers.active().length, 0);
     } finally {
         timers.restore();

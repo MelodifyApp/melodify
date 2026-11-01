@@ -74,6 +74,7 @@ export const INVOKE_CHANNELS: readonly string[] = Object.freeze([
     "file:selectSongFilePath",
     "log:getAll",
     "songRequest:getCount",
+    "home:getSession",
     // Spotify
     "spotify:getUserData",
     "spotify:checkAuth",
@@ -112,6 +113,7 @@ export const LISTEN_CHANNELS: readonly string[] = Object.freeze([
     // Updates / logs / song requests
     "update:status",
     "log:entry",
+    "home:sessionUpdated",
     "songRequest:completed",
     "tray:debug",
     // Spotify

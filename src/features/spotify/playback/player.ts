@@ -31,6 +31,11 @@ import {
     type PlaySongFailureReason,
     type PlaySongOutcome,
 } from "../../../shared/songRequestOutcome";
+import {
+    CURRENT_PLAYBACK_INTERVAL_MS,
+    createCurrentPlaybackService,
+    type CurrentPlaybackSnapshot,
+} from "./currentPlayback";
 
 // Global state management for Spotify integration
 let spotifyApi: SpotifyWebApi | null = null;
@@ -45,7 +50,7 @@ interface SavedCurrentSong {
 }
 
 let lastSavedSong: SavedCurrentSong | null = null;
-let songOverlayTimer: NodeJS.Timeout | null = null;
+let songOverlayUnsubscribe: (() => void) | null = null;
 let songOverlayGeneration = 0;
 let songOverlayActive = false;
 let tokenGeneration = 0;
@@ -258,6 +263,35 @@ export async function checkSpotifyAccessToken(
     }
     return true;
 }
+
+const currentPlayback = createCurrentPlaybackService({
+    getApi: () => getSpotifyApi(),
+    checkToken: () => checkSpotifyAccessToken(),
+});
+
+export function getCurrentPlaybackSnapshot(): CurrentPlaybackSnapshot {
+    return currentPlayback.getSnapshot();
+}
+
+export function subscribeCurrentPlayback(
+    listener: (snapshot: CurrentPlaybackSnapshot) => void
+): () => void {
+    return currentPlayback.subscribe(listener);
+}
+
+export function startCurrentPlaybackPolling(): void {
+    currentPlayback.start();
+}
+
+export function stopCurrentPlaybackPolling(): void {
+    currentPlayback.stop();
+}
+
+export function resetCurrentPlayback(): void {
+    currentPlayback.reset();
+}
+
+export { CURRENT_PLAYBACK_INTERVAL_MS };
 
 function createPlaybackDeadline(options: PlaySongOptions): PlaybackDeadline {
     const controller = new AbortController();
@@ -678,7 +712,8 @@ export async function startSpotifyTokenRefreshInterval(
 
 /**
  * Token and Playback System Shutdown
- * Stops token refresh and every current-song overlay timer.
+ * Stops token refresh and the file-overlay subscriber. The shared playback
+ * poller is stopped separately by logout/auth lifecycle owners.
  */
 export function stopSpotifyTokenAutoRefresh() {
     if (refreshSpotifyTokenInterval) {
@@ -686,24 +721,9 @@ export function stopSpotifyTokenAutoRefresh() {
         refreshSpotifyTokenInterval = null;
     }
 
-    // The overlay scheduler owns every current-song timer; stopping it here
-    // also prevents fallback or duration timers from surviving auth failure.
     stopSongFileSaving();
 
-    logDebug("All Spotify intervals and timeouts cleared", "spotify:stop");
-}
-
-function scheduleCurrentSongPoll(generation: number, delay: number): void {
-    if (!songOverlayActive || generation !== songOverlayGeneration) {
-        return;
-    }
-    if (songOverlayTimer) {
-        clearTimeout(songOverlayTimer);
-    }
-    songOverlayTimer = setTimeout(() => {
-        songOverlayTimer = null;
-        void saveCurrentSongToFile(generation);
-    }, delay);
+    logDebug("Spotify token refresh and file overlay stopped", "spotify:stop");
 }
 
 function currentSongOutput(): { filePath: string; format: string } {
@@ -718,10 +738,15 @@ function currentSongOutput(): { filePath: string; format: string } {
     };
 }
 
-// Function to save current song to file
-async function saveCurrentSongToFile(
-    generation = songOverlayGeneration
-): Promise<void> {
+/**
+ * The file overlay consumes the single main-owned playback snapshot. It does
+ * not poll Spotify or own a scheduler; every playback tick can retry a failed
+ * write or notice a path/format change for the same track.
+ */
+function writeCurrentSongFromPlayback(
+    snapshot: CurrentPlaybackSnapshot,
+    generation: number
+): void {
     if (
         !songFileSavingEnabled ||
         !songOverlayActive ||
@@ -729,150 +754,35 @@ async function saveCurrentSongToFile(
     ) {
         return;
     }
+    if (snapshot.status !== "playing" || !snapshot.track) {
+        return;
+    }
 
-    try {
-        const spotifyApi = getSpotifyApi();
-        if (!spotifyApi) {
-            stopSongFileSaving();
-            return;
-        }
+    const currentSong = {
+        title: snapshot.track.title,
+        artist: snapshot.track.artist,
+    };
+    const output = currentSongOutput();
+    if (
+        lastSavedSong &&
+        lastSavedSong.title === currentSong.title &&
+        lastSavedSong.artist === currentSong.artist &&
+        lastSavedSong.filePath === output.filePath &&
+        lastSavedSong.format === output.format
+    ) {
+        return;
+    }
 
-        // Check and refresh access token if needed before making API call
-        const tokenValid = await checkSpotifyAccessToken();
-        if (!songOverlayActive || generation !== songOverlayGeneration) {
-            return;
-        }
-        if (!tokenValid) {
-            logWarn(
-                "Spotify access token invalid, stopping current-song overlay",
-                "saveCurrentSongToFile"
-            );
-            stopSongFileSaving();
-            return;
-        }
-
-        const playbackState = await spotifyApi.getMyCurrentPlaybackState();
-        if (!songOverlayActive || generation !== songOverlayGeneration) {
-            return;
-        }
-
-        if (!playbackState.body.is_playing || !playbackState.body.item) {
-            scheduleCurrentSongPoll(generation, 30000);
-            return;
-        }
-
-        const item = playbackState.body.item;
-        if (item.type !== "track") {
-            // Only handle tracks, not episodes.
-            scheduleCurrentSongPoll(generation, 30000);
-            return;
-        }
-
-        const currentSong = {
-            title: item.name,
-            artist: item.artists[0]?.name || "Unknown Artist",
-        };
-
-        // Rewrite when the track or the effective output target changes, and
-        // only remember the song after the file write actually succeeds.
-        const output = currentSongOutput();
+    void saveSongToFile(currentSong).then((savedSong) => {
         if (
-            lastSavedSong &&
-            lastSavedSong.title === currentSong.title &&
-            lastSavedSong.artist === currentSong.artist &&
-            lastSavedSong.filePath === output.filePath &&
-            lastSavedSong.format === output.format
+            !savedSong ||
+            !songOverlayActive ||
+            generation !== songOverlayGeneration
         ) {
-            scheduleCurrentSongPoll(generation, 30000);
-            return;
-        }
-
-        const savedSong = await saveSongToFile(currentSong);
-        if (!songOverlayActive || generation !== songOverlayGeneration) {
-            return;
-        }
-        if (!savedSong) {
-            scheduleCurrentSongPoll(generation, 30000);
             return;
         }
         lastSavedSong = savedSong;
-
-        const songDuration = item.duration_ms;
-        const nextCheckDelay = Math.min(songDuration + 5000, 300000);
-        logDebug(
-            `Song changed, next check in ${Math.round(nextCheckDelay / 1000)}s`,
-            "saveCurrentSongToFile"
-        );
-        scheduleCurrentSongPoll(generation, nextCheckDelay);
-    } catch (error) {
-        if (!songOverlayActive || generation !== songOverlayGeneration) {
-            return;
-        }
-
-        // Handle token expiration specifically
-        if (
-            error instanceof Error &&
-            error.message.includes("access token expired")
-        ) {
-            logDebug(
-                "Access token expired in saveCurrentSongToFile, attempting refresh",
-                "saveCurrentSongToFile"
-            );
-            try {
-                const refreshed = await refreshSpotifyAccessToken();
-                if (!songOverlayActive || generation !== songOverlayGeneration) {
-                    return;
-                }
-                if (refreshed) {
-                    scheduleCurrentSongPoll(generation, 1000);
-                } else {
-                    logWarn(
-                        "Failed to refresh Spotify token for song file saving",
-                        "saveCurrentSongToFile"
-                    );
-                    stopSongFileSaving();
-                }
-            } catch (refreshError) {
-                logError(refreshError, "saveCurrentSongToFile:tokenRefresh");
-                stopSongFileSaving();
-            }
-            return;
-        }
-
-        const statusCode =
-            typeof error === "object" && error !== null
-                ? Number(
-                      (error as { statusCode?: unknown }).statusCode ??
-                          (
-                              error as {
-                                  body?: {
-                                      error?: { status?: unknown };
-                                  };
-                              }
-                          ).body?.error?.status
-                  )
-                : NaN;
-        if (statusCode === 401 || statusCode === 403) {
-            logWarn(
-                "Spotify authentication failed; stopping current-song overlay",
-                "saveCurrentSongToFile"
-            );
-            stopSongFileSaving();
-            return;
-        }
-
-        const message = error instanceof Error ? error.message : "";
-        if (
-            message.includes("NO_ACTIVE_DEVICE") ||
-            message.includes("PREMIUM_REQUIRED")
-        ) {
-            scheduleCurrentSongPoll(generation, 30000);
-            return;
-        }
-
-        logError(error, "saveCurrentSongToFile");
-        scheduleCurrentSongPoll(generation, 30000);
-    }
+    });
 }
 
 // Helper function to save song to file
@@ -926,8 +836,8 @@ async function saveSongToFile(songInfo: {
 
 /**
  * Song File Saving Control
- * Starts one generation-bound current-song scheduler. Starting again replaces
- * the previous owner rather than layering another timer.
+ * Starts one generation-bound subscriber over the main playback source. It
+ * does not start a second Spotify polling loop.
  */
 export function startSongFileSaving() {
     stopSongFileSaving();
@@ -943,19 +853,24 @@ export function startSongFileSaving() {
     songOverlayGeneration += 1;
     const generation = songOverlayGeneration;
     songOverlayActive = true;
+    songOverlayUnsubscribe = currentPlayback.subscribe((snapshot) => {
+        writeCurrentSongFromPlayback(snapshot, generation);
+    });
+    startCurrentPlaybackPolling();
+    writeCurrentSongFromPlayback(currentPlayback.getSnapshot(), generation);
     logInfo("Started saving current song to file");
-    void saveCurrentSongToFile(generation);
 }
 
 /**
- * Stops the single current-song owner and invalidates any in-flight poll.
+ * Stops the file-overlay subscriber and invalidates any in-flight write. The
+ * shared playback poller remains available to Home/session consumers.
  */
 export function stopSongFileSaving() {
     songOverlayGeneration += 1;
     songOverlayActive = false;
-    if (songOverlayTimer) {
-        clearTimeout(songOverlayTimer);
-        songOverlayTimer = null;
+    if (songOverlayUnsubscribe) {
+        songOverlayUnsubscribe();
+        songOverlayUnsubscribe = null;
     }
 
     logInfo("Stopped saving current song to file");

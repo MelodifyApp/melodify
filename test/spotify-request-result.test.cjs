@@ -24,6 +24,7 @@ let searchError = null;
 let noResults = false;
 let queueError = null;
 let trackOverride = null;
+const acceptedQueue = [];
 const track = { uri: "spotify:track:abc123", name: "Sample track", artists: [{ name: "Sample artist" }] };
 class FakeSpotifyWebApi {
     setAccessToken(token) {
@@ -103,6 +104,15 @@ try {
         if (request === "@/core/logging") return logging;
         if (request === "@/core/logging/utils") return { redactSecrets: (value) => value };
         if (request === "@/core/ipc/handlers") return { incrementSongRequestCount() { effects.count++; } };
+        if (request === "@/features/home/homeQueue") {
+            return {
+                homeQueue: {
+                    add(input) {
+                        acceptedQueue.push(input);
+                    },
+                },
+            };
+        }
         if (request === "@/features/spotify/playback/player") return player;
         return originalLoad.call(this, request, parent, isMain);
     };
@@ -161,6 +171,7 @@ function reset() {
     effects.replies = [];
     effects.warnings = [];
     effects.queue = [];
+    acceptedQueue.length = 0;
     rejectQueue = pendingQueue = false;
     resolveQueue = undefined;
     searchError = null;
@@ -204,6 +215,44 @@ test("reward request also fails without success side effects when Spotify reject
     assert.equal(effects.globalCooldown, 0);
     assert.equal(effects.userCooldown, 0);
     assert.deepEqual(effects.replies, []);
+});
+
+test("only Spotify-confirmed requests enter the local session queue", async () => {
+    reset();
+    rejectQueue = true;
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            sendReply,
+            skipPermissionCheck: true,
+        }),
+        false
+    );
+    assert.deepEqual(acceptedQueue, []);
+
+    reset();
+    assert.equal(
+        await executeSongRequest(context, "Sample track", manager, {
+            sendReply,
+            skipPermissionCheck: true,
+        }),
+        true
+    );
+    assert.equal(acceptedQueue.length, 1);
+    assert.deepEqual(
+        {
+            title: acceptedQueue[0].title,
+            artist: acceptedQueue[0].artist,
+            requester: acceptedQueue[0].requester,
+            platform: acceptedQueue[0].platform,
+        },
+        {
+            title: "Sample track",
+            artist: "Sample artist",
+            requester: "sample-viewer",
+            platform: "kick",
+        }
+    );
+    assert.equal(typeof acceptedQueue[0].acceptedAt, "number");
 });
 
 test("success side effects wait for Spotify queue confirmation and occur once", async () => {

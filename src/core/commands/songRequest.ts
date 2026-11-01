@@ -2,6 +2,7 @@ import Config from "@/core/config";
 import { playSong } from "@/features/spotify/playback/player";
 import { incrementSongRequestCount } from "@/core/ipc/handlers";
 import { recordSongRequestOutcome } from "../songRequestHistory";
+import { homeQueue } from "@/features/home/homeQueue";
 import { logDebug, logError, logWarn, logSongRequest } from "@/core/logging";
 import {
     songRequestErrorMessage,
@@ -175,6 +176,17 @@ export async function executeSongRequest(
     const songInfo = playbackOutcome.song;
 
     settleAdmission("commit");
+    try {
+        homeQueue.add({
+            title: songInfo.title,
+            artist: songInfo.artist,
+            requester: ctx.username,
+            platform: ctx.platform,
+            acceptedAt: Date.now(),
+        });
+    } catch (error) {
+        logError(error, "songRequest:enqueue");
+    }
     logSongRequest(songInfo.title, songInfo.artist, ctx.username);
     incrementSongRequestCount(songInfo);
 

@@ -19,6 +19,7 @@ import os from "os";
 import "@/core/ipc";
 import "@/features/kick/ipc/handlers";
 import "@/features/kick/ipc/rewards";
+import "@/features/home/ipc/handlers";
 import "@/features/spotify/ipc/handlers";
 import "@/features/twitch/ipc/handlers";
 import "@/features/twitch/ipc/rewards";
@@ -34,6 +35,7 @@ import {
     startSpotifyTokenRefreshInterval,
     stopSpotifyTokenAutoRefresh,
 } from "@/features/spotify/playback/player";
+import { initializeHomeSession } from "@/features/home/homeSession";
 
 // Window dimensions and platform detection
 const WINDOW_WIDTH = 1200;
@@ -471,6 +473,10 @@ app.on("ready", () => {
                 "main:features"
             );
         }
+
+        // The session queue/current-song state belongs to main and must keep
+        // updating even when Home is not the mounted renderer view.
+        initializeHomeSession();
 
         logInfo("Features initialized successfully", "main:features");
     } catch (error: any) {

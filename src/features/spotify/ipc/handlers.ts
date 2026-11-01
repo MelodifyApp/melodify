@@ -9,6 +9,9 @@ import {
     stopSpotifyTokenAutoRefresh,
     startSongFileSaving,
     resetSpotifyApi,
+    startCurrentPlaybackPolling,
+    stopCurrentPlaybackPolling,
+    resetCurrentPlayback,
 } from "@/features/spotify/playback/player";
 import { startSpotifyAuthServer, stopSpotifyAuthServer } from "@/features/spotify/auth/server";
 import { exec } from "child_process";
@@ -78,17 +81,22 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
     );
     if (!accessToken || !refreshToken) {
         stopSpotifyTokenAutoRefresh();
+        stopCurrentPlaybackPolling?.();
+        resetCurrentPlayback?.();
         return { authenticated: false };
     }
     const refreshed = await checkSpotifyAccessToken();
     if (!refreshed) {
         stopSpotifyTokenAutoRefresh();
+        stopCurrentPlaybackPolling?.();
+        resetCurrentPlayback?.();
         return { authenticated: false };
     }
     try {
         const spotifyApi = getSpotifyApi();
         const me = await spotifyApi.getMe();
         startSpotifyTokenRefreshInterval(window);
+        startCurrentPlaybackPolling?.();
         if (Config.get("saveCurrentSongToFile")) {
             startSongFileSaving();
         }
@@ -106,6 +114,8 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
 ipcMain.on("spotify:logout", () => {
     stopSpotifyAuthServer();
     stopSpotifyTokenAutoRefresh();
+    stopCurrentPlaybackPolling?.();
+    resetCurrentPlayback?.();
     Config.set({
         spotifyAccessToken: undefined,
         spotifyRefreshToken: undefined,

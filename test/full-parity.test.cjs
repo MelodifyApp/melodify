@@ -266,18 +266,26 @@ test("Settings sections all use Studio surfaces instead of legacy sections", () 
     );
 });
 
-test("Home uses the accepted queue/connection composition and themed actions", () => {
+test("Home uses the main-owned now-playing queue composition and themed actions", () => {
     const home = readSource("src/ui/components/HomePage.tsx");
+    const sessionView = readSource(
+        "src/features/home/HomeSessionView.tsx"
+    );
     const dialog = readSource(
         "src/features/home/HomeConnectionsDialog.tsx"
     );
     const homeCss = readSource("src/ui/components/homeStudio.css");
-    assert.match(home, /home\.queueTitle/);
-    assert.match(home, /home\.queueComingSoon/);
-    assert.doesNotMatch(home, /home\.queueCount|home\.queueEmpty/);
+    assert.match(home, /HomeSessionView/);
+    assert.match(home, /useHomeSession/);
+    assert.match(sessionView, /home\.nowPlaying/);
+    assert.match(sessionView, /home\.queueTitle/);
+    assert.match(sessionView, /home\.queueEmpty/);
+    assert.doesNotMatch(sessionView, /home\.queueComingSoon|home\.queueCount/);
+    assert.doesNotMatch(home, /home\.queueComingSoon|home\.queueCount/);
     assert.match(home, /home\.connections\.title/);
     assert.match(home, /HomeConnectionsDialog/);
     assert.match(homeCss, /studio-home-queue/);
+    assert.match(homeCss, /studio-home-queue-list/);
     assert.match(dialog, /home\.connections\.actionSetUp/);
     assert.match(dialog, /:auth/);
     assert.match(dialog, /:logout/);

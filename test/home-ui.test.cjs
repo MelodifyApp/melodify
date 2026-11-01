@@ -529,17 +529,16 @@ test("Home surfaces Spotify auth pending, failure, timeout and retry states", ()
     assert.match(pendingHtml, /disabled/);
 });
 
-test("Home renders a real latest-request summary and a connections rail", () => {
+test("Home renders now-playing and local queue loading states with a connections rail", () => {
     const html = renderComponent("src/ui/components/HomePage.tsx");
     assert.match(html, /studio-home/);
-    assert.match(html, /home\.latestRequest/);
-    assert.match(html, /home\.noRequestsYet/);
-    assert.match(html, /home\.noRequestsCopy/);
+    assert.match(html, /home\.nowPlaying/);
+    assert.match(html, /home\.nowPlayingLoading/);
     assert.match(html, /home\.queueTitle/);
-    assert.match(html, /home\.queueComingSoon/);
-    assert.match(html, /home\.queueComingSoonCopy/);
-    assert.doesNotMatch(html, /home\.queueCount|home\.queueEmpty/);
-    assert.match(html, /home\.acceptedRequests/);
+    assert.match(html, /home\.queueLoading/);
+    assert.doesNotMatch(html, /home\.latestRequest|home\.noRequestsYet/);
+    assert.doesNotMatch(html, /home\.queueComingSoon|home\.queueComingSoonCopy/);
+    assert.doesNotMatch(html, /home\.acceptedRequest|home\.acceptedRequests/);
     assert.match(html, /home\.connections\.title/);
     assert.match(html, /home\.connections\.music/);
     assert.match(html, /home\.connections\.streaming/);
@@ -547,6 +546,116 @@ test("Home renders a real latest-request summary and a connections rail", () => 
     assert.doesNotMatch(html, /settings-section/);
     assert.doesNotMatch(html, /Midnight City|M83|QUEUE/);
     assert.doesNotMatch(html, /home\.queue\.demo/);
+});
+
+test("HomeSessionView renders playing, idle, loading and error states truthfully", () => {
+    const playing = {
+        revision: 1,
+        current: {
+            status: "playing",
+            title: "Current Song",
+            artist: "Current Artist",
+            artworkUrl: "https://images.example/current.jpg",
+            error: null,
+        },
+        queue: [],
+        queueScope: "session",
+    };
+    const playingHtml = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session: playing, loading: false, error: false, now: 1000 },
+        translatorFor(en)
+    );
+    assert.match(playingHtml, /Now playing/);
+    assert.match(playingHtml, /Current Song/);
+    assert.match(playingHtml, /by Current Artist/);
+    assert.match(playingHtml, /https:\/\/images\.example\/current\.jpg/);
+    assert.match(playingHtml, /No requests waiting/);
+    assert.match(playingHtml, /Session queue/);
+    assert.doesNotMatch(playingHtml, /Coming soon/);
+    assert.doesNotMatch(playingHtml, /Latest request/);
+
+    const idle = {
+        ...playing,
+        current: {
+            status: "idle",
+            title: null,
+            artist: null,
+            artworkUrl: null,
+            error: null,
+        },
+    };
+    const idleHtml = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session: idle, loading: false, error: false, now: 1000 },
+        translatorFor(en)
+    );
+    assert.match(idleHtml, /Nothing playing/);
+    assert.doesNotMatch(idleHtml, /Current Song/);
+
+    const loadingHtml = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session: null, loading: true, error: false, now: 1000 },
+        translatorFor(en)
+    );
+    assert.match(loadingHtml, /Loading now playing/);
+    assert.match(loadingHtml, /Loading queue/);
+
+    const errorHtml = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session: null, loading: false, error: true, now: 1000 },
+        translatorFor(en)
+    );
+    assert.match(errorHtml, /Playback unavailable/);
+    assert.match(errorHtml, /Queue unavailable/);
+    assert.match(errorHtml, /role="alert"/);
+});
+
+test("HomeSessionView renders local queue entries with position, requester and platform", () => {
+    const session = {
+        revision: 3,
+        current: {
+            status: "playing",
+            title: "Current",
+            artist: "Artist",
+            artworkUrl: null,
+            error: null,
+        },
+        queue: [
+            {
+                id: "queue-1",
+                title: "Waiting One",
+                artist: "Artist One",
+                requester: "viewer-a",
+                platform: "kick",
+                acceptedAt: 1000,
+                position: 1,
+            },
+            {
+                id: "queue-2",
+                title: "Waiting Two",
+                artist: "Artist Two",
+                requester: "viewer-b",
+                platform: "twitch",
+                acceptedAt: 2000,
+                position: 2,
+            },
+        ],
+        queueScope: "session",
+    };
+    const html = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session, loading: false, error: false, now: 121000 },
+        translatorFor(en)
+    );
+    assert.match(html, /#1/);
+    assert.match(html, /#2/);
+    assert.match(html, /Waiting One/);
+    assert.match(html, /Waiting Two/);
+    assert.match(html, /viewer-a · Kick/);
+    assert.match(html, /viewer-b · Twitch/);
+    assert.match(html, /2m ago/);
+    assert.match(html, /<ol/);
 });
 
 test("Connections dialog presents real status rows and is modal", () => {
@@ -625,18 +734,23 @@ test("connection actions expose localized provider-plus-action names", () => {
     assert.equal((trHtml.match(/>Bağlan</g) || []).length, 3);
 });
 
-test("Home keeps real song-request and update sources and omits demo queue rows", () => {
+test("Home keeps the main-owned session source and omits demo queue rows", () => {
     const source = readSource("src/ui/components/HomePage.tsx");
+    const session = readSource("src/features/home/useHomeSession.ts");
     const dialog = readSource(
         "src/features/home/HomeConnectionsDialog.tsx"
     );
     const store = readSource("src/features/home/useHomeConnections.ts");
-    assert.match(source, /songRequest:getCount/);
-    assert.match(source, /songRequest:completed/);
+    assert.match(source, /useHomeSession/);
+    assert.match(source, /HomeSessionView/);
     assert.match(source, /useUpdateStatus/);
     assert.match(source, /StudioTheme/);
     assert.match(source, /HomeConnectionsDialog/);
     assert.match(source, /onSpotifyAuth/);
+    assert.doesNotMatch(source, /songRequest:getCount|songRequest:completed/);
+    assert.match(session, /home:getSession/);
+    assert.match(session, /home:sessionUpdated/);
+    assert.match(session, /removeListener/);
     assert.match(dialog, /:auth/);
     assert.match(dialog, /:logout/);
     assert.match(dialog, /onSpotifyAuth/);
@@ -652,18 +766,21 @@ test("Home keeps real song-request and update sources and omits demo queue rows"
 
 test("Home connection labels exist in English and Turkish", () => {
     const keys = [
-        "home.latestRequest",
-        "home.noRequestsYet",
-        "home.noRequestsCopy",
-        "home.acceptedRequest",
-        "home.acceptedRequests",
-        "home.requestSummary",
+        "home.byArtist",
+        "home.nowPlaying",
+        "home.nowPlayingLoading",
+        "home.nothingPlaying",
+        "home.nothingPlayingCopy",
+        "home.playbackUnavailable",
+        "home.playbackUnavailableCopy",
         "home.queueTitle",
-        "home.queueComingSoon",
-        "home.queueComingSoonCopy",
-        "home.acceptedRequestsLabel",
-        "home.lastRequest",
-        "home.requestSource",
+        "home.queueEmpty",
+        "home.queueEmptyCopy",
+        "home.queueLoading",
+        "home.queueUnavailable",
+        "home.queueUnavailableCopy",
+        "home.queueRequester",
+        "home.queueSessionNote",
         "home.connections.title",
         "home.connections.music",
         "home.connections.streaming",
@@ -712,11 +829,13 @@ test("Home connection labels exist in English and Turkish", () => {
     }
 });
 
-test("Home queue presents a localized Coming soon state without a fake count", () => {
-    assert.equal(en.home.queueComingSoon, "Coming soon");
-    assert.equal(tr.home.queueComingSoon, "Yakında");
-    assert.match(en.home.queueComingSoonCopy, /future update/i);
-    assert.match(tr.home.queueComingSoonCopy, /gelecekteki bir güncellemeyle/i);
+test("Home queue presents a localized empty session state without fake counts", () => {
+    assert.equal(en.home.queueEmpty, "No requests waiting");
+    assert.equal(tr.home.queueEmpty, "Bekleyen istek yok");
+    assert.match(en.home.queueSessionNote, /session queue/i);
+    assert.match(tr.home.queueSessionNote, /oturum kuyruğu/i);
+    assert.equal("queueComingSoon" in en.home, false);
+    assert.equal("queueComingSoon" in tr.home, false);
     assert.equal("queueCount" in en.home, false);
-    assert.equal("queueEmpty" in en.home, false);
+    assert.equal("acceptedRequests" in en.home, false);
 });

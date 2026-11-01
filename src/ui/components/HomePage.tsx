@@ -1,5 +1,5 @@
-// Home is the quiet session overview: latest request, accepted empty queue and
-// the real connection actions behind one modal.
+// Home is the quiet session overview: main-owned now playing, the local
+// session queue and the real connection actions behind one modal.
 
 import {
     useCallback,
@@ -11,8 +11,6 @@ import {
 import { useTranslation } from "react-i18next";
 import {
     AlertTriangle,
-    Clock,
-    Headphones,
     LoaderCircleIcon,
     RotateCcwIcon,
 } from "lucide-react";
@@ -24,7 +22,9 @@ import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
 import KickIcon from "@/features/kick/components/KickIcon";
 import TwitchIcon from "@/features/twitch/components/TwitchIcon";
 import HomeConnectionsDialog from "@/features/home/HomeConnectionsDialog";
+import HomeSessionView from "@/features/home/HomeSessionView";
 import { useHomeConnections } from "@/features/home/useHomeConnections";
+import { useHomeSession } from "@/features/home/useHomeSession";
 import {
     buildHomeConnectionAnnouncement,
     changedHomeConnectionIds,
@@ -33,7 +33,6 @@ import {
     type HomeConnectionStateMap,
     type HomeConnectionView,
 } from "@/features/home/homeConnections";
-import { timeAgoParts } from "@/features/home/homeTime";
 import "./homeStudio.css";
 
 function ConnectionRow({
@@ -76,12 +75,6 @@ export default function HomePage({
     onOpenSettings?: () => void;
 }) {
     const { t } = useTranslation();
-    const [songRequestCount, setSongRequestCount] = useState(0);
-    const [lastRequestTime, setLastRequestTime] = useState<Date | null>(null);
-    const [lastRequestedSong, setLastRequestedSong] = useState<{
-        title: string;
-        artist: string;
-    } | null>(null);
     const [now, setNow] = useState(() => Date.now());
     const { status, progress, manifest } = useUpdateStatus();
     const [version, setVersion] = useState("");
@@ -91,6 +84,11 @@ export default function HomePage({
         typeof window !== "undefined" ? window.electronAPI : undefined;
     const { views, refreshAll, beginSpotifyAuth } =
         useHomeConnections(bridge);
+    const {
+        session,
+        loading: sessionLoading,
+        error: sessionError,
+    } = useHomeSession(bridge);
     const [connectionAnnouncement, setConnectionAnnouncement] = useState("");
     const previousConnectionStates =
         useRef<HomeConnectionStateMap | null>(null);
@@ -129,78 +127,7 @@ export default function HomePage({
             .getAppVersion?.()
             .then(setVersion)
             .catch(() => setVersion(""));
-
-        const onSongRequestCompleted = (
-            data: { title?: string; artist?: string } = {}
-        ) => {
-            setSongRequestCount((previous) => previous + 1);
-            setNow(Date.now());
-            setLastRequestTime(new Date());
-            if (data?.title && data?.artist) {
-                setLastRequestedSong({
-                    title: data.title,
-                    artist: data.artist,
-                });
-            }
-        };
-        bridge.on("songRequest:completed", onSongRequestCompleted);
-
-        bridge
-            .invoke("songRequest:getCount")
-            .then(
-                (data: {
-                    count: number;
-                    lastRequestTime: string | null;
-                    lastSong?: { title: string; artist: string };
-                }) => {
-                    setSongRequestCount(data?.count || 0);
-                    if (data?.lastRequestTime) {
-                        const parsed = new Date(data.lastRequestTime);
-                        if (!Number.isNaN(parsed.getTime())) {
-                            setLastRequestTime(parsed);
-                        }
-                    }
-                    if (
-                        data?.lastSong &&
-                        typeof data.lastSong.title === "string" &&
-                        typeof data.lastSong.artist === "string"
-                    ) {
-                        setLastRequestedSong(data.lastSong);
-                    }
-                }
-            )
-            .catch(() => {
-                setSongRequestCount(0);
-                setLastRequestTime(null);
-                setLastRequestedSong(null);
-            });
-
-        return () => {
-            bridge.removeListener(
-                "songRequest:completed",
-                onSongRequestCompleted
-            );
-        };
     }, [bridge]);
-
-    const timeParts = lastRequestTime
-        ? timeAgoParts(lastRequestTime, new Date(now))
-        : null;
-    let timeAgoLabel = "";
-    if (timeParts?.unit === "now") {
-        timeAgoLabel = t("home.timeNow");
-    } else if (timeParts?.unit === "minutes") {
-        timeAgoLabel = t("home.timeMinutes", { count: timeParts.count });
-    } else if (timeParts?.unit === "hours") {
-        timeAgoLabel = t("home.timeHours", { count: timeParts.count });
-    } else if (timeParts?.unit === "days") {
-        timeAgoLabel = t("home.timeDays", { count: timeParts.count });
-    }
-
-    const requestCountLabel =
-        songRequestCount === 1
-            ? t("home.acceptedRequest")
-            : t("home.acceptedRequests", { count: songRequestCount });
 
     const needsSetup = Object.values(views).some(
         (view) => view.state === "setup"
@@ -247,72 +174,12 @@ export default function HomePage({
                         {connectionAnnouncement}
                     </p>
 
-                    <section
-                        className="studio-home-latest"
-                        aria-labelledby="home-latest-title"
-                    >
-                        <div
-                            className="studio-home-art"
-                            aria-hidden="true"
-                        >
-                            <Headphones />
-                        </div>
-                        <div className="studio-home-latest-body">
-                            <h2
-                                id="home-latest-title"
-                                className="studio-home-label"
-                            >
-                                {t("home.latestRequest")}
-                            </h2>
-                            {lastRequestedSong ? (
-                                <>
-                                    <p className="studio-home-request-title">
-                                        {lastRequestedSong.title}
-                                    </p>
-                                    <p className="studio-home-request-artist">
-                                        {t("home.byArtist", {
-                                            artist: lastRequestedSong.artist,
-                                        })}
-                                    </p>
-                                    {timeAgoLabel && (
-                                        <p className="studio-home-request-time">
-                                            <Clock aria-hidden="true" />
-                                            {timeAgoLabel}
-                                        </p>
-                                    )}
-                                </>
-                            ) : (
-                                <>
-                                    <p className="studio-home-request-title">
-                                        {t("home.noRequestsYet")}
-                                    </p>
-                                    <p className="studio-home-empty-copy">
-                                        {t("home.noRequestsCopy")}
-                                    </p>
-                                </>
-                            )}
-                            <p className="studio-home-count">
-                                {requestCountLabel}
-                            </p>
-                        </div>
-                    </section>
-
-                    <section
-                        className="studio-home-queue"
-                        aria-labelledby="home-queue-title"
-                    >
-                        <div className="studio-home-queue-head">
-                            <h2 id="home-queue-title">
-                                {t("home.queueTitle")}
-                            </h2>
-                            <span className="studio-home-queue-coming-soon">
-                                {t("home.queueComingSoon")}
-                            </span>
-                        </div>
-                        <p className="studio-home-queue-empty">
-                            {t("home.queueComingSoonCopy")}
-                        </p>
-                    </section>
+                    <HomeSessionView
+                        session={session}
+                        loading={sessionLoading}
+                        error={sessionError}
+                        now={now}
+                    />
                 </main>
 
                 <aside
