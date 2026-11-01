@@ -611,7 +611,7 @@ test("HomeSessionView renders playing, idle, loading and error states truthfully
     assert.match(errorHtml, /role="alert"/);
 });
 
-test("HomeSessionView renders local queue entries with position, requester and platform", () => {
+test("HomeSessionView renders artwork-led local queue entries with requester and platform", () => {
     const session = {
         revision: 3,
         current: {
@@ -659,6 +659,57 @@ test("HomeSessionView renders local queue entries with position, requester and p
     assert.match(html, /viewer-b · Twitch/);
     assert.match(html, /2m ago/);
     assert.match(html, /<ol/);
+});
+
+test("Home queue remains keyboard reachable and preserves full dense-row text", () => {
+    const title = "A very long song title with an extended live recording description";
+    const artist = "An unusually long artist name and several collaborating artists";
+    const requester = "a_viewer_with_a_long_name";
+    const session = {
+        revision: 4,
+        current: null,
+        queueScope: "session",
+        queue: Array.from({ length: 17 }, (_, index) => ({
+            id: `queue-${index}`,
+            title: `${title} ${index}`,
+            artist,
+            requester,
+            platform: index % 2 ? "twitch" : "kick",
+            acceptedAt: 1000 + index * 1000,
+            position: index + 1,
+            artworkUrl: index % 2 ? null : "https://images.example/cover.jpg",
+        })),
+    };
+    for (const locale of [en, tr]) {
+        const html = renderComponent(
+            "src/features/home/HomeSessionView.tsx",
+            { session, loading: false, error: false, now: 121000 },
+            translatorFor(locale)
+        );
+        const list = html.match(/<ol\b[^>]*>[\s\S]*?<\/ol>/)?.[0];
+        assert.ok(list, "waiting requests remain an ordered list");
+        assert.match(list, /tabindex="0"/);
+        assert.match(list, /role="list"/);
+        assert.match(list, /aria-labelledby="home-queue-title"/);
+        assert.equal((list.match(/<li\b/g) || []).length, 17);
+        assert.match(list, new RegExp(`title="${title} 0"`));
+        assert.match(list, new RegExp(`title="${artist}"`));
+        assert.match(list, new RegExp(`title="${requester} · Kick"`));
+        assert.match(list, /<time dateTime="1970-01-01T00:00:01.000Z"/);
+        assert.ok(list.indexOf(`${title} 0`) < list.indexOf(`${title} 16`));
+        assert.doesNotMatch(list, /<button|#1|#17|queueSessionNote/);
+    }
+});
+
+test("Home queue exposes its loading state without announcing fake waiting rows", () => {
+    const html = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        { session: null, loading: true, error: false, now: 1000 },
+        translatorFor(en)
+    );
+    assert.match(html, /aria-labelledby="home-queue-title" aria-busy="true"/);
+    assert.match(html, /role="status">Loading queue/);
+    assert.doesNotMatch(html, /<ol|<li|No requests waiting/);
 });
 
 test("Connections dialog presents real status rows and is modal", () => {

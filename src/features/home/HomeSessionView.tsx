@@ -112,6 +112,10 @@ function QueueItem({
     now: number;
 }) {
     const { t } = useTranslation();
+    const requesterLabel = t("home.queueRequester", {
+        requester: entry.requester,
+        platform: entry.platform === "kick" ? "Kick" : "Twitch",
+    });
     return (
         <li className="studio-home-queue-item">
             <span className="studio-home-queue-art" aria-hidden="true">
@@ -126,16 +130,12 @@ function QueueItem({
                 )}
             </span>
             <span className="studio-home-queue-copy">
-                <strong>{entry.title}</strong>
-                <span>{entry.artist}</span>
+                <strong title={entry.title}>{entry.title}</strong>
+                <span title={entry.artist}>{entry.artist}</span>
             </span>
             <span className="studio-home-queue-meta">
-                <span>
-                    {t("home.queueRequester", {
-                        requester: entry.requester,
-                        platform:
-                            entry.platform === "kick" ? "Kick" : "Twitch",
-                    })}
+                <span title={requesterLabel}>
+                    {requesterLabel}
                 </span>
                 <time dateTime={new Date(entry.acceptedAt).toISOString()}>
                     <Clock aria-hidden="true" />
@@ -171,34 +171,42 @@ export default function HomeSessionView({
             <section
                 className="studio-home-queue"
                 aria-labelledby="home-queue-title"
+                aria-busy={queueLoading}
             >
                 <div className="studio-home-queue-head">
                     <h2 id="home-queue-title">{t("home.queueTitle")}</h2>
                 </div>
                 {queueError ? (
-                    <>
+                    <div className="studio-home-queue-state">
                         <p className="studio-home-queue-empty" role="alert">
                             {t("home.queueUnavailable")}
                         </p>
                         <p className="studio-home-queue-note">
                             {t("home.queueUnavailableCopy")}
                         </p>
-                    </>
+                    </div>
                 ) : queueLoading ? (
-                    <p className="studio-home-queue-empty">
-                        {t("home.queueLoading")}
-                    </p>
+                    <div className="studio-home-queue-state">
+                        <p className="studio-home-queue-empty" role="status">
+                            {t("home.queueLoading")}
+                        </p>
+                    </div>
                 ) : queue.length === 0 ? (
-                    <>
+                    <div className="studio-home-queue-state">
                         <p className="studio-home-queue-empty">
                             {t("home.queueEmpty")}
                         </p>
                         <p className="studio-home-queue-note">
                             {t("home.queueEmptyCopy")}
                         </p>
-                    </>
+                    </div>
                 ) : (
-                    <ol className="studio-home-queue-list">
+                    <ol
+                        className="studio-home-queue-list"
+                        role="list"
+                        tabIndex={0}
+                        aria-labelledby="home-queue-title"
+                    >
                         {queue.map((entry) => (
                             <QueueItem
                                 key={entry.id}
