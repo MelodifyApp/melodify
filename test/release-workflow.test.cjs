@@ -189,7 +189,7 @@ test("release checklist documents settings and the local Sandbox boundary", () =
     assert.match(checklist, /not a GitHub-hosted job/i);
     assert.match(checklist, /`release` environment/);
     assert.match(checklist, /v\*\.\*\.\*/);
-    assert.match(checklist, /required reviewers?/i);
+    assert.match(checklist, /Do not add required reviewers/i);
     assert.match(checklist, /read-only checkout/i);
     assert.match(checklist, /artifact[^\n]*data only/i);
     assert.match(checklist, /update\.json/);
