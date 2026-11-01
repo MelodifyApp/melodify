@@ -37,19 +37,17 @@ export default function General({ config, onConfigChange }: GeneralProps) {
     };
 
     return (
-        <>
+        <div className="studio-general">
             <SettingGroup heading={t("general.application")}>
                 <Toggle
                     id="general-start-with-system"
                     label={t("general.startWithSystem")}
-                    helper={t("general.startWithSystemDesc")}
                     checked={config.startOnStartup === true}
                     onCheckedChange={(enabled) => onConfigChange("startOnStartup", enabled)}
                 />
                 <Toggle
                     id="general-minimize-to-tray"
                     label={t("general.minimizeToTray")}
-                    helper={t("general.minimizeToTrayDesc")}
                     checked={config.minimizeToTray === true}
                     onCheckedChange={(enabled) => onConfigChange("minimizeToTray", enabled)}
                 />
@@ -59,7 +57,7 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 <Select
                     id="general-language"
                     label={t("general.interfaceLanguage")}
-                    helper={t("general.interfaceLanguageDesc")}
+                    wrapperClassName="studio-general-language-row"
                     value={language}
                     options={languageOptions}
                     onChange={(value) => onConfigChange("language", value)}
@@ -75,7 +73,7 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                     <Select
                         id="general-defaults-language"
                         label={t("general.defaultsLanguage")}
-                        helper={t("general.defaultsLanguageDesc")}
+                        wrapperClassName="studio-general-language-row"
                         value={config.defaultsLanguage || language}
                         options={languageOptions}
                         onChange={(value) =>
@@ -93,16 +91,16 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                     checked={autoUpdate}
                     onCheckedChange={(enabled) => onConfigChange("autoUpdateEnabled", enabled)}
                 />
-                <div className="studio-general-versions">
+                <dl className="studio-general-versions">
                     <div>
-                        <span>{t("general.current")}</span>
-                        <strong>{currentVersion || "—"}</strong>
+                        <dt>{t("general.current")}</dt>
+                        <dd>{currentVersion || "—"}</dd>
                     </div>
                     <div>
-                        <span>{t("general.latest")}</span>
-                        <strong>{status === "available" ? manifest?.version || "—" : currentVersion || "—"}</strong>
+                        <dt>{t("general.latest")}</dt>
+                        <dd>{status === "available" ? manifest?.version || "—" : currentVersion || "—"}</dd>
                     </div>
-                </div>
+                </dl>
                 <div className="studio-general-update-actions">
                     <Button
                         onClick={() => window.electronAPI.checkForUpdates()}
@@ -156,6 +154,6 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                     )}
                 </div>
             </SettingGroup>
-        </>
+        </div>
     );
 }
