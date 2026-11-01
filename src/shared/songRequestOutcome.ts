@@ -18,6 +18,7 @@ export type SongRequestSource = "command" | "reward";
 export interface SongInfo {
     title: string;
     artist: string;
+    artworkUrl?: string | null;
 }
 
 export type PlaySongOutcome =

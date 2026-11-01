@@ -18,6 +18,7 @@ export interface HomeQueueEntry {
     platform: HomePlatform;
     acceptedAt: number;
     position: number;
+    artworkUrl?: string | null;
 }
 
 export interface HomeSessionSnapshot {
@@ -33,6 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown): string | null {
     return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function isSafeArtwork(value: string): boolean {
+    return /^https:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
 /** Whitelist the renderer payload so IPC extras never cross into Home state. */
@@ -66,7 +71,7 @@ export function normalizeHomeSessionSnapshot(
 
     const artwork = text(value.current.artworkUrl);
     const artworkUrl =
-        artwork && /^https:\/\//i.test(artwork) ? artwork : null;
+        artwork && isSafeArtwork(artwork) ? artwork : null;
     const queue: HomeQueueEntry[] = [];
     for (const raw of value.queue) {
         if (!isRecord(raw)) continue;
@@ -76,6 +81,11 @@ export function normalizeHomeSessionSnapshot(
         const requester = text(raw.requester);
         const platform = raw.platform;
         const acceptedAt = raw.acceptedAt;
+        const entryArtwork = text(raw.artworkUrl);
+        const artworkUrl =
+            entryArtwork && isSafeArtwork(entryArtwork)
+                ? entryArtwork
+                : null;
         if (
             !id ||
             !entryTitle ||
@@ -95,6 +105,7 @@ export function normalizeHomeSessionSnapshot(
             platform,
             acceptedAt,
             position: queue.length + 1,
+            artworkUrl,
         });
     }
 

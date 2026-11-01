@@ -571,7 +571,7 @@ test("HomeSessionView renders playing, idle, loading and error states truthfully
     assert.match(playingHtml, /by Current Artist/);
     assert.match(playingHtml, /https:\/\/images\.example\/current\.jpg/);
     assert.match(playingHtml, /No requests waiting/);
-    assert.match(playingHtml, /Session queue/);
+    assert.doesNotMatch(playingHtml, /Session queue/);
     assert.doesNotMatch(playingHtml, /Coming soon/);
     assert.doesNotMatch(playingHtml, /Latest request/);
 
@@ -630,6 +630,7 @@ test("HomeSessionView renders local queue entries with position, requester and p
                 platform: "kick",
                 acceptedAt: 1000,
                 position: 1,
+                artworkUrl: "https://images.example/queue-1.jpg",
             },
             {
                 id: "queue-2",
@@ -639,6 +640,7 @@ test("HomeSessionView renders local queue entries with position, requester and p
                 platform: "twitch",
                 acceptedAt: 2000,
                 position: 2,
+                artworkUrl: null,
             },
         ],
         queueScope: "session",
@@ -648,8 +650,9 @@ test("HomeSessionView renders local queue entries with position, requester and p
         { session, loading: false, error: false, now: 121000 },
         translatorFor(en)
     );
-    assert.match(html, /#1/);
-    assert.match(html, /#2/);
+    assert.match(html, /https:\/\/images\.example\/queue-1\.jpg/);
+    assert.match(html, /studio-home-queue-art/);
+    assert.doesNotMatch(html, /#1|#2/);
     assert.match(html, /Waiting One/);
     assert.match(html, /Waiting Two/);
     assert.match(html, /viewer-a · Kick/);

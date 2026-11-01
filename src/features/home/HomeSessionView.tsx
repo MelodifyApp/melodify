@@ -114,8 +114,16 @@ function QueueItem({
     const { t } = useTranslation();
     return (
         <li className="studio-home-queue-item">
-            <span className="studio-home-queue-position">
-                #{entry.position}
+            <span className="studio-home-queue-art" aria-hidden="true">
+                {entry.artworkUrl ? (
+                    <img
+                        src={entry.artworkUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                    />
+                ) : (
+                    <Headphones />
+                )}
             </span>
             <span className="studio-home-queue-copy">
                 <strong>{entry.title}</strong>
@@ -200,9 +208,6 @@ export default function HomeSessionView({
                         ))}
                     </ol>
                 )}
-                <p className="studio-home-queue-note studio-home-queue-scope">
-                    {t("home.queueSessionNote")}
-                </p>
             </section>
         </>
     );

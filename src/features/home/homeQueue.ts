@@ -6,6 +6,7 @@ export interface HomeQueueAddInput {
     requester: string;
     platform: HomePlatform;
     acceptedAt?: number;
+    artworkUrl?: string | null;
 }
 
 export interface HomeQueueStore {
@@ -27,6 +28,7 @@ interface StoredEntry {
     requester: string;
     platform: HomePlatform;
     acceptedAt: number;
+    artworkUrl: string | null;
 }
 
 function normalize(value: string): string {
@@ -102,6 +104,11 @@ export function createHomeQueueStore({
                     Number.isFinite(input.acceptedAt)
                         ? input.acceptedAt
                         : now(),
+                artworkUrl:
+                    typeof input.artworkUrl === "string" &&
+                    input.artworkUrl.length > 0
+                        ? input.artworkUrl
+                        : null,
             };
             entries.push(entry);
             notify();

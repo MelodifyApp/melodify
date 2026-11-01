@@ -675,6 +675,12 @@ async function playSongWithinDeadline(
             artist: (track.artists || [])
                 .map((a: any) => a.name)
                 .join(", "),
+            artworkUrl:
+                track.album?.images?.find(
+                    (image: { url?: unknown }) =>
+                        typeof image.url === "string" &&
+                        image.url.length > 0
+                )?.url ?? null,
         },
     };
 }

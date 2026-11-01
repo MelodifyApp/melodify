@@ -30,6 +30,7 @@ const valid = {
             platform: "kick",
             acceptedAt: 1000,
             position: 9,
+            artworkUrl: "https://images.example/queue.jpg",
             spotifyRefreshToken: "must-not-cross",
         },
     ],
@@ -57,6 +58,7 @@ test("Home session snapshots whitelist only safe current/queue fields", () => {
             platform: "kick",
             acceptedAt: 1000,
             position: 1,
+            artworkUrl: "https://images.example/queue.jpg",
         },
     ]);
     assert.doesNotMatch(

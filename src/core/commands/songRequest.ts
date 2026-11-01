@@ -183,6 +183,7 @@ export async function executeSongRequest(
             requester: ctx.username,
             platform: ctx.platform,
             acceptedAt: Date.now(),
+            artworkUrl: songInfo.artworkUrl ?? null,
         });
     } catch (error) {
         logError(error, "songRequest:enqueue");

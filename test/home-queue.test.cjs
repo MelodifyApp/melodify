@@ -39,6 +39,7 @@ test("accepted entries keep stable ids, order, fields and exposed positions", ()
         platform: "kick",
         acceptedAt: 1234,
         position: 1,
+        artworkUrl: null,
     });
     assert.deepEqual(second, {
         id: "queue-2",
@@ -48,6 +49,7 @@ test("accepted entries keep stable ids, order, fields and exposed positions", ()
         platform: "twitch",
         acceptedAt: 9876,
         position: 2,
+        artworkUrl: null,
     });
     assert.deepEqual(
         queue.snapshot().map((entry) => ({
