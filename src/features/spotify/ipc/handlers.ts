@@ -190,9 +190,15 @@ ipcMain.handle("spotify:setSecrets", async (_event, secrets) => {
     if (!verification.success) {
         return verification;
     }
-    // Persist credentials and discard the singleton that may still hold the
-    // previous client ID/secret before OAuth starts.
-    updateSpotifyClientCredentials(clientId, clientSecret);
+    // Persist credentials before discarding the singleton that may still hold
+    // the previous client ID/secret. A failed durable write must leave the
+    // working client untouched and report failure.
+    try {
+        updateSpotifyClientCredentials(clientId, clientSecret);
+    } catch {
+        logError("Spotify credential persistence failed", "spotify:setSecrets");
+        return { success: false, code: "persistence_failed" };
+    }
     return { success: true };
 });
 

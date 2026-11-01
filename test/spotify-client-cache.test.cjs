@@ -10,8 +10,13 @@ const config = {
         spotifyClientSecret: "old-client-secret",
         spotifyRedirectUri: "http://127.0.0.1:8888/callback",
     },
+    failPersisted: false,
     get(key) { return this.values[key]; },
     set(values) { Object.assign(this.values, values); },
+    setPersisted(values) {
+        if (this.failPersisted) throw new Error("disk write failed");
+        Object.assign(this.values, values);
+    },
 };
 const logger = { debug() {}, info() {}, warn() {}, error() {} };
 class FakeSpotifyWebApi {
@@ -53,4 +58,26 @@ test("changing Spotify credentials rebuilds the cached API client", () => {
     assert.notStrictEqual(newClient, oldClient);
     assert.equal(newClient.options.clientId, "new-client-id");
     assert.equal(newClient.options.clientSecret, "new-client-secret");
+});
+
+test("failed Spotify credential persistence keeps the cached client", () => {
+    const oldClient = player.getSpotifyApi();
+    const previousId = config.values.spotifyClientId;
+    const previousSecret = config.values.spotifyClientSecret;
+    config.failPersisted = true;
+    try {
+        assert.throws(
+            () =>
+                player.updateSpotifyClientCredentials(
+                    "failed-client-id",
+                    "failed-client-secret"
+                ),
+            /disk write failed/
+        );
+        assert.strictEqual(player.getSpotifyApi(), oldClient);
+        assert.equal(config.values.spotifyClientId, previousId);
+        assert.equal(config.values.spotifyClientSecret, previousSecret);
+    } finally {
+        config.failPersisted = false;
+    }
 });

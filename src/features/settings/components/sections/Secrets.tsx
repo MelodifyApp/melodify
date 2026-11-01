@@ -211,6 +211,7 @@ export default function Secrets({
         // an unverified pair.
         const canSave = canSaveCredentials(status, { secretDraft });
         const isSaving = section.saving[serviceId] === true;
+        const saveError = section.saveErrors[serviceId] === true;
         const helpKey =
             status === "unverified" && stored && !secretDraft.trim()
                 ? "common.storedCredentialsHelp"
@@ -273,8 +274,18 @@ export default function Secrets({
                     </>
                 }
                 note={
-                    <p className="studio-credential-help" data-tone={status}>
-                        {t(helpKey)}
+                    <p
+                        className="studio-credential-help"
+                        data-tone={
+                            saveError ? "verification-unavailable" : status
+                        }
+                        role={saveError ? "status" : undefined}
+                    >
+                        {t(
+                            saveError
+                                ? "common.secretsSaveError"
+                                : helpKey
+                        )}
                     </p>
                 }
             >

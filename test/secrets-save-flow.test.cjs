@@ -188,6 +188,7 @@ test("failed saves retain the draft and map only stable errors", async () => {
         [async () => ({ success: false, code: "invalid_credentials", error: "raw" }), "invalid"],
         [async () => ({ success: false, code: "verification_unavailable" }), "unavailable"],
         [async () => ({ success: false, code: "missing_credentials" }), "required"],
+        [async () => ({ success: false, code: "persistence_failed" }), "persistence"],
         [async () => ({ success: false }), "failed"],
     ];
     for (const [invoke, expected] of cases) {

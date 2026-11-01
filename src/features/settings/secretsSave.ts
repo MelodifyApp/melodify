@@ -139,6 +139,7 @@ export type SecretSaveErrorCode =
     | "required"
     | "invalid"
     | "unavailable"
+    | "persistence"
     | "failed";
 
 export interface SecretSaveResult {
@@ -182,6 +183,8 @@ function failureStatusFor(result: unknown): SecretSaveErrorCode {
             return "unavailable";
         case "missing_credentials":
             return "required";
+        case "persistence_failed":
+            return "persistence";
         default:
             return "failed";
     }

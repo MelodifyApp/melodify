@@ -197,8 +197,16 @@ ipcMain.handle("twitch:setSecrets", async (_event, secrets) => {
     if (!verification.success) {
         return verification;
     }
-    logInfo("twitch:setSecrets called");
-    Config.set({ twitchClientId: clientId, twitchClientSecret: clientSecret });
+    try {
+        Config.setPersisted({
+            twitchClientId: clientId,
+            twitchClientSecret: clientSecret,
+        });
+    } catch {
+        logError("Twitch credential persistence failed", "twitch:setSecrets");
+        return { success: false, code: "persistence_failed" };
+    }
+    logInfo("twitch:setSecrets persisted credentials");
     return { success: true };
 });
 

@@ -92,6 +92,7 @@ export function useSecretsSection({
         Record<string, string | null>
     >({});
     const [saving, setSaving] = useState<Record<string, boolean>>({});
+    const [saveErrors, setSaveErrors] = useState<Record<string, boolean>>({});
 
     const bumpVerificationVersion = (serviceId: SecretServiceId) => {
         verificationVersions[serviceId] =
@@ -111,6 +112,15 @@ export function useSecretsSection({
         );
     };
 
+    const clearSaveError = (serviceId: SecretServiceId) => {
+        setSaveErrors((prev) => {
+            if (!prev[serviceId]) return prev;
+            const next = { ...prev };
+            delete next[serviceId];
+            return next;
+        });
+    };
+
     const editField = (
         serviceId: SecretServiceId,
         key: string,
@@ -118,6 +128,7 @@ export function useSecretsSection({
         isSecret: boolean
     ) => {
         const service = getSecretService(serviceId);
+        clearSaveError(serviceId);
         const nextSecret = isSecret
             ? value
             : drafts[service.clientSecretKey] ?? "";
@@ -147,6 +158,7 @@ export function useSecretsSection({
 
     const verifyService = async (serviceId: SecretServiceId) => {
         const version = verificationVersions[serviceId] ?? 0;
+        clearSaveError(serviceId);
         onStatusChange(serviceId, "verifying");
         const result = await verify(serviceId, drafts);
         if ((verificationVersions[serviceId] ?? 0) !== version) {
@@ -168,6 +180,7 @@ export function useSecretsSection({
             return;
         }
 
+        clearSaveError(serviceId);
         setSaving((prev) => ({ ...prev, [serviceId]: true }));
         const result = await save(serviceId, drafts);
         setSaving((prev) => ({ ...prev, [serviceId]: false }));
@@ -176,6 +189,11 @@ export function useSecretsSection({
         if (result.ok) {
             onStatusChange(serviceId, "verified");
             onStoredSecretChange(serviceId, true);
+        } else if (result.error === "persistence") {
+            // Provider verification remains valid; only the durable write
+            // failed. Keep the draft and the Save action available for retry.
+            setSaveErrors((prev) => ({ ...prev, [serviceId]: true }));
+            onStatusChange(serviceId, "verified");
         } else {
             onStatusChange(serviceId, statusForSaveFailure(result.error));
         }
@@ -184,6 +202,7 @@ export function useSecretsSection({
     const cancelService = (serviceId: SecretServiceId) => {
         const service = getSecretService(serviceId);
         bumpVerificationVersion(serviceId);
+        clearSaveError(serviceId);
         setDrafts((prev) => clearSecretDrafts(prev, serviceId));
         onResetStatus(serviceId);
         setValidationErrors((prev) => {
@@ -199,6 +218,7 @@ export function useSecretsSection({
         getStatus,
         validationErrors,
         saving,
+        saveErrors,
         editField,
         verifyService,
         saveService,

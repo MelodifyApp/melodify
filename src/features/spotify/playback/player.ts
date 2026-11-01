@@ -51,12 +51,16 @@ export function resetSpotifyApi(): void {
     spotifyApi = null;
 }
 
-/** Persist new Spotify app credentials and invalidate any client built with the previous pair. */
+/**
+ * Persist new Spotify app credentials and invalidate any client built with the
+ * previous pair. The cached client is discarded only after the durable write
+ * succeeds, so a failed save leaves the working session intact.
+ */
 export function updateSpotifyClientCredentials(
     spotifyClientId: string,
     spotifyClientSecret: string
 ): void {
-    Config.set({ spotifyClientId, spotifyClientSecret });
+    Config.setPersisted({ spotifyClientId, spotifyClientSecret });
     resetSpotifyApi();
 }
 

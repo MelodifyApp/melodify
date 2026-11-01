@@ -385,8 +385,16 @@ ipcMain.handle("kick:setSecrets", async (_event, secrets) => {
     if (!verification.success) {
         return verification;
     }
-    logInfo("kick:setSecrets called");
-    Config.set({ kickClientId: clientId, kickClientSecret: clientSecret });
+    try {
+        Config.setPersisted({
+            kickClientId: clientId,
+            kickClientSecret: clientSecret,
+        });
+    } catch {
+        logError("Kick credential persistence failed", "kick:setSecrets");
+        return { success: false, code: "persistence_failed" };
+    }
+    logInfo("kick:setSecrets persisted credentials");
     return { success: true };
 });
 

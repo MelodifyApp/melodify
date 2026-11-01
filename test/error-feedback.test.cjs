@@ -628,3 +628,49 @@ test("Secrets section hook gates verification and save, and keeps drafts on fail
     api = run(base);
     assert.equal(api.getStatus("spotify"), "unverified");
 });
+
+test("a persistence save failure keeps the draft and does not mark the pair stored", async () => {
+    const { run } = loadHook(
+        "src/features/settings/useSecretsSection.ts",
+        "useSecretsSection"
+    );
+    const statuses = {};
+    const stored = [];
+    const props = {
+        validate: () => null,
+        onClientIdChange() {},
+        statuses,
+        onStatusChange: (serviceId, status) => {
+            statuses[serviceId] = status;
+        },
+        onResetStatus: (serviceId) => {
+            delete statuses[serviceId];
+        },
+        verify: async (serviceId, drafts) => ({ ok: true, drafts }),
+        save: async (serviceId, drafts) => ({
+            ok: false,
+            error: "persistence",
+            drafts,
+        }),
+        config: { spotifyClientId: "client-id" },
+        storedSecrets: {},
+        storedClientIds: {},
+        onStoredSecretChange: (serviceId, isStored) => {
+            stored.push([serviceId, isStored]);
+        },
+    };
+
+    let api = run(props);
+    api.editField("spotify", "spotifyClientSecret", "draft-secret", true);
+    api = run(props);
+    await api.verifyService("spotify");
+    api = run(props);
+    assert.equal(api.getStatus("spotify"), "verified");
+
+    await api.saveService("spotify");
+    api = run(props);
+    assert.deepEqual(api.drafts, { spotifyClientSecret: "draft-secret" });
+    assert.deepEqual(stored, []);
+    assert.equal(api.getStatus("spotify"), "verified");
+    assert.equal(api.saveErrors.spotify, true);
+});

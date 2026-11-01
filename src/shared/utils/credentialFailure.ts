@@ -1,14 +1,16 @@
 /**
- * Stable, machine-readable failure codes for credential verification.
+ * Stable, machine-readable failure codes for credential verification and
+ * persistence.
  *
  * Handlers return these codes instead of free-form service text so the
- * renderer can show translated copy and no raw endpoint message, token or
- * user-supplied value ever crosses the bridge.
+ * renderer can show translated copy and no raw endpoint message, filesystem
+ * error, token or user-supplied value ever crosses the bridge.
  */
 export type CredentialFailureCode =
     | "missing_credentials"
     | "invalid_credentials"
-    | "verification_unavailable";
+    | "verification_unavailable"
+    | "persistence_failed";
 
 export interface CredentialVerificationSuccess {
     readonly success: true;
@@ -32,6 +34,8 @@ export function credentialFailureMessageKey(code: unknown): string | null {
             return "common.invalidCredentials";
         case "verification_unavailable":
             return "common.verificationUnavailable";
+        case "persistence_failed":
+            return "common.secretsSaveError";
         default:
             return null;
     }

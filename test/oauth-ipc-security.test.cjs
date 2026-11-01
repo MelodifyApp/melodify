@@ -78,6 +78,10 @@ function configStub(values, writes = []) {
             writes.push(data);
             Object.assign(values, data);
         },
+        setPersisted(data) {
+            writes.push(data);
+            Object.assign(values, data);
+        },
     };
 }
 
