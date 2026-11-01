@@ -252,6 +252,9 @@ function spotifyAuthHarness(options = {}) {
                 capture.saves += 1;
             },
             startSongFileSaving() {},
+            startCurrentPlaybackPolling() {},
+            stopCurrentPlaybackPolling() {},
+            resetCurrentPlayback() {},
         },
         "@/shared/utils/windowSend": {
             sendToWindowIfAlive: (...args) => {
@@ -607,6 +610,9 @@ function spotifyIpcHarness() {
             startSpotifyTokenRefreshInterval: async () => {},
             stopSpotifyTokenAutoRefresh() {},
             resetSpotifyApi() {},
+            startCurrentPlaybackPolling() {},
+            stopCurrentPlaybackPolling() {},
+            resetCurrentPlayback() {},
         },
         "@/features/spotify/auth/server": {
             startSpotifyAuthServer: () => "state",

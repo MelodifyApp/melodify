@@ -712,6 +712,9 @@ function spotifyIpcHarness(startPromise) {
             checkSpotifyAccessToken: async () => true,
             startSpotifyTokenRefreshInterval: async () => {},
             stopSpotifyTokenAutoRefresh() {},
+            startCurrentPlaybackPolling() {},
+            stopCurrentPlaybackPolling() {},
+            resetCurrentPlayback() {},
         },
         "@/features/spotify/auth/server": {
             startSpotifyAuthServer: () => startPromise.promise,

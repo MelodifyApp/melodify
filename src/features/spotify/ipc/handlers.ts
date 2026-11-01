@@ -81,22 +81,22 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
     );
     if (!accessToken || !refreshToken) {
         stopSpotifyTokenAutoRefresh();
-        stopCurrentPlaybackPolling?.();
-        resetCurrentPlayback?.();
+        stopCurrentPlaybackPolling();
+        resetCurrentPlayback();
         return { authenticated: false };
     }
     const refreshed = await checkSpotifyAccessToken();
     if (!refreshed) {
         stopSpotifyTokenAutoRefresh();
-        stopCurrentPlaybackPolling?.();
-        resetCurrentPlayback?.();
+        stopCurrentPlaybackPolling();
+        resetCurrentPlayback();
         return { authenticated: false };
     }
     try {
         const spotifyApi = getSpotifyApi();
         const me = await spotifyApi.getMe();
         startSpotifyTokenRefreshInterval(window);
-        startCurrentPlaybackPolling?.();
+        startCurrentPlaybackPolling();
         if (Config.get("saveCurrentSongToFile")) {
             startSongFileSaving();
         }
@@ -114,8 +114,8 @@ ipcMain.handle("spotify:checkAuth", async (event) => {
 ipcMain.on("spotify:logout", () => {
     stopSpotifyAuthServer();
     stopSpotifyTokenAutoRefresh();
-    stopCurrentPlaybackPolling?.();
-    resetCurrentPlayback?.();
+    stopCurrentPlaybackPolling();
+    resetCurrentPlayback();
     Config.set({
         spotifyAccessToken: undefined,
         spotifyRefreshToken: undefined,

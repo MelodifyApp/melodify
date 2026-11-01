@@ -80,6 +80,9 @@ function spotifyHandlerHarness() {
         checkSpotifyAccessToken: async () => true,
         startSpotifyTokenRefreshInterval: async () => {},
         stopSpotifyTokenAutoRefresh() {},
+        startCurrentPlaybackPolling() {},
+        stopCurrentPlaybackPolling() {},
+        resetCurrentPlayback() {},
     };
     const authServer = {
         startSpotifyAuthServer: () => null,

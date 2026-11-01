@@ -194,6 +194,8 @@ test("one overlay scheduler writes changes, stops fully, and does not leave a ti
 
         const timerAtStop = timers.active()[0];
         player.stopSongFileSaving();
+        // The shared playback poller is owned by Home/session, not the file
+        // overlay, so the test must release it explicitly.
         player.stopCurrentPlaybackPolling();
         assert.equal(timers.active().length, 0);
         timerAtStop.fired = true;
@@ -234,6 +236,7 @@ test("a failed first current-song write is retried for the same track", async ()
         ]);
         assert.equal(timers.active().length, 1);
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
     } finally {
         timers.restore();
     }
@@ -270,6 +273,7 @@ test("a same-track path or format change rewrites the current song", async () =>
         assert.equal(writes.length, 3);
         assert.equal(timers.active().length, 1);
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
     } finally {
         timers.restore();
     }
@@ -316,6 +320,7 @@ test("disabled overlay starts no timer and auth failure stops all owned timers",
         assert.equal(writes[writes.length - 1].content, "Artist // Song C");
         assert.equal(timers.active().length, 1);
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
     } finally {
         timers.restore();
     }
@@ -343,6 +348,7 @@ test("overlay polling stops on an API auth failure and resumes after recovery", 
         await flush();
         assert.equal(writes[writes.length - 1].content, "Artist // Song B");
         player.stopSongFileSaving();
+        player.stopCurrentPlaybackPolling();
     } finally {
         timers.restore();
     }

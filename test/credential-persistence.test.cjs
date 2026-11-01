@@ -190,6 +190,9 @@ function spotifyHarness(mode) {
         stopSpotifyTokenAutoRefresh() {},
         startSongFileSaving() {},
         resetSpotifyApi() {},
+        startCurrentPlaybackPolling() {},
+        stopCurrentPlaybackPolling() {},
+        resetCurrentPlayback() {},
     };
     load("src/features/spotify/ipc/handlers.ts", {
         electron: electronStub(ipc),
