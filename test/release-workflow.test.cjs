@@ -88,6 +88,13 @@ test("build job is read-only, uses npm ci, and uploads release assets", () => {
 
     const prepare = stepNamed(build, "Prepare and verify release assets");
     assert.match(prepare.run, /release-assets\.cjs prepare/);
+    assert.equal(
+        (build.steps || []).some(
+            (step) => step.name === "Stage release verifier"
+        ),
+        false,
+        "the build artifact must not contain executable verifier code"
+    );
 
     const upload = stepNamed(build, "Upload release assets");
     assert.equal(
@@ -107,8 +114,20 @@ test("publish job is write-scoped, protected, and does not install or build", ()
     assert.deepEqual(publish.permissions, { contents: "write" });
     assert.doesNotMatch(
         JSON.stringify(publish),
-        /actions\/checkout|npm ci|npm install|npm run make|npm run publish|electron-forge/i
+        /npm ci|npm install|npm run make|npm run publish|electron-forge/i
     );
+    assert.doesNotMatch(
+        JSON.stringify(publish),
+        /release-assets\/release-assets\.cjs/i
+    );
+
+    const checkout = stepNamed(publish, "Checkout release source");
+    assert.equal(
+        checkout.uses,
+        `actions/checkout@${PINNED_ACTIONS["actions/checkout"]}`
+    );
+    assert.equal(checkout.with?.ref, "${{ github.sha }}");
+    assert.equal(checkout.with?.["persist-credentials"], false);
 
     const download = stepNamed(
         publish,
@@ -121,8 +140,10 @@ test("publish job is write-scoped, protected, and does not install or build", ()
     assert.equal(download.with?.path, "release-assets");
 
     const verify = stepNamed(publish, "Verify release assets");
-    assert.match(verify.run, /release-assets\.cjs verify/);
+    assert.match(verify.run, /node scripts\/release-assets\.cjs verify/);
+    assert.match(verify.run, /--dir release-assets/);
     assert.match(verify.run, /GITHUB_REF_NAME/);
+    assert.doesNotMatch(verify.run, /release-assets\/release-assets\.cjs/);
 
     const draft = stepNamed(
         publish,
@@ -143,6 +164,10 @@ test("publish job is write-scoped, protected, and does not install or build", ()
     assert.match(publishStep.run, /gh release edit[^\n]*--draft=false/);
 
     const names = publish.steps.map((step) => step.name);
+    assert.ok(
+        names.indexOf("Checkout release source") <
+            names.indexOf("Verify release assets")
+    );
     assert.ok(
         names.indexOf("Verify release assets") <
             names.indexOf("Create or update draft release and upload assets")
@@ -165,6 +190,8 @@ test("release checklist documents settings and the local Sandbox boundary", () =
     assert.match(checklist, /`release` environment/);
     assert.match(checklist, /v\*\.\*\.\*/);
     assert.match(checklist, /required reviewers?/i);
+    assert.match(checklist, /read-only checkout/i);
+    assert.match(checklist, /artifact[^\n]*data only/i);
     assert.match(checklist, /update\.json/);
     assert.match(checklist, /RELEASE-NOTES-v<version>\.md/);
 });

@@ -42,12 +42,6 @@ jobs:
               shell: pwsh
               run: node scripts/release-assets.cjs prepare --tag "$env:GITHUB_REF_NAME"
 
-            # The write-scoped job receives this verifier with the artifacts, so it
-            # never needs a checkout or dependency installation.
-            - name: Stage release verifier
-              shell: pwsh
-              run: Copy-Item -LiteralPath scripts/release-assets.cjs -Destination release-assets/release-assets.cjs
-
             - name: Upload release assets
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
@@ -66,6 +60,15 @@ jobs:
         timeout-minutes: 20
 
         steps:
+            # Run the verifier from the triggering commit, not from downloaded
+            # build output. The artifact remains data only.
+            - name: Checkout release source
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  ref: ${{ github.sha }}
+                  persist-credentials: false
+                  fetch-depth: 1
+
             - name: Download Windows release artifacts
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
@@ -74,7 +77,7 @@ jobs:
 
             - name: Verify release assets
               shell: pwsh
-              run: node release-assets/release-assets.cjs verify --tag "$env:GITHUB_REF_NAME" --dir release-assets
+              run: node scripts/release-assets.cjs verify --tag "$env:GITHUB_REF_NAME" --dir release-assets
 
             - name: Create or update draft release and upload assets
               shell: pwsh

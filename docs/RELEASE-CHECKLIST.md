@@ -35,8 +35,10 @@ This checklist covers the Windows `v*.*.*` release path. The workflow is
     provide Windows Sandbox; do not claim that boundary exists in CI.
 - Inspect the expected Squirrel output under
   `out/make/squirrel.windows/x64/` before creating the tag.
-- For 1.1.0, publish the hardened `basic-electron-updater` version above 1.0.6
-  and update the desktop dependency before tagging.
+- For 1.1.0, publish the hardened `basic-electron-updater` package as **1.1.0**
+  and update the desktop dependency/lockfile before tagging.
+- 1.1.0 ships **unsigned**; publish `SHA256SUMS.txt` and do not describe the
+  installer as signed or as having verified publisher identity.
 
 ## Tag gate
 
@@ -47,10 +49,13 @@ After owner approval, push a `v<version>` tag. The workflow then:
    `Melodify-<version>-full.nupkg`, `RELEASES`, `update.json`, `SHA256SUMS.txt`,
    a release manifest, and the release notes.
 3. Uploads those files as a workflow artifact.
-4. Downloads them into the protected `release` environment without installing
-   dependencies.
-5. Verifies the tag/version match, expected files, non-zero sizes, SHA-256
-   hashes, `update.json` metadata, and release notes.
+4. Downloads the artifact **as data only** into the protected `release`
+   environment, then performs a **read-only checkout** of the triggering commit.
+   The publish job does not install dependencies or execute verifier code from
+   the artifact.
+5. Runs `scripts/release-assets.cjs` from that checkout against the downloaded
+   directory and verifies the tag/version match, expected files, non-zero sizes,
+   SHA-256 hashes, `update.json` metadata, and release notes.
 6. Creates or updates the draft release, uploads the expected Windows assets,
    and verifies the uploaded names and sizes.
 7. Un-drafts the release only after every check passes.
