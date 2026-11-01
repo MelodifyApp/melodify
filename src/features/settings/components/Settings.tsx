@@ -20,6 +20,7 @@ import {
     settingsAreDirty,
     toggleDraftCommand,
 } from "./draftState";
+import { mergeLogEntries } from "./logFeed";
 import "./settingsStudio.css";
 
 const SECTION_IDS = ["general", "secrets", "requests", "commands", "logs", "debug"] as const;
@@ -115,10 +116,28 @@ export default function Settings({ onClose, theme = "graphite", active = true, r
 
     useEffect(() => {
         if (!active || activeSection !== "logs") return;
+        let disposed = false;
+        const onLogEntry = (entry: unknown) => {
+            if (disposed) return;
+            setLogs((current) => mergeLogEntries(current, [entry]));
+        };
+
+        // Subscribe before hydrating so an entry emitted during the snapshot
+        // request is retained; the merge removes the overlap.
+        window.electronAPI.on("log:entry", onLogEntry);
         window.electronAPI
             .invoke("log:getAll")
-            .then((data) => setLogs(data || []))
+            .then((data) => {
+                if (disposed) return;
+                const snapshot = Array.isArray(data) ? data : [];
+                setLogs((current) => mergeLogEntries(snapshot, current));
+            })
             .catch((error) => console.error("Failed to load logs", error));
+
+        return () => {
+            disposed = true;
+            window.electronAPI.removeListener("log:entry", onLogEntry);
+        };
     }, [active, activeSection]);
 
     useEffect(() => {

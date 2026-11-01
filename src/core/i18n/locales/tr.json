@@ -142,6 +142,7 @@
             "actionReconnect": "Yeniden bağlan",
             "actionRefresh": "Yenile",
             "actionRetry": "Yeniden dene",
+            "actionForService": "{{service}} — {{action}}",
             "refreshStatus": "Durumu yenile"
         }
     },
@@ -183,7 +184,7 @@
         "minimizeToTray": "Sistem tepsisine küçült",
         "minimizeToTrayDesc": "Kapatırken sistem tepsisinde sakla",
         "autoUpdate": "Otomatik güncelle",
-        "autoUpdateDesc": "Güncellemeleri otomatik kontrol et",
+        "autoUpdateDesc": "Başlangıçta güncellemeleri kontrol eder; indirme ve kurulum manueldir",
         "current": "Mevcut",
         "latest": "En Son",
         "checkUpdates": "Güncelleme Kontrol Et",

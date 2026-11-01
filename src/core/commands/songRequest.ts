@@ -45,8 +45,12 @@ export async function executeSongRequest(
         recordSongRequestOutcome(outcome);
         onOutcome?.(outcome);
         if (outcome.status === "rejected") {
+            const reconciliation =
+                outcome.source === "reward"
+                    ? ` [requester: ${outcome.requestedBy}, platform: ${outcome.platform}; manual reconciliation required]`
+                    : "";
             logWarn(
-                `Song request rejected (${outcome.reason}, ${outcome.source}): ${outcome.message}`,
+                `Song request rejected (${outcome.reason}, ${outcome.source})${reconciliation}: ${outcome.message}`,
                 "songRequest"
             );
         }

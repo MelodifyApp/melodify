@@ -52,3 +52,29 @@ test("English locale uses an English back-to-home label", () => {
     const locale = JSON.parse(fs.readFileSync(LOCALE_PATH, "utf8"));
     assert.equal(locale.navigation.homePage, "Home");
 });
+
+test("auto-update copy describes startup checks and manual download/install", () => {
+    const en = JSON.parse(fs.readFileSync(LOCALE_PATH, "utf8"));
+    const trPath = path.join(
+        SRC_ROOT,
+        "core",
+        "i18n",
+        "locales",
+        "tr.json"
+    );
+    const tr = JSON.parse(fs.readFileSync(trPath, "utf8"));
+
+    assert.match(en.general.autoUpdateDesc, /startup/i);
+    assert.match(en.general.autoUpdateDesc, /manual/i);
+    assert.doesNotMatch(
+        en.general.autoUpdateDesc,
+        /download.*automatically|automatically.*download/i
+    );
+
+    assert.match(tr.general.autoUpdateDesc, /başlangıçta/i);
+    assert.match(tr.general.autoUpdateDesc, /manuel/i);
+    assert.doesNotMatch(
+        tr.general.autoUpdateDesc,
+        /indirmeyi otomatik|otomatik indir/i
+    );
+});

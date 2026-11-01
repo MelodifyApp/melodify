@@ -144,6 +144,7 @@ export interface TranslationKeys {
             actionReconnect: string;
             actionRefresh: string;
             actionRetry: string;
+            actionForService: string;
             refreshStatus: string;
         };
     };

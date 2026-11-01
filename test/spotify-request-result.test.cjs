@@ -16,7 +16,7 @@ const values = {
     songRequestReplyTemplate: "Added: {title} - {artist}",
     songRequestErrorTemplate: "Could not add track",
 };
-const effects = { count: 0, history: 0, globalCooldown: 0, userCooldown: 0, replies: [], queue: [] };
+const effects = { count: 0, history: 0, globalCooldown: 0, userCooldown: 0, replies: [], warnings: [], queue: [] };
 let rejectQueue = false;
 let resolveQueue;
 let pendingQueue = false;
@@ -88,7 +88,9 @@ test.after(() => {
 });
 const config = { get: (key) => values[key], set: (data) => Object.assign(values, data) };
 const logging = {
-    logDebug() {}, logInfo() {}, logWarn() {}, logError() {},
+    logDebug() {}, logInfo() {},
+    logWarn(message) { effects.warnings.push(message); },
+    logError() {},
     logSongRequest() { effects.history++; },
 };
 const originalLoad = Module._load;
@@ -157,6 +159,7 @@ const sendReply = async (message) => { effects.replies.push(message); };
 function reset() {
     effects.count = effects.history = effects.globalCooldown = effects.userCooldown = 0;
     effects.replies = [];
+    effects.warnings = [];
     effects.queue = [];
     rejectQueue = pendingQueue = false;
     resolveQueue = undefined;
@@ -499,6 +502,42 @@ test("reward outcomes use the existing history status for success, cooldown and 
         true
     );
     assert.equal(effects.count, 0);
+});
+
+test("a failed reward is attributable in app logs and export", async () => {
+    const { formatLogsForExport } = require("../src/core/logging/export");
+    for (const platform of ["kick", "twitch"]) {
+        reset();
+        history.resetSongRequestOutcomeHistory();
+        rejectQueue = true;
+        assert.equal(
+            await executeSongRequest(
+                { ...context, platform },
+                "Sample track",
+                manager,
+                { sendReply, skipPermissionCheck: true }
+            ),
+            false
+        );
+        const warning = effects.warnings.find((message) =>
+            /Song request rejected/i.test(message)
+        );
+        assert.ok(warning, "expected the rejection warning");
+        assert.match(warning, /sample-viewer/);
+        assert.match(warning, new RegExp(platform));
+        assert.match(warning, /manual reconciliation/i);
+
+        const exported = formatLogsForExport([
+            {
+                level: "warn",
+                timestamp: Date.now(),
+                message: warning,
+            },
+        ]);
+        assert.match(exported, /sample-viewer/);
+        assert.match(exported, new RegExp(platform));
+        assert.match(exported, /manual reconciliation/i);
+    }
 });
 
 test("no-sender reward outcomes are still recorded without a chat reply", async () => {

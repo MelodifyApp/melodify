@@ -45,7 +45,7 @@ function withCssStub(callback) {
     }
 }
 
-function renderComponent(relativePath, props = {}) {
+function renderComponent(relativePath, props = {}, translator) {
     return withCssStub(() => {
         const originalLoad = Module._load;
         Module._resolveFilename = function (request, ...args) {
@@ -61,10 +61,12 @@ function renderComponent(relativePath, props = {}) {
             if (request === "react-i18next") {
                 return {
                     useTranslation: () => ({
-                        t: (key, options) =>
-                            options && options.count !== undefined
-                                ? `${key}:${options.count}`
-                                : key,
+                        t:
+                            translator ||
+                            ((key, options) =>
+                                options && options.count !== undefined
+                                    ? `${key}:${options.count}`
+                                    : key),
                     }),
                 };
             }
@@ -82,6 +84,20 @@ function renderComponent(relativePath, props = {}) {
             Module._load = originalLoad;
         }
     });
+}
+
+function translatorFor(locale) {
+    return (key, options = {}) => {
+        let value = locale;
+        for (const part of key.split(".")) {
+            if (!value || typeof value !== "object") return key;
+            value = value[part];
+        }
+        if (typeof value !== "string") return key;
+        return value.replace(/\{\{(\w+)\}\}/g, (_match, name) =>
+            options[name] === undefined ? `{{${name}}}` : String(options[name])
+        );
+    };
 }
 
 const homeTime = load("src/features/home/homeTime.ts");
@@ -557,6 +573,58 @@ test("Connections dialog presents real status rows and is modal", () => {
     assert.doesNotMatch(html, /studio-provider-card/);
 });
 
+test("connection actions expose localized provider-plus-action names", () => {
+    const views = homeConnections.deriveHomeConnections({
+        spotify: {
+            hasSecrets: true,
+            authenticated: false,
+            hasSession: false,
+            error: false,
+        },
+        kick: {
+            hasSecrets: true,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+        twitch: {
+            hasSecrets: true,
+            authenticated: false,
+            listening: false,
+            error: false,
+        },
+    });
+    const props = {
+        views,
+        onClose() {},
+        onRefresh() {},
+        onOpenSettings() {},
+        onSpotifyAuth() {},
+    };
+    const enHtml = renderComponent(
+        "src/features/home/HomeConnectionsDialog.tsx",
+        props,
+        translatorFor(en)
+    );
+    for (const service of ["Spotify", "Kick", "Twitch"]) {
+        assert.match(enHtml, new RegExp(`aria-label="Connect ${service}"`));
+    }
+    assert.equal((enHtml.match(/>Connect</g) || []).length, 3);
+
+    const trHtml = renderComponent(
+        "src/features/home/HomeConnectionsDialog.tsx",
+        props,
+        translatorFor(tr)
+    );
+    for (const service of ["Spotify", "Kick", "Twitch"]) {
+        assert.match(
+            trHtml,
+            new RegExp(`aria-label="${service} — Bağlan"`)
+        );
+    }
+    assert.equal((trHtml.match(/>Bağlan</g) || []).length, 3);
+});
+
 test("Home keeps real song-request and update sources and omits demo queue rows", () => {
     const source = readSource("src/ui/components/HomePage.tsx");
     const dialog = readSource(
@@ -622,6 +690,7 @@ test("Home connection labels exist in English and Turkish", () => {
         "home.connections.actionReconnect",
         "home.connections.actionRefresh",
         "home.connections.actionRetry",
+        "home.connections.actionForService",
         "home.connections.refreshStatus",
         "home.timeNow",
         "home.timeMinutes",

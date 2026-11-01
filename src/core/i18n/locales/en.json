@@ -142,6 +142,7 @@
             "actionReconnect": "Reconnect",
             "actionRefresh": "Refresh",
             "actionRetry": "Retry",
+            "actionForService": "{{action}} {{service}}",
             "refreshStatus": "Refresh status"
         }
     },
@@ -183,7 +184,7 @@
         "minimizeToTray": "Minimize to tray",
         "minimizeToTrayDesc": "Hide in system tray when minimized",
         "autoUpdate": "Auto-update",
-        "autoUpdateDesc": "Check and download updates automatically",
+        "autoUpdateDesc": "Check for updates at startup; download and install manually",
         "current": "Current",
         "latest": "Latest",
         "checkUpdates": "Check Updates",

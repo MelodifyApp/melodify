@@ -36,7 +36,15 @@ import {
 let spotifyApi: SpotifyWebApi | null = null;
 let refreshSpotifyTokenInterval: NodeJS.Timeout | null = null;
 const songFileSavingEnabled = true;
-let lastSavedSong: { title: string; artist: string } | null = null;
+
+interface SavedCurrentSong {
+    title: string;
+    artist: string;
+    filePath: string;
+    format: string;
+}
+
+let lastSavedSong: SavedCurrentSong | null = null;
 let songOverlayTimer: NodeJS.Timeout | null = null;
 let songOverlayGeneration = 0;
 let songOverlayActive = false;
@@ -698,6 +706,18 @@ function scheduleCurrentSongPoll(generation: number, delay: number): void {
     }, delay);
 }
 
+function currentSongOutput(): { filePath: string; format: string } {
+    const filePath = Config.get("currentSongFilePath");
+    const configuredFormat = Config.get("currentSongFormat");
+    return {
+        filePath: typeof filePath === "string" ? filePath : "",
+        format:
+            typeof configuredFormat === "string" && configuredFormat
+                ? configuredFormat
+                : "{title} - {artist}",
+    };
+}
+
 // Function to save current song to file
 async function saveCurrentSongToFile(
     generation = songOverlayGeneration
@@ -753,21 +773,29 @@ async function saveCurrentSongToFile(
             artist: item.artists[0]?.name || "Unknown Artist",
         };
 
-        // Keep the existing behavior: only write when the track changes.
+        // Rewrite when the track or the effective output target changes, and
+        // only remember the song after the file write actually succeeds.
+        const output = currentSongOutput();
         if (
             lastSavedSong &&
             lastSavedSong.title === currentSong.title &&
-            lastSavedSong.artist === currentSong.artist
+            lastSavedSong.artist === currentSong.artist &&
+            lastSavedSong.filePath === output.filePath &&
+            lastSavedSong.format === output.format
         ) {
             scheduleCurrentSongPoll(generation, 30000);
             return;
         }
 
-        await saveSongToFile(currentSong);
+        const savedSong = await saveSongToFile(currentSong);
         if (!songOverlayActive || generation !== songOverlayGeneration) {
             return;
         }
-        lastSavedSong = currentSong;
+        if (!savedSong) {
+            scheduleCurrentSongPoll(generation, 30000);
+            return;
+        }
+        lastSavedSong = savedSong;
 
         const songDuration = item.duration_ms;
         const nextCheckDelay = Math.min(songDuration + 5000, 300000);
@@ -848,41 +876,51 @@ async function saveCurrentSongToFile(
 }
 
 // Helper function to save song to file
-async function saveSongToFile(songInfo: { title: string; artist: string }) {
+async function saveSongToFile(songInfo: {
+    title: string;
+    artist: string;
+}): Promise<SavedCurrentSong | null> {
     try {
         logDebug("saveSongToFile called", { songInfo });
         const saveToFile = Config.get("saveCurrentSongToFile");
-        const filePath = Config.get("currentSongFilePath");
+        const output = currentSongOutput();
 
-        logDebug("Song file saving config", { saveToFile, filePath });
+        logDebug("Song file saving config", {
+            saveToFile,
+            filePath: output.filePath,
+        });
 
-        if (!saveToFile || !filePath) {
+        if (!saveToFile || !output.filePath) {
             logDebug("Song file saving disabled or no file path configured");
-            return;
+            return null;
         }
 
         // Handle empty song info (no song playing)
         let songText = "";
         if (songInfo.title && songInfo.artist) {
-            const currentSongFormat =
-                Config.get("currentSongFormat") || "{title} - {artist}";
-            songText = currentSongFormat
+            songText = output.format
                 .replace("{title}", songInfo.title)
                 .replace("{artist}", songInfo.artist);
         }
 
         // Ensure directory exists
-        const dir = path.dirname(filePath);
+        const dir = path.dirname(output.filePath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
 
-        fs.writeFileSync(filePath, songText, "utf-8");
-        logDebug(`Current song saved to file: ${filePath}`, {
+        fs.writeFileSync(output.filePath, songText, "utf-8");
+        logDebug(`Current song saved to file: ${output.filePath}`, {
             songText: songText || "No song playing",
         });
+        return {
+            ...songInfo,
+            filePath: output.filePath,
+            format: output.format,
+        };
     } catch (error) {
         logError(error, "spotify:saveSongToFile");
+        return null;
     }
 }
 

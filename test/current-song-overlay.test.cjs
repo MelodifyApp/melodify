@@ -33,10 +33,18 @@ function loadPlayer(configValues, state) {
         }
     }
     const writes = [];
+    let writeAttempts = 0;
     const fsStub = {
         existsSync: () => true,
         mkdirSync() {},
         writeFileSync: (filePath, content) => {
+            writeAttempts += 1;
+            if (state.failWrites > 0) {
+                state.failWrites -= 1;
+                const error = new Error("dummy write failure");
+                error.code = "EACCES";
+                throw error;
+            }
             writes.push({ filePath, content });
         },
     };
@@ -80,7 +88,11 @@ function loadPlayer(configValues, state) {
             path.join(root, "src/features/spotify/playback/player.ts")
         );
         delete require.cache[resolved];
-        return { player: require(resolved), writes };
+        return {
+            player: require(resolved),
+            writes,
+            writeAttempts: () => writeAttempts,
+        };
     } finally {
         Module._resolveFilename = originalResolve;
         Module._load = originalLoad;
@@ -192,6 +204,70 @@ test("one overlay scheduler writes changes, stops fully, and does not leave a ti
         await flush();
         player.stopSongFileSaving();
         assert.equal(timers.active().length, 0);
+    } finally {
+        timers.restore();
+    }
+});
+
+test("a failed first current-song write is retried for the same track", async () => {
+    const config = baseConfig();
+    const state = { playback: playback("Song A"), failWrites: 1 };
+    const timers = fakeTimers();
+    try {
+        const { player, writes, writeAttempts } = loadPlayer(config, state);
+        player.startSongFileSaving();
+        await flush();
+        assert.equal(writeAttempts(), 1);
+        assert.equal(writes.length, 0);
+        assert.equal(timers.active().length, 1);
+
+        timers.fireNext();
+        await flush();
+        assert.equal(writeAttempts(), 2);
+        assert.deepEqual(writes, [
+            {
+                filePath: config.currentSongFilePath,
+                content: "Artist // Song A",
+            },
+        ]);
+        assert.equal(timers.active().length, 1);
+        player.stopSongFileSaving();
+    } finally {
+        timers.restore();
+    }
+});
+
+test("a same-track path or format change rewrites the current song", async () => {
+    const config = baseConfig();
+    const state = { playback: playback("Song A") };
+    const timers = fakeTimers();
+    try {
+        const { player, writes } = loadPlayer(config, state);
+        player.startSongFileSaving();
+        await flush();
+        assert.deepEqual(writes[0], {
+            filePath: config.currentSongFilePath,
+            content: "Artist // Song A",
+        });
+
+        config.currentSongFilePath = "C:\\dummy\\retargeted.txt";
+        timers.fireNext();
+        await flush();
+        assert.deepEqual(writes[1], {
+            filePath: config.currentSongFilePath,
+            content: "Artist // Song A",
+        });
+
+        config.currentSongFormat = "{title}";
+        timers.fireNext();
+        await flush();
+        assert.deepEqual(writes[2], {
+            filePath: config.currentSongFilePath,
+            content: "Song A",
+        });
+        assert.equal(writes.length, 3);
+        assert.equal(timers.active().length, 1);
+        player.stopSongFileSaving();
     } finally {
         timers.restore();
     }

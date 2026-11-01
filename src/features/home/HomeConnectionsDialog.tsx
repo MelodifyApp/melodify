@@ -236,6 +236,14 @@ export default function HomeConnectionsDialog({
                                                     ? "primary"
                                                     : "secondary"
                                             }
+                                            aria-label={t(
+                                                "home.connections.actionForService",
+                                                {
+                                                    service:
+                                                        names[serviceId],
+                                                    action: t(action.key),
+                                                }
+                                            )}
                                             disabled={action.disabled}
                                             onClick={() => runAction(view)}
                                         >
