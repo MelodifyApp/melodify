@@ -99,6 +99,13 @@ export async function executeSongRequest(
     }
 
     let admission: SongRequestAdmission | undefined;
+    let admissionSettled = false;
+    const settleAdmission = (action: "commit" | "release") => {
+        if (!admission || admissionSettled) return;
+        admissionSettled = true;
+        if (action === "commit") admission.commit();
+        else admission.release();
+    };
     if (commandManager) {
         admission = commandManager.reserveSongRequestAdmission(ctx.username);
         if (!admission.admitted) {
@@ -121,7 +128,7 @@ export async function executeSongRequest(
     }
 
     if (!query) {
-        admission?.release();
+        settleAdmission("release");
         const result = reject("empty-query");
         if (Config.get("replyOnSongRequestError") && sendReply) {
             await sendReply(
@@ -136,7 +143,7 @@ export async function executeSongRequest(
         playbackOutcome = await playSong(query, ctx.username);
     } catch (error) {
         logError(error, "songRequest:playSong");
-        admission?.release();
+        settleAdmission("release");
         playbackOutcome = {
             status: "failure" as const,
             reason: "unknown" as const,
@@ -145,7 +152,7 @@ export async function executeSongRequest(
     }
 
     if (playbackOutcome.status === "failure") {
-        admission?.release();
+        settleAdmission("release");
         const result = reject(
             playbackOutcome.reason,
             playbackOutcome.error
@@ -163,7 +170,7 @@ export async function executeSongRequest(
 
     const songInfo = playbackOutcome.song;
 
-    admission?.commit();
+    settleAdmission("commit");
     logSongRequest(songInfo.title, songInfo.artist, ctx.username);
     incrementSongRequestCount(songInfo);
 

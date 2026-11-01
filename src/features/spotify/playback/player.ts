@@ -43,6 +43,23 @@ let songOverlayActive = false;
 let tokenGeneration = 0;
 let refreshInFlight: Promise<boolean> | null = null;
 
+/**
+ * A song request must not hold the global admission slot forever when the
+ * provider stops responding. The deadline is deliberately finite and covers
+ * token preflight, reads, queue submission and one 401 recovery.
+ */
+export const SPOTIFY_PLAYBACK_DEADLINE_MS = 15_000;
+
+export interface PlaySongOptions {
+    deadlineMs?: number;
+    signal?: AbortSignal;
+}
+
+interface PlaybackDeadline {
+    signal: AbortSignal;
+    dispose(): void;
+}
+
 /** Rebuild the API client after Spotify credentials change in Settings. */
 export function resetSpotifyApi(): void {
     // Credential changes supersede any refresh that started with the old pair.
@@ -234,6 +251,180 @@ export async function checkSpotifyAccessToken(
     return true;
 }
 
+function createPlaybackDeadline(options: PlaySongOptions): PlaybackDeadline {
+    const controller = new AbortController();
+    const external = options.signal;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let onExternalAbort: (() => void) | null = null;
+
+    if (external) {
+        onExternalAbort = () => controller.abort();
+        if (external.aborted) controller.abort();
+        else external.addEventListener("abort", onExternalAbort, { once: true });
+    }
+
+    if (!controller.signal.aborted) {
+        const requested =
+            typeof options.deadlineMs === "number" &&
+            Number.isFinite(options.deadlineMs) &&
+            options.deadlineMs > 0
+                ? options.deadlineMs
+                : SPOTIFY_PLAYBACK_DEADLINE_MS;
+        timer = setTimeout(() => controller.abort(), requested);
+    }
+
+    return {
+        signal: controller.signal,
+        dispose() {
+            if (timer) clearTimeout(timer);
+            if (external && onExternalAbort) {
+                external.removeEventListener("abort", onExternalAbort);
+            }
+        },
+    };
+}
+
+function cancelledPlaybackError(): Error {
+    const error = new Error("Spotify request was cancelled");
+    error.name = "AbortError";
+    return error;
+}
+
+function withPlaybackAbort<T>(
+    promise: Promise<T>,
+    signal: AbortSignal
+): Promise<T> {
+    if (signal.aborted) {
+        // Still attach a rejection handler so an already-aborted provider
+        // promise cannot become an unhandled rejection.
+        void promise.catch((): void => undefined);
+        return Promise.reject(cancelledPlaybackError());
+    }
+    return new Promise<T>((resolve, reject) => {
+        function cleanup() {
+            signal.removeEventListener("abort", onAbort);
+        }
+        function onAbort() {
+            cleanup();
+            reject(cancelledPlaybackError());
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+        promise.then(
+            (value) => {
+                cleanup();
+                resolve(value);
+            },
+            (error) => {
+                cleanup();
+                reject(error);
+            }
+        );
+    });
+}
+
+function playbackErrorStatus(error: unknown): number {
+    if (typeof error !== "object" || error === null) return NaN;
+    return Number(
+        (error as { statusCode?: unknown }).statusCode ??
+            (
+                error as {
+                    body?: { error?: { status?: unknown } };
+                }
+            ).body?.error?.status
+    );
+}
+
+function isDefinitiveAuthError(error: unknown): boolean {
+    return playbackErrorStatus(error) === 401;
+}
+
+function currentSpotifyApi(): SpotifyWebApi | null {
+    const api = getSpotifyApi();
+    if (!api) return null;
+    const accessToken = api.getAccessToken();
+    return typeof accessToken === "string" && accessToken.length > 0
+        ? api
+        : null;
+}
+
+function spotifyAuthError(): Error {
+    const error = new Error("Spotify authentication is unavailable");
+    (error as Error & { statusCode?: number }).statusCode = 401;
+    return error;
+}
+
+/**
+ * Queue submission needs its own abortable transport. The SDK's addToQueue
+ * promise cannot be cancelled, so a deadline around it would let a late queue
+ * mutation happen after the request was reported as timed out.
+ */
+async function addToQueueWithDeadline(
+    trackUri: string,
+    signal: AbortSignal
+): Promise<void> {
+    if (signal.aborted) throw cancelledPlaybackError();
+    const api = currentSpotifyApi();
+    const accessToken = api?.getAccessToken();
+    if (!accessToken) throw spotifyAuthError();
+
+    const endpoint = new URL("https://api.spotify.com/v1/me/player/queue");
+    endpoint.searchParams.set("uri", trackUri);
+    const response = await withPlaybackAbort(
+        globalThis.fetch(endpoint.toString(), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal,
+        }),
+        signal
+    );
+
+    if (!response.ok) {
+        const error = new Error(
+            `Spotify queue request failed (${response.status})`
+        ) as Error & { statusCode?: number };
+        error.statusCode = response.status;
+        throw error;
+    }
+}
+
+async function recoverSpotifyAuth(
+    generationBefore: number,
+    accessTokenBefore: string | null,
+    signal: AbortSignal
+): Promise<boolean> {
+    if (signal.aborted) return false;
+
+    // A login, logout or credential change that finished while the provider
+    // call was in flight already superseded the token this call used. Only
+    // skip the refresh when a different token is actually available.
+    const currentToken =
+        currentSpotifyApi()?.getAccessToken() ?? null;
+    if (
+        tokenGeneration !== generationBefore &&
+        currentToken !== null &&
+        currentToken !== accessTokenBefore
+    ) {
+        return true;
+    }
+
+    const refreshGeneration = tokenGeneration;
+    const refreshed = await withPlaybackAbort(
+        refreshSpotifyAccessToken(),
+        signal
+    );
+    if (refreshed) return currentSpotifyApi() !== null;
+
+    // A login can win while the refresh is in flight and make the refresh
+    // return false. Use that newer token rather than treating it as stale.
+    const refreshedToken =
+        currentSpotifyApi()?.getAccessToken() ?? null;
+    return (
+        tokenGeneration !== refreshGeneration &&
+        refreshedToken !== null &&
+        refreshedToken !== accessTokenBefore
+    );
+}
+
 /**
  * Classifies provider errors without retaining or exposing response bodies.
  */
@@ -249,17 +440,7 @@ function playbackFailureReason(
             return "cancelled";
         }
     }
-    const statusCode =
-        typeof error === "object" && error !== null
-            ? Number(
-                  (error as { statusCode?: unknown }).statusCode ??
-                      (
-                          error as {
-                              body?: { error?: { status?: unknown } };
-                          }
-                      ).body?.error?.status
-              )
-            : NaN;
+    const statusCode = playbackErrorStatus(error);
     if (statusCode === 401 || statusCode === 403) return "auth-error";
     if (statusCode === 404) return "not-found";
     if (statusCode === 429 || statusCode >= 500) return "provider-error";
@@ -287,14 +468,101 @@ function failedPlayback(
  */
 export async function playSong(
     songQuery: string,
-    username: string
+    username: string,
+    options: PlaySongOptions = {}
+): Promise<PlaySongOutcome> {
+    const deadline = createPlaybackDeadline(options);
+    try {
+        return await playSongWithinDeadline(
+            songQuery,
+            username,
+            deadline.signal
+        );
+    } catch (error) {
+        if (deadline.signal.aborted) {
+            return failedPlayback("cancelled");
+        }
+        logError(error, "spotify:playSong");
+        return failedPlayback(playbackFailureReason(error, "provider-error"));
+    } finally {
+        deadline.dispose();
+    }
+}
+
+async function playSongWithinDeadline(
+    songQuery: string,
+    username: string,
+    signal: AbortSignal
 ): Promise<PlaySongOutcome> {
     logDebug("playSong called", redactSecrets({ songQuery, username }));
-    const spotifyApi = getSpotifyApi();
-    if (!spotifyApi) {
+
+    const tokenBeforePreflight =
+        currentSpotifyApi()?.getAccessToken() ?? null;
+    let tokenValid: boolean;
+    try {
+        tokenValid = await withPlaybackAbort(
+            checkSpotifyAccessToken(),
+            signal
+        );
+    } catch (error) {
+        logError(error, "spotify:playSong:checkAccessToken");
+        return failedPlayback(playbackFailureReason(error, "provider-error"));
+    }
+
+    if (!tokenValid) {
+        const tokenAfterPreflight =
+            currentSpotifyApi()?.getAccessToken() ?? null;
+        if (
+            tokenAfterPreflight === null ||
+            tokenAfterPreflight === tokenBeforePreflight
+        ) {
+            logError("Spotify access token unavailable", "spotify:playSong");
+            return failedPlayback("auth-error");
+        }
+    }
+    if (!currentSpotifyApi()) {
         logError("Spotify API not configured", "spotify:playSong");
         return failedPlayback("auth-error");
     }
+
+    let requestGeneration = tokenGeneration;
+    let requestAccessToken =
+        currentSpotifyApi()?.getAccessToken() ?? null;
+    let authRetryUsed = false;
+    const withAuthRetry = async <T>(
+        operation: () => Promise<T>
+    ): Promise<T> => {
+        try {
+            return await operation();
+        } catch (error) {
+            if (
+                !isDefinitiveAuthError(error) ||
+                authRetryUsed ||
+                signal.aborted
+            ) {
+                throw error;
+            }
+            authRetryUsed = true;
+            const recovered = await recoverSpotifyAuth(
+                requestGeneration,
+                requestAccessToken,
+                signal
+            );
+            if (!recovered) throw error;
+            requestGeneration = tokenGeneration;
+            requestAccessToken =
+                currentSpotifyApi()?.getAccessToken() ??
+                requestAccessToken;
+            return await operation();
+        }
+    };
+
+    const readableApi = (): SpotifyWebApi => {
+        const api = currentSpotifyApi();
+        if (!api) throw spotifyAuthError();
+        return api;
+    };
+
     let trackUri: string | null = null;
     let track: any = null;
     // Updated regex to handle /intl-xx/ in the URL path and optional query params
@@ -304,7 +572,9 @@ export async function playSong(
     if (match && match[1]) {
         trackUri = `spotify:track:${match[1]}`;
         try {
-            const trackData = await spotifyApi.getTrack(match[1]);
+            const trackData = await withAuthRetry(() =>
+                withPlaybackAbort(readableApi().getTrack(match[1]), signal)
+            );
             track = trackData.body;
         } catch (err) {
             logError(err, "spotify:playSong:getTrack");
@@ -314,9 +584,12 @@ export async function playSong(
         }
     } else {
         try {
-            const tracks = await spotifyApi.searchTracks(songQuery, {
-                limit: 1,
-            });
+            const tracks = await withAuthRetry(() =>
+                withPlaybackAbort(
+                    readableApi().searchTracks(songQuery, { limit: 1 }),
+                    signal
+                )
+            );
             if (!tracks.body.tracks.total || !tracks.body.tracks.items[0]) {
                 logWarn(
                     "No tracks found for query: " + songQuery,
@@ -342,7 +615,9 @@ export async function playSong(
 
     logDebug("Adding to queue", redactSecrets({ trackUri, track }));
     try {
-        await spotifyApi.addToQueue(trackUri);
+        await withAuthRetry(() =>
+            addToQueueWithDeadline(trackUri as string, signal)
+        );
     } catch (err) {
         logError(err, "spotify:playSong:addToQueue");
         // A found track is not a successful request until Spotify accepts it.

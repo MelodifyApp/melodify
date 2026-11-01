@@ -7,6 +7,9 @@ const Module = require("node:module");
 const values = {
     spotifyClientId: "test-client",
     spotifyClientSecret: "test-secret",
+    spotifyAccessToken: "test-access",
+    spotifyRefreshToken: "test-refresh",
+    spotifyExpiresAt: Date.now() + 3_600_000,
     canAnyonePlaySong: true,
     replyOnSongRequest: true,
     replyOnSongRequestError: true,
@@ -23,12 +26,27 @@ let queueError = null;
 let trackOverride = null;
 const track = { uri: "spotify:track:abc123", name: "Sample track", artists: [{ name: "Sample artist" }] };
 class FakeSpotifyWebApi {
+    setAccessToken(token) {
+        this.accessToken = token;
+        values.spotifyAccessToken = token;
+    }
+    setRefreshToken(token) {
+        values.spotifyRefreshToken = token;
+    }
+    getAccessToken() {
+        return this.accessToken || values.spotifyAccessToken;
+    }
     async searchTracks() {
         if (searchError) throw searchError;
         if (noResults) return { body: { tracks: { total: 0, items: [] } } };
         return { body: { tracks: { total: 1, items: [trackOverride || track] } } };
     }
     async getTrack() { return { body: trackOverride || track }; }
+    async refreshAccessToken() {
+        return {
+            body: { access_token: "refreshed-access", expires_in: 3600 },
+        };
+    }
     async addToQueue(uri) {
         effects.queue.push(uri);
         if (pendingQueue) await new Promise((resolve) => { resolveQueue = resolve; });
@@ -36,6 +54,38 @@ class FakeSpotifyWebApi {
         if (rejectQueue) throw new Error("Spotify rejected queue insertion");
     }
 }
+
+const originalFetch = global.fetch;
+global.fetch = async (url, init = {}) => {
+    const uri = new URL(String(url)).searchParams.get("uri");
+    effects.queue.push(uri);
+    if (pendingQueue) {
+        await new Promise((resolve, reject) => {
+            resolveQueue = resolve;
+            if (init.signal?.aborted) {
+                const error = new Error("request aborted");
+                error.name = "AbortError";
+                reject(error);
+                return;
+            }
+            init.signal?.addEventListener(
+                "abort",
+                () => {
+                    const error = new Error("request aborted");
+                    error.name = "AbortError";
+                    reject(error);
+                },
+                { once: true }
+            );
+        });
+    }
+    if (queueError) throw queueError;
+    if (rejectQueue) throw new Error("Spotify rejected queue insertion");
+    return { ok: true, status: 204 };
+};
+test.after(() => {
+    global.fetch = originalFetch;
+});
 const config = { get: (key) => values[key], set: (data) => Object.assign(values, data) };
 const logging = {
     logDebug() {}, logInfo() {}, logWarn() {}, logError() {},
@@ -114,11 +164,15 @@ function reset() {
     noResults = false;
     queueError = null;
     trackOverride = null;
+    values.spotifyAccessToken = "test-access";
+    values.spotifyRefreshToken = "test-refresh";
+    values.spotifyExpiresAt = Date.now() + 3_600_000;
     values.replyOnSongRequestError = true;
     values.replyOnCooldown = true;
     values.canAnyonePlaySong = true;
     values.allowedBadges = ["og", "vip", "subscriber"];
     values.customModerators = [];
+    player?.resetSpotifyApi?.();
 }
 
 for (const query of ["Sample track", "https://open.spotify.com/track/abc123", "spotify:track:abc123"]) {
