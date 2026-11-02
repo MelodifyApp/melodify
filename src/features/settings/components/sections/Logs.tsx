@@ -113,7 +113,6 @@ export default function Logs({ logs }: LogsProps) {
                         </span>
                         <div>
                             <h3>{t("logs.title")}</h3>
-                            <p>{t("logs.runtimeLogs")}</p>
                         </div>
                     </div>
                     <Button variant="secondary" onClick={handleExportLogs}>

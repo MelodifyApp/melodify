@@ -53,7 +53,7 @@ test("English locale uses an English back-to-home label", () => {
     assert.equal(locale.navigation.homePage, "Home");
 });
 
-test("auto-update copy describes startup checks and manual download/install", () => {
+test("update label describes startup checks and helper keeps only manual download/install", () => {
     const en = JSON.parse(fs.readFileSync(LOCALE_PATH, "utf8"));
     const trPath = path.join(
         SRC_ROOT,
@@ -64,14 +64,16 @@ test("auto-update copy describes startup checks and manual download/install", ()
     );
     const tr = JSON.parse(fs.readFileSync(trPath, "utf8"));
 
-    assert.match(en.general.autoUpdateDesc, /startup/i);
+    assert.match(en.general.autoUpdate, /check.*updates.*startup/i);
+    assert.doesNotMatch(en.general.autoUpdateDesc, /startup|check.*updates/i);
     assert.match(en.general.autoUpdateDesc, /manual/i);
     assert.doesNotMatch(
         en.general.autoUpdateDesc,
         /download.*automatically|automatically.*download/i
     );
 
-    assert.match(tr.general.autoUpdateDesc, /başlangıçta/i);
+    assert.match(tr.general.autoUpdate, /başlangıçta.*güncellemeleri.*kontrol/i);
+    assert.doesNotMatch(tr.general.autoUpdateDesc, /başlangıçta|kontrol/i);
     assert.match(tr.general.autoUpdateDesc, /manuel/i);
     assert.doesNotMatch(
         tr.general.autoUpdateDesc,

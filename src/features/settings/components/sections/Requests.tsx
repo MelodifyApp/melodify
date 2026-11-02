@@ -357,7 +357,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Toggle
                     id="requests-anyone"
                     label={t("requests.anyoneCanRequest")}
-                    helper={t("requests.anyoneCanRequestDesc")}
                     checked={config.canAnyonePlaySong === true}
                     onCheckedChange={(checked) =>
                         onConfigChange("canAnyonePlaySong", checked)
@@ -366,7 +365,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Input
                     id="requests-prefix"
                     label={t("requests.commandPrefix")}
-                    helper={t("requests.commandPrefixDesc")}
                     value={config.prefix || "!"}
                     onChange={(event) =>
                         handleInputChange("prefix", event.target.value)
@@ -402,7 +400,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Toggle
                     id="requests-save-current-song"
                     label={t("requests.saveCurrentSong")}
-                    helper={t("requests.saveCurrentSongDesc")}
                     checked={config.saveCurrentSongToFile === true}
                     onCheckedChange={(checked) =>
                         onConfigChange("saveCurrentSongToFile", checked)
@@ -412,7 +409,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                     <Field
                         id="requests-song-file-path"
                         label={t("requests.filePath")}
-                        helper={t("requests.filePathDesc")}
                     >
                         {(control) => (
                             <div className="studio-requests-path-row">
@@ -488,7 +484,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Toggle
                     id="requests-reply-success"
                     label={t("requests.replyOnSongRequest")}
-                    helper={t("requests.replyOnSongRequestDesc")}
                     checked={config.replyOnSongRequest === true}
                     onCheckedChange={(checked) =>
                         onConfigChange("replyOnSongRequest", checked)
@@ -516,7 +511,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Toggle
                     id="requests-reply-error"
                     label={t("requests.replyOnErrors")}
-                    helper={t("requests.replyOnErrorsDesc")}
                     checked={config.replyOnSongRequestError === true}
                     onCheckedChange={(checked) =>
                         onConfigChange("replyOnSongRequestError", checked)
@@ -627,7 +621,6 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                 <Toggle
                     id="requests-reply-cooldown"
                     label={t("requests.replyOnCooldown")}
-                    helper={t("requests.replyOnCooldownDesc")}
                     checked={config.replyOnCooldown === true}
                     onCheckedChange={(checked) =>
                         onConfigChange("replyOnCooldown", checked)

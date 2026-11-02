@@ -252,7 +252,6 @@ export default function Commands({
                 <Input
                     id="commands-prefix"
                     label={t("commands.prefixCharacter")}
-                    helper={t("requests.commandPrefixDesc")}
                     value={prefix}
                     onChange={(event) =>
                         onConfigChange("prefix", event.target.value)
@@ -326,11 +325,6 @@ export default function Commands({
                                                     {prefix}
                                                     {command.name}
                                                 </h3>
-                                                <p>
-                                                    {t(
-                                                        `commands.${command.name}.description`
-                                                    )}
-                                                </p>
                                                 {stats && (
                                                     <span className="studio-command-stat">
                                                         <Clock
@@ -367,7 +361,6 @@ export default function Commands({
                                         <StringListEditor
                                             id={`command-aliases-${command.name}`}
                                             label={t("commands.aliases")}
-                                            helper={t("commands.aliasesDesc")}
                                             placeholder={t("commands.addAlias")}
                                             values={aliases}
                                             onChange={(values) =>
@@ -413,9 +406,6 @@ export default function Commands({
                                                     label={
                                                         replyConfig.successLabel
                                                     }
-                                                    helper={t(
-                                                        "commands.sendConfirmationMessage"
-                                                    )}
                                                     checked={
                                                         config[
                                                             replyConfig
@@ -462,9 +452,6 @@ export default function Commands({
                                                 <Toggle
                                                     id={`command-${command.name}-reply-error`}
                                                     label={replyConfig.errorLabel}
-                                                    helper={t(
-                                                        "commands.sendMessageOnFailure"
-                                                    )}
                                                     checked={
                                                         config[
                                                             replyConfig

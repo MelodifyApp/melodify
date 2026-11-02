@@ -42,7 +42,6 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 <Toggle
                     id="general-start-with-system"
                     label={t("general.startWithSystem")}
-                    helper={t("general.startWithSystemDesc")}
                     checked={config.startOnStartup === true}
                     onCheckedChange={(enabled) => onConfigChange("startOnStartup", enabled)}
                 />
@@ -59,7 +58,6 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 <Select
                     id="general-language"
                     label={t("general.interfaceLanguage")}
-                    helper={t("general.interfaceLanguageDesc")}
                     value={language}
                     options={languageOptions}
                     onChange={(value) => onConfigChange("language", value)}
@@ -67,7 +65,6 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                 <Toggle
                     id="general-auto-follow"
                     label={t("general.autoFollowDefaults")}
-                    helper={t("general.autoFollowDefaultsDesc")}
                     checked={autoFollow}
                     onCheckedChange={handleAutoFollowToggle}
                 />
@@ -75,7 +72,6 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                     <Select
                         id="general-defaults-language"
                         label={t("general.defaultsLanguage")}
-                        helper={t("general.defaultsLanguageDesc")}
                         value={config.defaultsLanguage || language}
                         options={languageOptions}
                         onChange={(value) =>
