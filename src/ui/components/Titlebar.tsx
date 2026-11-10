@@ -18,6 +18,7 @@ interface TitlebarProps {
     theme?: StudioThemeName;
     maximized?: boolean;
     showSettings?: boolean;
+    canMaximize?: boolean;
 }
 
 const noop = (): void => undefined;
@@ -32,6 +33,7 @@ export default function Titlebar({
     theme = "graphite",
     maximized = false,
     showSettings = true,
+    canMaximize = true,
 }: TitlebarProps) {
     const { t } = useTranslation();
     const [themeOpen, setThemeOpen] = useState(false);
@@ -237,63 +239,65 @@ export default function Titlebar({
                             />
                         </svg>
                     </button>
-                    <button
-                        type="button"
-                        className="studio-window-btn"
-                        onClick={onMaximize}
-                        aria-label={
-                            maximized
-                                ? t("titlebar.restore")
-                                : t("titlebar.maximize")
-                        }
-                        title={
-                            maximized
-                                ? t("titlebar.restore")
-                                : t("titlebar.maximize")
-                        }
-                    >
-                        {maximized ? (
-                            <svg
-                                viewBox="0 0 12 12"
-                                width="12"
-                                height="12"
-                                aria-hidden="true"
-                            >
-                                <rect
-                                    x="2.2"
-                                    y="4"
-                                    width="5.8"
-                                    height="5.8"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.1"
-                                />
-                                <path
-                                    d="M4.2 4V2.2h5.6v5.6H8.2"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.1"
-                                />
-                            </svg>
-                        ) : (
-                            <svg
-                                viewBox="0 0 12 12"
-                                width="12"
-                                height="12"
-                                aria-hidden="true"
-                            >
-                                <rect
-                                    x="2.5"
-                                    y="2.5"
-                                    width="7"
-                                    height="7"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="1.1"
-                                />
-                            </svg>
-                        )}
-                    </button>
+                    {canMaximize && (
+                        <button
+                            type="button"
+                            className="studio-window-btn"
+                            onClick={onMaximize}
+                            aria-label={
+                                maximized
+                                    ? t("titlebar.restore")
+                                    : t("titlebar.maximize")
+                            }
+                            title={
+                                maximized
+                                    ? t("titlebar.restore")
+                                    : t("titlebar.maximize")
+                            }
+                        >
+                            {maximized ? (
+                                <svg
+                                    viewBox="0 0 12 12"
+                                    width="12"
+                                    height="12"
+                                    aria-hidden="true"
+                                >
+                                    <rect
+                                        x="2.2"
+                                        y="4"
+                                        width="5.8"
+                                        height="5.8"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                    />
+                                    <path
+                                        d="M4.2 4V2.2h5.6v5.6H8.2"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                    />
+                                </svg>
+                            ) : (
+                                <svg
+                                    viewBox="0 0 12 12"
+                                    width="12"
+                                    height="12"
+                                    aria-hidden="true"
+                                >
+                                    <rect
+                                        x="2.5"
+                                        y="2.5"
+                                        width="7"
+                                        height="7"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.1"
+                                    />
+                                </svg>
+                            )}
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="studio-window-btn close"

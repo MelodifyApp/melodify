@@ -2,6 +2,8 @@
 .studio {
     --studio-motion-fast: 120ms;
     --studio-motion-base: 180ms;
+    --studio-motion-switch: 140ms;
+    --studio-motion-theme: 160ms;
     --studio-motion-surface: 240ms;
     --studio-motion-check: 260ms;
     --studio-motion-spin: 700ms;
@@ -18,7 +20,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .studio *, .studio *::before, .studio *::after {
+    .studio, .studio *, .studio *::before, .studio *::after {
         transition: none !important;
         animation: none !important;
         scroll-behavior: auto !important;

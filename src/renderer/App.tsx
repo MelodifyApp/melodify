@@ -136,6 +136,7 @@ export default function App() {
                     onThemeChange={handleThemeChange}
                     theme={theme}
                     maximized={maximized}
+                    canMaximize={false}
                 />
                 {settingsVisibility.mounted && (
                     <div hidden={!settingsVisibility.open}>
