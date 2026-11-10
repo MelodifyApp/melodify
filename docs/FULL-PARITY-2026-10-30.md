@@ -56,6 +56,8 @@ Reference: `design-previews/app-2026-10-27/index.html` (Studio concept), review 
 
 ## Verification
 
+> Test counts below are from the 2026-10-30 parity round. Later security and regression suites increased the totals; this is historical evidence, not the current full count.
+
 - [x] `npx tsc --noEmit`
 - [x] Scoped ESLint for changed files (known alias baseline excluded)
 - [x] Full-parity, Home, Settings continuity, credential, draft, preload and security tests

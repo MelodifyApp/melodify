@@ -40,6 +40,24 @@ This checklist covers the Windows `v*.*.*` release path. The workflow is
 - 1.1.0 ships **unsigned**; publish `SHA256SUMS.txt` and do not describe the
   installer as signed or as having verified publisher identity.
 
+## Privacy / KVKK (before tagging)
+
+- [ ] Controller identity, address, email and website filled in
+      `docs/PRIVACY.tr.md` and `docs/PRIVACY.md`.
+- [ ] Turkish KVKK legal review of `PRIVACY.tr.md` completed.
+- [ ] `docs/KVKK.md` assessment current; VERBİS exemption recorded.
+- [x] Secret-at-rest decision: Client Secrets and OAuth access/refresh tokens
+      are encrypted with Electron `safeStorage` (Windows DPAPI) under the
+      `enc:v1:` envelope. Manual QA completed 2026-11-10 in an isolated profile:
+      plaintext migration, restart, token update, forced decrypt failure,
+      ciphertext preservation and renderer projection. 1.1.0 release notes may
+      claim credential encryption; downgrades are unsupported and no rollback
+      path is provided.
+- [ ] Privacy links present in README and release notes; add an in-app link when
+      available.
+- [ ] If a website or newsletter ships: cookie notice, consent and Art. 9
+      transfer assessment.
+
 ## Tag gate
 
 After owner approval, push a `v<version>` tag. The workflow then:

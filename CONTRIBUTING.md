@@ -2,12 +2,14 @@
 
 Thank you for your interest in contributing!
 
+Until **1.1.0** is stable, external contributions are limited to bug and security reports. Do not open feature pull requests yet.
+
 ## How to contribute
 
 1. Fork the repository and clone it locally.
 2. Create a new branch for your feature or fix:
     ```bash
-    git checkout -b feature/your-feature-name
+    git checkout -b fix/your-fix-name
     ```
 3. Install dependencies with `npm ci`.
 4. Make your changes, following the existing code style.
@@ -32,8 +34,14 @@ Thank you for your interest in contributing!
 
 ## Issues
 
-- Use GitHub Issues for bugs, features and questions.
+- Use GitHub Issues for reproducible bugs and setup questions.
 - Search existing issues before opening a new one.
+- Do **not** report security vulnerabilities in a public issue. Follow [SECURITY.md](SECURITY.md) and use GitHub private vulnerability reporting.
+- Feature requests are deferred until 1.1.0 is stable.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for supported versions, private reporting and disclosure expectations. Never include credentials, tokens, chat contents or personal data in a report.
 
 ## Code of Conduct
 

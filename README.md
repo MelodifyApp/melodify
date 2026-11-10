@@ -77,9 +77,19 @@ A request is not a promise of playback order: Spotify controls the playback queu
 - `test/` — focused `node:test` suites
 - `scripts/` — translation validation and maintenance scripts
 
+## Privacy
+
+Melodify is local-first: no account, no telemetry and no developer-operated
+server. It stores its profile under `%APPDATA%\melodify` and keeps 30 days of
+local logs.
+
+- English notice: [docs/PRIVACY.md](docs/PRIVACY.md)
+- KVKK aydınlatma metni: [docs/PRIVACY.tr.md](docs/PRIVACY.tr.md)
+- Internal KVKK assessment: [docs/KVKK.md](docs/KVKK.md)
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Report vulnerabilities privately using [SECURITY.md](SECURITY.md); do not open a public issue.
 
 ## License
 
