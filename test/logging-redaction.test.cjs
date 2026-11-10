@@ -224,6 +224,22 @@ test("renderer logger sanitizes both DevTools and IPC payloads", () => {
     assert.doesNotMatch(JSON.stringify(captured), /renderer-sensitive|context-sensitive/);
 });
 
+test("encrypted secret payloads are masked wherever they appear", () => {
+    const ciphertext = "enc:v1:YWJjZGVmZ2hpamtsbW5vcA==";
+    const text = redactLogText(`Decrypt failed for ${ciphertext}`);
+    assert.doesNotMatch(text, /YWJjZGVmZ2hpamtsbW5vcA/);
+    assert.match(text, /REDACTED/);
+
+    const object = redactSecrets({
+        value: ciphertext,
+        spotifyAccessToken: ciphertext,
+        nested: [{ note: `cipher=${ciphertext}` }],
+    });
+    const serialized = JSON.stringify(object);
+    assert.doesNotMatch(serialized, /YWJjZGVmZ2hpamtsbW5vcA/);
+    assert.match(serialized, /REDACTED/);
+});
+
 test("sanitization remains stable when main and renderer apply it twice", () => {
     for (const input of ['{"access_token":"sensitive"}', "refresh_token=sensitive", "Bearer sensitive", "http://localhost/?code=sensitive&error=denied"]) {
         assert.equal(redactSecrets(redactSecrets(input)), redactSecrets(input));

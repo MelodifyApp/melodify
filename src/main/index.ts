@@ -399,11 +399,13 @@ const createMainWindow = (): void => {
         mainWindow = new BrowserWindow({
             width: WINDOW_WIDTH,
             height: WINDOW_HEIGHT,
-            minWidth: 320,
-            minHeight: 600,
+            minWidth: WINDOW_WIDTH,
+            maxWidth: WINDOW_WIDTH,
+            minHeight: WINDOW_HEIGHT,
+            maxHeight: WINDOW_HEIGHT,
             fullscreenable: false,
-            resizable: true,
-            maximizable: true,
+            resizable: false,
+            maximizable: false,
             autoHideMenuBar: true,
             frame: false,
             webPreferences: {
@@ -424,8 +426,11 @@ const createMainWindow = (): void => {
             },
         });
 
-        // Open DevTools in development mode
-        if (process.env.NODE_ENV === "development") {
+        // Open DevTools in development mode; fixture review can disable it.
+        if (
+            process.env.NODE_ENV === "development" &&
+            process.env.MELODIFY_DISABLE_DEVTOOLS !== "1"
+        ) {
             mainWindow.webContents.openDevTools({ mode: "detach" });
             logDebug("DevTools opened in development mode");
         }
@@ -443,6 +448,7 @@ const createMainWindow = (): void => {
 
 app.on("ready", () => {
     if (!appLifecycle.isPrimaryInstance()) return;
+    Config.unlockSecrets();
     logInfo("App ready event");
     createMainWindow();
 
@@ -535,7 +541,7 @@ ipcMain.on("window:maximize", (event) => {
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
     const target =
         senderWindow === testWindow ? testWindow : mainWindow;
-    if (!target || target.isDestroyed()) return;
+    if (!target || target.isDestroyed() || !target.isMaximizable()) return;
     if (target.isMaximized()) target.unmaximize();
     else target.maximize();
 });

@@ -1,9 +1,17 @@
 import fs from "fs";
 import path from "path";
-import { app } from "electron";
+import { app, safeStorage } from "electron";
 import { logInfo, logError, logDebug, logWarn } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { resolveUserDataDirectory, previewOverrideIgnored } from "./userDataDirectory";
+import {
+    decryptSecret,
+    encryptSecret,
+    isEncrypted,
+    isSecretKey,
+    SECRET_KEYS,
+    type SecretCodec,
+} from "./secretCodec";
 
 /**
  * Configuration management system with multi-language support
@@ -224,6 +232,8 @@ let cache: AppConfig = { ...defaultConfig };
 let loadError: string | null = null;
 let recoveryPath: string | null = null;
 let strictSave = false;
+let secretsUnlocked = false;
+let secretCodec: SecretCodec | null = null;
 
 function notLoadedError(): Error {
     return new Error(
@@ -297,6 +307,33 @@ function writeConfigAtomically(config: AppConfig): void {
         }
         throw error;
     }
+}
+
+function readSecretValue(key: string): string | undefined {
+    if (!secretsUnlocked || !isSecretKey(key)) return undefined;
+    const value = cache[key];
+    if (typeof value !== "string") return undefined;
+    // Failed decryptions intentionally stay encrypted in the cache so a later
+    // unrelated save cannot drop the ciphertext. Never hand it to callers.
+    if (isEncrypted(value)) return undefined;
+    return value;
+}
+
+/** Serializes the cache for disk, encrypting plaintext secrets after unlock. */
+function serializeConfigForDisk(config: AppConfig): AppConfig {
+    const output = cloneConfig(config);
+    if (!secretsUnlocked || !secretCodec) return output;
+    for (const key of SECRET_KEYS) {
+        const value = output[key];
+        if (
+            typeof value === "string" &&
+            value.length > 0 &&
+            !isEncrypted(value)
+        ) {
+            output[key] = encryptSecret(secretCodec, value);
+        }
+    }
+    return output;
 }
 
 function load(): void {
@@ -412,11 +449,85 @@ function save(): void {
         return;
     }
     try {
-        writeConfigAtomically(cache);
+        writeConfigAtomically(serializeConfigForDisk(cache));
         logInfo("Saved config to disk", redactSecrets(cache));
     } catch (err) {
         logError(err, "config:save");
         if (strictSave) throw err;
+    }
+}
+
+function createSafeStorageCodec(): SecretCodec | null {
+    try {
+        if (
+            typeof safeStorage?.isEncryptionAvailable !== "function" ||
+            !safeStorage.isEncryptionAvailable()
+        ) {
+            return null;
+        }
+        return {
+            encrypt(value) {
+                return safeStorage.encryptString(value).toString("base64");
+            },
+            decrypt(value) {
+                return safeStorage.decryptString(Buffer.from(value, "base64"));
+            },
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Runs only after Electron is ready. Decrypts encrypted fields in memory,
+ * migrates 1.0.7 plaintext once, and leaves ciphertext untouched when DPAPI is
+ * unavailable or a payload cannot be decoded. Logs field names only.
+ */
+function unlockSecrets(): void {
+    const codec = createSafeStorageCodec();
+    secretsUnlocked = true;
+    if (!codec) {
+        secretCodec = null;
+        logWarn(
+            "Secret encryption is unavailable; encrypted credentials remain locked",
+            "config:secrets"
+        );
+        return;
+    }
+    secretCodec = codec;
+
+    let needsMigration = false;
+    for (const key of SECRET_KEYS) {
+        const value = cache[key];
+        if (typeof value !== "string" || value.length === 0) continue;
+        if (isEncrypted(value)) {
+            const plaintext = decryptSecret(codec, value);
+            if (plaintext === undefined) {
+                logWarn(
+                    `Could not decrypt secret field ${key}; treating it as missing`,
+                    "config:secrets"
+                );
+            } else {
+                cache[key] = plaintext;
+            }
+        } else {
+            needsMigration = true;
+        }
+    }
+
+    if (!needsMigration) return;
+
+    const previousStrictSave = strictSave;
+    strictSave = true;
+    try {
+        save();
+    } catch {
+        logWarn(
+            "Secret migration failed; plaintext credentials were left on disk",
+            "config:secrets"
+        );
+    } finally {
+        strictSave = previousStrictSave;
     }
 }
 
@@ -491,7 +602,17 @@ load();
 function get(): AppConfig;
 function get<K extends keyof AppConfig>(key: K): AppConfig[K];
 function get(key?: keyof AppConfig) {
-    return typeof key === "undefined" ? { ...cache } : cache[key];
+    if (typeof key === "undefined") {
+        const copy: AppConfig = {};
+        for (const [entryKey, value] of Object.entries(cache)) {
+            (copy as Record<string, unknown>)[entryKey] = isSecretKey(entryKey)
+                ? readSecretValue(entryKey)
+                : value;
+        }
+        return copy;
+    }
+    if (isSecretKey(key)) return readSecretValue(key);
+    return cache[key];
 }
 
 const Config = {
@@ -514,8 +635,14 @@ const Config = {
         error?: string;
         recoveryPath?: string;
     } {
+        const wasUnlocked = secretsUnlocked;
         load();
+        if (wasUnlocked) unlockSecrets();
         return this.getLoadState();
+    },
+    /** Initialize safeStorage after app ready; safe to call on reload. */
+    unlockSecrets(): void {
+        unlockSecrets();
     },
     /**
      * Transactional settings save. The in-memory cache is committed only after
@@ -538,7 +665,9 @@ const Config = {
     getMany<K extends keyof AppConfig>(keys: K[]): Pick<AppConfig, K> {
         const result = keys.reduce(
             (acc, key) => {
-                acc[key] = cache[key];
+                acc[key] = isSecretKey(key)
+                    ? (readSecretValue(key) as AppConfig[K])
+                    : cache[key];
                 return acc;
             },
             {} as Pick<AppConfig, K>

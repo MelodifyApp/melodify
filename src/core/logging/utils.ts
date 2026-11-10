@@ -80,6 +80,9 @@ export function redactLogText(text: string): string {
             const valueQuote = raw.startsWith('"') ? '"' : raw.startsWith("'") ? "'" : "";
             return `${quote}${key}${quote}${separator}${valueQuote}${REDACTED}${valueQuote}`;
         });
+    // Encrypted config envelopes must never leak payloads even when a field
+    // name or object shape does not look credential-like.
+    safe = safe.replace(/\benc:v1:[A-Za-z0-9+/=]+/g, REDACTED);
     return safe;
 }
 
