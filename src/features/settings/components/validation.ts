@@ -37,58 +37,6 @@ export const validateUrl = (
     }
 };
 
-export const validateClientId = (
-    id: string,
-    t?: ValidationTranslator
-): string | null => {
-    if (!id.trim())
-        return message(t, "validation.clientIdRequired", "Please enter a Client ID");
-    if (id.length < 10)
-        return message(
-            t,
-            "validation.clientIdTooShort",
-            "Client ID appears to be too short"
-        );
-    if (id.length > 100)
-        return message(
-            t,
-            "validation.clientIdTooLong",
-            "Client ID appears to be too long"
-        );
-    if (!/^[a-zA-Z0-9_-]+$/.test(id))
-        return message(
-            t,
-            "validation.clientIdInvalid",
-            "Client ID can only contain letters, numbers, hyphens, and underscores"
-        );
-    return null;
-};
-
-export const validateClientSecret = (
-    secret: string,
-    t?: ValidationTranslator
-): string | null => {
-    if (!secret.trim())
-        return message(
-            t,
-            "validation.clientSecretRequired",
-            "Please enter a Client Secret"
-        );
-    if (secret.length < 20)
-        return message(
-            t,
-            "validation.clientSecretTooShort",
-            "Client Secret appears to be too short"
-        );
-    if (secret.length > 200)
-        return message(
-            t,
-            "validation.clientSecretTooLong",
-            "Client Secret appears to be too long"
-        );
-    return null;
-};
-
 export const validateCommandAlias = (
     alias: string,
     existingAliases: string[],
@@ -221,20 +169,6 @@ export const validateField = (
         case "spotifyRedirectUri":
             if (typeof value === "string" && value) {
                 return validateUrl(value, t);
-            }
-            break;
-        case "spotifyClientId":
-        case "kickClientId":
-        case "twitchClientId":
-            if (typeof value === "string" && value) {
-                return validateClientId(value, t);
-            }
-            break;
-        case "spotifyClientSecret":
-        case "kickClientSecret":
-        case "twitchClientSecret":
-            if (typeof value === "string" && value) {
-                return validateClientSecret(value, t);
             }
             break;
         case "songRequestReplyTemplate":
