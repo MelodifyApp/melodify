@@ -181,9 +181,13 @@ test("the Twitch setup guide resolves the fixed OAuth callback and ignores confi
     const secretsSource = readSource(
         "src/features/settings/components/sections/Secrets.tsx"
     );
+    const dialogSource = readSource(
+        "src/features/settings/components/sections/CredentialSetupDialog.tsx"
+    );
     assert.doesNotMatch(secretsSource, /twitchRedirectUri/);
-    assert.match(secretsSource, /getSetupGuide\(guideService, config\)/);
-    assert.match(secretsSource, /<code>\{redirectUri\}<\/code>/);
+    assert.match(secretsSource, /getSetupGuide\(dialog\.serviceId, config\)/);
+    assert.match(dialogSource, /<code>\{redirectUri\}<\/code>/);
+    assert.doesNotMatch(dialogSource, /twitchRedirectUri/);
     const twitchCard = readSource(
         "src/features/twitch/components/TwitchCard.tsx"
     );
@@ -225,7 +229,7 @@ test("ExternalLink keeps href focusability and routes activation through the ope
     }
 
     const focusTrapSource = readSource(
-        "src/features/settings/components/sections/Secrets.tsx"
+        "src/features/settings/components/sections/CredentialSetupDialog.tsx"
     );
     assert.match(focusTrapSource, /\[href\]/);
 });
@@ -469,10 +473,12 @@ test("Settings commits only after config:save acknowledgment and exposes load re
     assert.match(source, /if \(result\?\.ok !== true\)/);
     assert.match(
         source,
-        /commitAcknowledgedDraft\(\s*current,\s*acknowledgedConfig,\s*patch\s*\)/
+        /commitAcknowledgedDraft\(\s*draftsRef\.current,\s*acknowledgedConfig,\s*patch\s*\)/
     );
     assert.match(source, /acknowledgedConfig\s*=\s*[\s\S]*result\.config/);
     assert.doesNotMatch(source, /commitDraft\(current\)/);
+    assert.match(source, /saveInFlight\.current/);
+    assert.match(source, /pendingAutoSave\.current/);
     assert.match(source, /config:reload/);
     assert.match(source, /settings\.loadFailedTitle/);
     assert.doesNotMatch(source, /send\("config:set"/);

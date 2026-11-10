@@ -1,9 +1,4 @@
 /* Pure draft/baseline rules for the Studio Settings shell. */
-export const API_CLIENT_ID_KEYS = [
-    "spotifyClientId",
-    "kickClientId",
-    "twitchClientId",
-] as const;
 
 export type ConfigRecord = Record<string, unknown>;
 
@@ -47,10 +42,8 @@ function commandsWithEnabledState(
     return commands;
 }
 
-function withoutApiIds(config: ConfigRecord): ConfigRecord {
-    const next = clone(config);
-    for (const key of API_CLIENT_ID_KEYS) delete next[key];
-    return next;
+function cloneConfig(config: ConfigRecord): ConfigRecord {
+    return clone(config);
 }
 
 export function stableStringify(value: unknown): string {
@@ -67,7 +60,7 @@ export function createDraftState(
     config: ConfigRecord = {},
     commands: ConfigRecord[] = []
 ): SettingsDraftState {
-    const ordinary = withoutApiIds(config);
+    const ordinary = cloneConfig(config);
     return {
         baselineConfig: clone(ordinary),
         draftConfig: clone(ordinary),
@@ -325,27 +318,5 @@ export function changedCommandStates(
             name: String(command.name),
             enabled: command.enabled !== false,
         }));
-}
-
-export function credentialDraftsFromConfig(config: ConfigRecord): ConfigRecord {
-    const drafts: ConfigRecord = {};
-    for (const key of API_CLIENT_ID_KEYS) {
-        drafts[key] = typeof config[key] === "string" ? config[key] : "";
-    }
-    return drafts;
-}
-
-export function credentialDraftPending(
-    draft: ConfigRecord,
-    baseline: ConfigRecord
-): boolean {
-    return stableStringify(draft) !== stableStringify(baseline);
-}
-
-export function mergeCredentialDrafts(
-    config: ConfigRecord,
-    credentials: ConfigRecord
-): ConfigRecord {
-    return { ...config, ...credentials };
 }
 

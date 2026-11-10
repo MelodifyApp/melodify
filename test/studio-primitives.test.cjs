@@ -101,6 +101,33 @@ test("API SaveDock reserves a hidden pending status and never renders global act
     assert.ok(render("SaveDock", { mode: "api", draftPending: true }).includes("API draft pending"));
 });
 
+test("Auto-save SaveDock reports status without manual Save or Discard actions", () => {
+    const saved = render("SaveDock", { mode: "auto", status: "saved" });
+    assert.ok(saved.includes("Saved"));
+    assert.equal(saved.includes("<button"), false);
+    assert.equal(saved.includes("Discard"), false);
+    const saving = render("SaveDock", { mode: "auto", status: "saving" });
+    assert.ok(saving.includes("Saving"));
+    const error = render("SaveDock", { mode: "auto", status: "error", error: "Could not save", onRetry() {} });
+    assert.ok(error.includes("Could not save"));
+    assert.ok(error.includes("Retry"));
+    assert.equal(/onretry/i.test(error), false, "onRetry must not leak to the DOM footer");
+});
+
+test("ServiceCard renders notes before actions", () => {
+    const html = render(
+        "ServiceCard",
+        {
+            service: "spotify",
+            status: "verified",
+            note: h("p", null, "Credential note"),
+            actions: h("button", null, "Credential action"),
+        },
+        "Credential fields"
+    );
+    assert.ok(html.indexOf("Credential note") < html.indexOf("Credential action"));
+});
+
 test("SectionNav and ServiceCard compose real headings, current rows and brand icons", () => {
     const nav = render("SectionNav", { groups: [{ id: "app", label: "Application", items: [{ id: "general", label: "General" }, { id: "api", label: "API Keys" }] }], activeId: "api", onSelect() {}, onHome() {} });
     assert.ok(nav.includes('aria-current="page"')); assert.ok(nav.includes('aria-label="Return Home"'));

@@ -141,6 +141,7 @@ export default function Commands({
     onCommandToggle,
 }: CommandsProps) {
     const { t } = useTranslation();
+    const [prefixError, setPrefixError] = useState<string | null>(null);
     const [performanceStats, setPerformanceStats] = useState<
         Record<string, any>
     >({});
@@ -175,6 +176,11 @@ export default function Commands({
 
     const handleReplyToggle = (key: string, enabled: boolean) => {
         onConfigChange(key, enabled);
+    };
+
+    const handlePrefixChange = (value: string) => {
+        setPrefixError(validateField("prefix", value, t));
+        onConfigChange("prefix", value);
     };
 
     const handleReplyTemplateChange = (key: string, template: string) => {
@@ -254,11 +260,12 @@ export default function Commands({
                     label={t("commands.prefixCharacter")}
                     value={prefix}
                     onChange={(event) =>
-                        onConfigChange("prefix", event.target.value)
+                        handlePrefixChange(event.target.value)
                     }
                     placeholder="!"
-                    maxLength={5}
+                    maxLength={10}
                     wrapperClassName="studio-requests-prefix"
+                    error={prefixError || undefined}
                 />
                 <StringListEditor
                     id="commands-moderators"
@@ -421,33 +428,34 @@ export default function Commands({
                                                         )
                                                     }
                                                 />
-                                                {config[
-                                                    replyConfig.successToggle
-                                                ] && (
-                                                    <Input
-                                                        id={`command-${command.name}-success-template`}
-                                                        label={t(
-                                                            "commands.successTemplate"
-                                                        )}
-                                                        helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
-                                                        value={
-                                                            config[
-                                                                replyConfig
-                                                                    .successTemplate
-                                                            ] || ""
-                                                        }
-                                                        onChange={(event) =>
-                                                            handleReplyTemplateChange(
-                                                                replyConfig.successTemplate,
-                                                                event.target
-                                                                    .value
-                                                            )
-                                                        }
-                                                        placeholder={
-                                                            replyConfig.successPlaceholder
-                                                        }
-                                                    />
-                                                )}
+                                                <Input
+                                                    id={`command-${command.name}-success-template`}
+                                                    label={t(
+                                                        "commands.successTemplate"
+                                                    )}
+                                                    helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
+                                                    value={
+                                                        config[
+                                                            replyConfig
+                                                                .successTemplate
+                                                        ] || ""
+                                                    }
+                                                    onChange={(event) =>
+                                                        handleReplyTemplateChange(
+                                                            replyConfig.successTemplate,
+                                                            event.target.value
+                                                        )
+                                                    }
+                                                    placeholder={
+                                                        replyConfig.successPlaceholder
+                                                    }
+                                                    disabled={
+                                                        !config[
+                                                            replyConfig
+                                                                .successToggle
+                                                        ]
+                                                    }
+                                                />
 
                                                 <Toggle
                                                     id={`command-${command.name}-reply-error`}
@@ -467,33 +475,34 @@ export default function Commands({
                                                         )
                                                     }
                                                 />
-                                                {config[
-                                                    replyConfig.errorToggle
-                                                ] && (
-                                                    <Input
-                                                        id={`command-${command.name}-error-template`}
-                                                        label={t(
-                                                            "commands.errorTemplate"
-                                                        )}
-                                                        helper={`${t("commands.availableVariables")}: ${replyConfig.errorVariables}`}
-                                                        value={
-                                                            config[
-                                                                replyConfig
-                                                                    .errorTemplate
-                                                            ] || ""
-                                                        }
-                                                        onChange={(event) =>
-                                                            handleReplyTemplateChange(
-                                                                replyConfig.errorTemplate,
-                                                                event.target
-                                                                    .value
-                                                            )
-                                                        }
-                                                        placeholder={
-                                                            replyConfig.errorPlaceholder
-                                                        }
-                                                    />
-                                                )}
+                                                <Input
+                                                    id={`command-${command.name}-error-template`}
+                                                    label={t(
+                                                        "commands.errorTemplate"
+                                                    )}
+                                                    helper={`${t("commands.availableVariables")}: ${replyConfig.errorVariables}`}
+                                                    value={
+                                                        config[
+                                                            replyConfig
+                                                                .errorTemplate
+                                                        ] || ""
+                                                    }
+                                                    onChange={(event) =>
+                                                        handleReplyTemplateChange(
+                                                            replyConfig.errorTemplate,
+                                                            event.target.value
+                                                        )
+                                                    }
+                                                    placeholder={
+                                                        replyConfig.errorPlaceholder
+                                                    }
+                                                    disabled={
+                                                        !config[
+                                                            replyConfig
+                                                                .errorToggle
+                                                        ]
+                                                    }
+                                                />
 
                                                 {replyConfig.getToggle && (
                                                     <>
@@ -520,36 +529,37 @@ export default function Commands({
                                                                 )
                                                             }
                                                         />
-                                                        {config[
-                                                            replyConfig.getToggle
-                                                        ] && (
-                                                            <Input
-                                                                id={`command-${command.name}-get-template`}
-                                                                label={t(
-                                                                    "commands.getTemplate"
-                                                                )}
-                                                                helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
-                                                                value={
-                                                                    config[
-                                                                        replyConfig
-                                                                            .getTemplate
-                                                                    ] || ""
-                                                                }
-                                                                onChange={(
-                                                                    event
-                                                                ) =>
-                                                                    handleReplyTemplateChange(
-                                                                        replyConfig.getTemplate,
-                                                                        event
-                                                                            .target
-                                                                            .value
-                                                                    )
-                                                                }
-                                                                placeholder={
-                                                                    replyConfig.getPlaceholder
-                                                                }
-                                                            />
-                                                        )}
+                                                        <Input
+                                                            id={`command-${command.name}-get-template`}
+                                                            label={t(
+                                                                "commands.getTemplate"
+                                                            )}
+                                                            helper={`${t("commands.availableVariables")}: ${replyConfig.variables}`}
+                                                            value={
+                                                                config[
+                                                                    replyConfig
+                                                                        .getTemplate
+                                                                ] || ""
+                                                            }
+                                                            onChange={(
+                                                                event
+                                                            ) =>
+                                                                handleReplyTemplateChange(
+                                                                    replyConfig.getTemplate,
+                                                                    event.target
+                                                                        .value
+                                                                )
+                                                            }
+                                                            placeholder={
+                                                                replyConfig.getPlaceholder
+                                                            }
+                                                            disabled={
+                                                                !config[
+                                                                    replyConfig
+                                                                        .getToggle
+                                                                ]
+                                                            }
+                                                        />
                                                     </>
                                                 )}
                                             </div>

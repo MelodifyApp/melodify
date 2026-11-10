@@ -17,6 +17,7 @@ export interface ServiceCardProps extends Omit<HTMLAttributes<HTMLElement>, "tit
     status: CredentialStatus;
     statusLabel?: string;
     announceStatus?: boolean;
+    description?: ReactNode;
     actions?: ReactNode;
     note?: ReactNode;
     headingLevel?: 2 | 3 | 4;
@@ -24,19 +25,25 @@ export interface ServiceCardProps extends Omit<HTMLAttributes<HTMLElement>, "tit
 
 /** Presentational only: no credentials, providers, verification or persistence logic. */
 export const ServiceCard = forwardRef<HTMLElement, ServiceCardProps>(
-    ({ service, status, statusLabel, announceStatus = true, headingLevel = 3, actions, note, className, children, ...props }, ref) => {
+    ({ service, status, statusLabel, announceStatus = true, description, actions, note, headingLevel = 3, className, children, ...props }, ref) => {
         const titleId = useId();
         const { label, Icon } = services[service];
         const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
         return (
             <article {...props} ref={ref} className={cn("studio-card", "studio-service-card", className)} aria-labelledby={titleId}>
                 <header className="studio-service-head">
-                    <div className="studio-service-identity"><span className="studio-service-tile" data-service={service} aria-hidden="true"><Icon aria-hidden="true" tabIndex={-1} /></span><Heading id={titleId}>{label}</Heading></div>
+                    <div className="studio-service-identity">
+                        <span className="studio-service-tile" data-service={service} aria-hidden="true"><Icon aria-hidden="true" tabIndex={-1} /></span>
+                        <div className="studio-service-identity-copy">
+                            <Heading id={titleId}>{label}</Heading>
+                            {description && <p className="studio-service-purpose">{description}</p>}
+                        </div>
+                    </div>
                     <StatusChip status={status} label={statusLabel} announce={announceStatus} />
                 </header>
-                <div className="studio-service-fields">{children}</div>
-                {actions && <div className="studio-service-actions">{actions}</div>}
+                {children && <div className="studio-service-fields">{children}</div>}
                 {note && <div className="studio-service-note">{note}</div>}
+                {actions && <div className="studio-service-actions">{actions}</div>}
             </article>
         );
     }

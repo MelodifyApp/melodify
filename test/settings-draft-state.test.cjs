@@ -49,14 +49,18 @@ test("command changes are detected normatively and include only real differences
     assert.equal(draft.configIsDirty(state), true);
 });
 
-test("API client ID drafts are excluded from the ordinary config baseline and dirty check", () => {
-    const state = base();
-    assert.equal("spotifyClientId" in state.baselineConfig, false);
-    assert.equal("spotifyClientId" in state.draftConfig, false);
-    const credentials = draft.credentialDraftsFromConfig({ spotifyClientId: "committed", kickClientId: 42 });
-    assert.deepEqual(credentials, { spotifyClientId: "committed", kickClientId: "", twitchClientId: "" });
-    assert.equal(draft.credentialDraftPending(credentials, draft.credentialDraftsFromConfig({ spotifyClientId: "older" })), true);
-    assert.equal(draft.credentialDraftPending(draft.credentialDraftsFromConfig({ spotifyClientId: "committed" }), draft.credentialDraftsFromConfig({ spotifyClientId: "committed" })), false);
+test("API client IDs stay in the Settings baseline for credential dialog prefill", () => {
+    const state = draft.createDraftState({
+        spotifyClientId: "committed",
+        kickClientId: "kick-id",
+        twitchClientId: "twitch-id",
+        prefix: "!",
+    });
+    assert.equal(state.baselineConfig.spotifyClientId, "committed");
+    assert.equal(state.draftConfig.spotifyClientId, "committed");
+    assert.equal(state.baselineConfig.kickClientId, "kick-id");
+    assert.equal(state.draftConfig.twitchClientId, "twitch-id");
+    assert.equal(draft.configIsDirty(state), false);
 });
 
 test("stable equality ignores object key order and protects nested values", () => {

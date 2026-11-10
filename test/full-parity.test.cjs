@@ -172,6 +172,32 @@ test("Titlebar switches the maximize control to restore when maximized", () => {
     assert.doesNotMatch(html, /titlebar\.maximize/);
 });
 
+test("Titlebar omits maximize when the window resolution is fixed", () => {
+    const html = renderTitlebar({ canMaximize: false });
+    assert.doesNotMatch(html, /titlebar\.maximize|titlebar\.restore/);
+    assert.match(html, /titlebar\.minimize/);
+    assert.match(html, /titlebar\.close/);
+});
+
+test("main window is locked to 1200x800", () => {
+    const main = readSource("src/main/index.ts");
+    assert.match(main, /const WINDOW_WIDTH = 1200;/);
+    assert.match(main, /const WINDOW_HEIGHT = 800;/);
+    assert.match(main, /width: WINDOW_WIDTH/);
+    assert.match(main, /height: WINDOW_HEIGHT/);
+    assert.match(main, /minWidth: WINDOW_WIDTH/);
+    assert.match(main, /maxWidth: WINDOW_WIDTH/);
+    assert.match(main, /minHeight: WINDOW_HEIGHT/);
+    assert.match(main, /maxHeight: WINDOW_HEIGHT/);
+    assert.match(main, /resizable: false/);
+    assert.match(main, /maximizable: false/);
+    assert.match(main, /!target\.isMaximizable\(\)/);
+    assert.match(
+        readSource("src/renderer/App.tsx"),
+        /canMaximize=\{false\}/
+    );
+});
+
 test("Titlebar geometry matches the Studio shell", () => {
     const css = readSource("src/ui/components/titlebarStudio.css");
     assert.match(css, /\.studio-titlebar[^}]*height: 38px/);
@@ -196,8 +222,8 @@ test("window maximize IPC is allowlisted and wired through preload and main", ()
     assert.match(main, /ipcMain\.on\("window:maximize"/);
     assert.match(main, /ipcMain\.handle\("window:isMaximized"/);
     assert.match(main, /"window:maximized"/);
-    assert.match(main, /resizable: true/);
-    assert.match(main, /maximizable: true/);
+    assert.match(main, /resizable: false/);
+    assert.match(main, /maximizable: false/);
 });
 
 test("every Studio theme defines shell surfaces and titlebar tokens", () => {

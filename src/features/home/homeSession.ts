@@ -5,6 +5,7 @@ import {
 } from "@/features/spotify/playback/player";
 import type { CurrentPlaybackSnapshot } from "@/features/spotify/playback/currentPlayback";
 import { homeQueue } from "./homeQueue";
+import { createHomeFixtureSnapshot, homeFixtureEnabled } from "./homeFixture";
 import type {
     HomeNowPlaying,
     HomeSessionSnapshot,
@@ -17,6 +18,9 @@ let lastSerialized = "";
 let unsubscribePlayback: (() => void) | null = null;
 let unsubscribeQueue: (() => void) | null = null;
 const listeners = new Set<(snapshot: HomeSessionSnapshot) => void>();
+const fixtureSnapshot = homeFixtureEnabled()
+    ? createHomeFixtureSnapshot()
+    : null;
 
 function toNowPlaying(snapshot: CurrentPlaybackSnapshot): HomeNowPlaying {
     return {
@@ -29,6 +33,7 @@ function toNowPlaying(snapshot: CurrentPlaybackSnapshot): HomeNowPlaying {
 }
 
 function buildSnapshot(): HomeSessionSnapshot {
+    if (fixtureSnapshot) return fixtureSnapshot;
     return {
         revision,
         current: toNowPlaying(getCurrentPlaybackSnapshot()),
@@ -79,6 +84,7 @@ function onQueue(): void {
 export function initializeHomeSession(): void {
     if (initialized) return;
     initialized = true;
+    if (fixtureSnapshot) return;
     unsubscribePlayback = subscribeCurrentPlayback(onPlayback);
     unsubscribeQueue = homeQueue.subscribe(onQueue);
     startCurrentPlaybackPolling();

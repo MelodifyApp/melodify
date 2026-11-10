@@ -167,6 +167,64 @@ export async function verifyStoredCredentials(
     return statuses;
 }
 
+/**
+ * Re-runs the stored-pair verification for one service. Used by the
+ * "Try again" card state; no credential draft or secret crosses the bridge.
+ */
+export async function retryStoredCredentialVerification(
+    bridge: CredentialStatusBridge,
+    serviceId: SecretServiceId,
+    clientIdOverride?: string
+): Promise<CredentialStatus> {
+    const service = SECRET_SERVICES.find((item) => item.id === serviceId);
+    if (!service) return "needs-credentials";
+    const clientId =
+        (clientIdOverride ?? snapshot.clientIds[serviceId] ?? "").trim();
+    if (!snapshot.storedSecrets[serviceId] || !clientId) {
+        return "needs-credentials";
+    }
+
+    serviceVersions[serviceId] += 1;
+    const version = serviceVersions[serviceId];
+    publish({
+        ...snapshot,
+        clientIds: { ...snapshot.clientIds, [serviceId]: clientId },
+        statuses: { ...snapshot.statuses, [serviceId]: "verifying" },
+    });
+
+    let status: CredentialStatus;
+    try {
+        const result = await bridge.invoke(service.verifyChannel, {
+            [service.clientIdKey]: clientId,
+        });
+        status = verificationStatus(result);
+    } catch {
+        status = "verification-unavailable";
+    }
+
+    if (serviceVersions[serviceId] !== version) {
+        return snapshot.statuses[serviceId] ?? status;
+    }
+
+    if (status === "verified") {
+        publish({
+            ...snapshot,
+            statuses: { ...snapshot.statuses, [serviceId]: "verified" },
+            baselineStatuses: {
+                ...snapshot.baselineStatuses,
+                [serviceId]: "verified",
+            },
+            storedSecrets: { ...snapshot.storedSecrets, [serviceId]: true },
+        });
+    } else {
+        publish({
+            ...snapshot,
+            statuses: { ...snapshot.statuses, [serviceId]: status },
+        });
+    }
+    return status;
+}
+
 function emptySnapshot(): CredentialStatusSnapshot {
     return {
         clientIds: emptyClientIds(),
@@ -274,33 +332,17 @@ export function initializeCredentialStatusStore(
     return initializePromise;
 }
 
-/** Applies a field-edit or explicit verification state for this session. */
-export function setCredentialStatus(
+/** A successful save replaces the session baseline and marks the pair stored. */
+export function markCredentialSaved(
     serviceId: SecretServiceId,
-    status: CredentialStatus
+    clientId?: string
 ): void {
     serviceVersions[serviceId] += 1;
     publish({
         ...snapshot,
-        statuses: { ...snapshot.statuses, [serviceId]: status },
-    });
-}
-
-/** Cancels a draft and returns to the stored pair's session baseline. */
-export function resetCredentialStatus(serviceId: SecretServiceId): void {
-    serviceVersions[serviceId] += 1;
-    const statuses = { ...snapshot.statuses };
-    const baseline = snapshot.baselineStatuses[serviceId];
-    if (baseline) statuses[serviceId] = baseline;
-    else delete statuses[serviceId];
-    publish({ ...snapshot, statuses });
-}
-
-/** A successful save replaces the session baseline and marks the pair stored. */
-export function markCredentialSaved(serviceId: SecretServiceId): void {
-    serviceVersions[serviceId] += 1;
-    publish({
-        ...snapshot,
+        ...(clientId !== undefined
+            ? { clientIds: { ...snapshot.clientIds, [serviceId]: clientId } }
+            : {}),
         statuses: { ...snapshot.statuses, [serviceId]: "verified" },
         baselineStatuses: {
             ...snapshot.baselineStatuses,

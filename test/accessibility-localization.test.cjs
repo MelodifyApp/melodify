@@ -129,13 +129,14 @@ test("validation errors translate while isolated callers keep English fallback",
     const validation = loadModule(
         "src/features/settings/components/validation.ts"
     );
+    const tooLongAlias = "x".repeat(21);
     assert.equal(
-        validation.validateClientId("short", trT),
-        "Client ID çok kısa görünüyor"
+        validation.validateCommandAlias(tooLongAlias, [], "sr", trT),
+        "Alternatif ad en fazla 20 karakter olmalı"
     );
     assert.equal(
-        validation.validateClientId("short"),
-        "Client ID appears to be too short"
+        validation.validateCommandAlias(tooLongAlias, [], "sr"),
+        "Alternative name must be no more than 20 characters"
     );
 });
 

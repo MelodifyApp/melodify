@@ -13,6 +13,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Button, Input, Select, SettingGroup } from "@/ui/components/studio";
 import { formatLogsForExport } from "@/core/logging/export";
+import { isLogListAtBottom } from "../logScroll";
 
 interface LogsProps {
     logs: any[];
@@ -39,15 +40,23 @@ const levelMessageKeys: Record<LogLevel, string> = {
 export default function Logs({ logs }: LogsProps) {
     const { t } = useTranslation();
     const logsContainerRef = useRef<HTMLDivElement>(null);
+    const stickToBottomRef = useRef(true);
     const [filter, setFilter] = useState<string>("all");
     const [searchTerm, setSearchTerm] = useState<string>("");
 
     useEffect(() => {
-        if (logsContainerRef.current) {
-            logsContainerRef.current.scrollTop =
-                logsContainerRef.current.scrollHeight;
+        const container = logsContainerRef.current;
+        if (container && stickToBottomRef.current) {
+            container.scrollTop = container.scrollHeight;
         }
     }, [logs]);
+
+    const handleLogScroll = () => {
+        const container = logsContainerRef.current;
+        if (container) {
+            stickToBottomRef.current = isLogListAtBottom(container);
+        }
+    };
 
     const filteredLogs = logs.filter((log) => {
         if (
@@ -180,6 +189,7 @@ export default function Logs({ logs }: LogsProps) {
                     role="log"
                     aria-label={t("logs.title")}
                     tabIndex={0}
+                    onScroll={handleLogScroll}
                 >
                     {filteredLogs.length === 0 ? (
                         <p className="studio-logs-empty">

@@ -228,7 +228,6 @@ test("Requests raw inputs also disable spellcheck and autocorrect", () => {
     });
     for (const id of [
         "requests-song-file-path",
-        "requests-moderator-input",
         "requests-global-cooldown-seconds",
         "requests-per-user-cooldown-seconds",
     ]) {
@@ -242,11 +241,12 @@ test("Requests raw inputs also disable spellcheck and autocorrect", () => {
 test("Studio inputs have one focus border while buttons and toggles keep their outline", () => {
     const css = readSource("src/ui/components/studio/studio.css");
     const generic = css.match(
-        /\.studio :is\(([^)]*)\):focus-visible\s*\{([^}]*)\}/
+        /\.studio :is\(([^\n]+)\):focus-visible\s*\{([^}]*)\}/
     );
     assert.ok(generic, "generic Studio focus-visible rule must exist");
     assert.doesNotMatch(generic[1], /\binput\b|\bselect\b|\btextarea\b/);
     assert.match(generic[1], /\.studio-toggle/);
+    assert.match(generic[1], /\[tabindex\]:not\(\.studio-settings-title\)/);
     assert.match(generic[2], /outline:\s*2px solid var\(--studio-focus\)/);
 
     const inputFocus = css.match(/\.studio-input:focus\s*\{([^}]*)\}/);
@@ -456,7 +456,7 @@ test("startup verification maps provider failures to unavailable without raw err
     assert.doesNotMatch(JSON.stringify(statuses), /provider secret detail/);
 });
 
-test("shared credential status cache survives consumers and resets to the verified baseline", async () => {
+test("shared credential status cache survives consumers and marks new saves", async () => {
     const store = loadFresh("src/features/settings/credentialStatusStore.ts");
     let notifications = 0;
     const unsubscribe = store.subscribeCredentialStatuses(() => {
@@ -478,18 +478,12 @@ test("shared credential status cache survives consumers and resets to the verifi
     assert.equal(snapshot.storedSecrets.spotify, true);
     assert.ok(notifications > 0);
 
-    store.setCredentialStatus("spotify", "unverified");
-    snapshot = store.getCredentialStatusSnapshot();
-    assert.equal(snapshot.statuses.spotify, "unverified");
-    store.resetCredentialStatus("spotify");
-    snapshot = store.getCredentialStatusSnapshot();
-    assert.equal(snapshot.statuses.spotify, "verified");
-
-    store.markCredentialSaved("kick");
+    store.markCredentialSaved("kick", "kick-new-id");
     snapshot = store.getCredentialStatusSnapshot();
     assert.equal(snapshot.statuses.kick, "verified");
     assert.equal(snapshot.baselineStatuses.kick, "verified");
     assert.equal(snapshot.storedSecrets.kick, true);
+    assert.equal(snapshot.clientIds.kick, "kick-new-id");
 
     const verifyCalls = bridge.calls.filter(
         (call) => call.channel === "spotify:verifySecrets"
@@ -505,51 +499,61 @@ test("shared credential status cache survives consumers and resets to the verifi
     unsubscribe();
 });
 
-test("startup verification cannot overwrite a user edit made while checking", async () => {
+test("one-service retry verifies a stored pair without sending the secret", async () => {
     const store = loadFresh("src/features/settings/credentialStatusStore.ts");
-    let releaseVerify;
-    let markStarted;
-    const started = new Promise((resolve) => {
-        markStarted = resolve;
-    });
+    const verifyPayloads = [];
     const bridge = mockBridge({
-        "config:get": CONFIG,
+        "config:get": { spotifyClientId: "stored-id", kickClientId: "", twitchClientId: "" },
         "spotify:hasSecrets": true,
         "kick:hasSecrets": false,
         "twitch:hasSecrets": false,
-        "spotify:verifySecrets": () => {
-            markStarted();
-            return new Promise((resolve) => {
-                releaseVerify = resolve;
-            });
+        "spotify:verifySecrets": (payload) => {
+            verifyPayloads.push(payload);
+            return verifyPayloads.length === 1
+                ? { success: false, code: "verification_unavailable" }
+                : { success: true };
         },
     });
 
-    const initialization = store.initializeCredentialStatusStore(bridge);
-    await started;
-    store.setCredentialStatus("spotify", "unverified");
-    releaseVerify({ success: true });
-    await initialization;
-
+    await store.initializeCredentialStatusStore(bridge);
     assert.equal(
         store.getCredentialStatusSnapshot().statuses.spotify,
-        "unverified",
-        "a user edit must win over a late startup result"
+        "verification-unavailable"
     );
+
+    const retried = await store.retryStoredCredentialVerification(
+        bridge,
+        "spotify"
+    );
+    assert.equal(retried, "verified");
+    const snapshot = store.getCredentialStatusSnapshot();
+    assert.equal(snapshot.statuses.spotify, "verified");
+    assert.equal(snapshot.baselineStatuses.spotify, "verified");
+    assert.equal(snapshot.storedSecrets.spotify, true);
+    assert.equal(verifyPayloads.length, 2);
+    for (const payload of verifyPayloads) {
+        assert.deepEqual(payload, { spotifyClientId: "stored-id" });
+        assert.equal(
+            Object.keys(payload).some((key) => key.endsWith("ClientSecret")),
+            false
+        );
+    }
 });
 
-test("API Keys consumes the shared status cache; the section hook no longer owns overrides", () => {
+test("API Keys consumes the shared status cache and one-service retry", () => {
     const secrets = readSource(
         "src/features/settings/components/sections/Secrets.tsx"
     );
-    const hook = readSource("src/features/settings/useSecretsSection.ts");
+    const dialog = readSource(
+        "src/features/settings/components/sections/CredentialSetupDialog.tsx"
+    );
     assert.match(secrets, /useCredentialStatuses/);
     assert.match(secrets, /credentialStatuses\.statuses/);
-    assert.match(secrets, /setCredentialStatus/);
-    assert.match(secrets, /resetCredentialStatus/);
+    assert.match(secrets, /credentialStatuses\.storedSecrets/);
+    assert.match(secrets, /markCredentialSaved/);
+    assert.match(secrets, /retryStoredCredentialVerification/);
     assert.match(secrets, /active/);
-    assert.match(secrets, /if \(!active\) setGuideService\(null\)/);
-    assert.doesNotMatch(hook, /statusOverrides/);
-    assert.match(hook, /onStatusChange/);
-    assert.match(hook, /onResetStatus/);
+    assert.match(secrets, /if \(!active\) setDialog\(null\)/);
+    assert.doesNotMatch(secrets, /useSecretsSection|statusOverrides/);
+    assert.match(dialog, /saveServiceSecrets/);
 });

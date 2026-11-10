@@ -111,15 +111,6 @@ export function getSetupGuide(
 /** Draft secret values keyed by their config key. */
 export type SecretDrafts = Readonly<Record<string, string>>;
 
-/** Returns a new draft map with one field updated (never mutates the input). */
-export function updateSecretDraft(
-    drafts: SecretDrafts,
-    key: string,
-    value: string
-): SecretDrafts {
-    return { ...drafts, [key]: value };
-}
-
 /** Returns a new draft map without the given service's secret. */
 export function clearSecretDrafts(
     drafts: SecretDrafts,
@@ -148,8 +139,6 @@ export interface SecretSaveResult {
     /** Drafts after the attempt: cleared on success, retained on failure. */
     readonly drafts: SecretDrafts;
 }
-
-export type SecretVerificationResult = SecretSaveResult;
 
 function readTrimmedString(
     source: Record<string, unknown>,
@@ -193,53 +182,21 @@ function failureStatusFor(result: unknown): SecretSaveErrorCode {
 function credentialPayload(
     service: SecretServiceDefinition,
     config: Record<string, unknown>,
-    drafts: SecretDrafts,
-    includeEmptySecret = false
+    drafts: SecretDrafts
 ): Record<string, string> {
     const payload: Record<string, string> = {
         [service.clientIdKey]: readTrimmedString(config, service.clientIdKey),
     };
     const secret = readTrimmedString(drafts, service.clientSecretKey);
-    if (secret || includeEmptySecret) {
+    if (secret) {
         payload[service.clientSecretKey] = secret;
     }
     return payload;
 }
 
 /**
- * Verifies credentials without persisting them. A stored secret may be used by
- * the main process when the submitted client ID still matches the stored one.
- */
-export async function verifyServiceSecrets(
-    id: SecretServiceId,
-    config: Record<string, unknown>,
-    drafts: SecretDrafts,
-    bridge: SecretsBridge
-): Promise<SecretVerificationResult> {
-    const service = getSecretService(id);
-    const payload = credentialPayload(service, config, drafts, true);
-    if (!payload[service.clientIdKey]) {
-        return { ok: false, error: "required", drafts };
-    }
-
-    try {
-        const result = await bridge.invoke(service.verifyChannel, payload);
-        if (!invokeSucceeded(result)) {
-            return {
-                ok: false,
-                error: failureStatusFor(result),
-                drafts,
-            };
-        }
-        return { ok: true, drafts };
-    } catch {
-        return { ok: false, error: "unavailable", drafts };
-    }
-}
-
-/**
  * Persists one service's credentials after the main process verifies them
- * again. Save is gated in the UI; failed saves retain the draft for retry.
+ * again. Failed saves retain the draft for retry.
  */
 export async function saveServiceSecrets(
     id: SecretServiceId,

@@ -502,9 +502,9 @@ test("reward drafts stay isolated per platform and discard restores both", () =>
 });
 
 test("song-file controls and reward defaults follow the product rules", () => {
-    assert.equal(requestsView.showSongFileControls({ saveCurrentSongToFile: true }), true);
-    assert.equal(requestsView.showSongFileControls({ saveCurrentSongToFile: false }), false);
-    assert.equal(requestsView.showSongFileControls({}), false);
+    assert.equal(requestsView.songFileControlsEnabled({ saveCurrentSongToFile: true }), true);
+    assert.equal(requestsView.songFileControlsEnabled({ saveCurrentSongToFile: false }), false);
+    assert.equal(requestsView.songFileControlsEnabled({}), false);
     assert.equal(requestsView.rewardTitleOrDefault("VIP Song"), "VIP Song");
     assert.equal(requestsView.rewardTitleOrDefault(""), "Song Request");
     assert.equal(requestsView.rewardTitleOrDefault(undefined), "Song Request");
@@ -524,15 +524,18 @@ test("song-file controls and reward defaults follow the product rules", () => {
     );
 });
 
-test("Requests uses Studio primitives, conditional file controls and matching reward labels", () => {
+test("Requests uses Studio primitives, always-mounted file controls and matching reward labels", () => {
     const source = readSource("src/features/settings/components/sections/Requests.tsx");
     for (const component of ["SettingGroup", "Input", "Select", "Toggle", "IconButton"]) {
         assert.match(source, new RegExp(`\\b${component}\\b`), component);
     }
     assert.doesNotMatch(source, /settings-section/);
     assert.doesNotMatch(source, /<Input\s+type="password"/i);
-    assert.match(source, /showSongFileControls\(config\)/);
-    assert.match(source, /customModerators/);
+    assert.match(source, /songFileControlsEnabled\(config\)/);
+    assert.doesNotMatch(
+        source,
+        /customModerators|commands\.moderatorsList|requests-prefix|requests-moderator-input/
+    );
     assert.match(source, /t\("requests\.chooseFilePath"\)/);
     assert.match(source, /t\("requests\.kickRewardTitle"\)/);
     assert.match(source, /t\("requests\.twitchRewardTitle"\)/);
@@ -546,7 +549,7 @@ test("Requests uses Studio primitives, conditional file controls and matching re
     assert.match(source, /saveCurrentSongToFile/);
 });
 
-test("Requests renders Studio groups, hides the path until file output is on, and labels the icon chooser", () => {
+test("Requests renders Studio groups, keeps the path row mounted, and labels the icon chooser", () => {
     const visible = renderRequests({
         saveCurrentSongToFile: true,
         currentSongFilePath: "C:\\Users\\Example\\current-song.txt",
@@ -560,19 +563,31 @@ test("Requests renders Studio groups, hides the path until file output is on, an
     assert.doesNotMatch(visible, /settings-section/);
     assert.match(visible, /requests\.kickRewardTitle/);
     assert.match(visible, /requests\.twitchRewardTitle/);
-    assert.match(visible, /modmira/);
-    assert.match(visible, /commands\.moderatorsList/);
-    assert.match(visible, /commands\.addModerator/);
-    assert.match(visible, /requests\.removeModerator/);
+    assert.doesNotMatch(
+        visible,
+        /modmira|commands\.moderatorsList|commands\.addModerator|requests\.removeModerator|requests-moderator-input/
+    );
     assert.match(visible, /requests\.chooseFilePath/);
     assert.match(visible, /title="requests\.chooseFilePathTitle"/);
     assert.match(visible, /data-icon-only="true"/);
     assert.match(visible, /readOnly/i);
     assert.match(visible, /role="status"/);
+    const visiblePath = visible.match(/<input[^>]*id="requests-song-file-path"[^>]*>/)?.[0];
+    assert.ok(visiblePath, "path row must render while file output is on");
+    assert.doesNotMatch(visiblePath, /\sdisabled(=|\s|\/|>)/);
 
-    const hidden = renderRequests({ saveCurrentSongToFile: false });
-    assert.doesNotMatch(hidden, /requests-song-file-path/);
-    assert.doesNotMatch(hidden, /requests\.chooseFilePath/);
+    const disabled = renderRequests({ saveCurrentSongToFile: false });
+    const disabledPath = disabled.match(
+        /<input[^>]*id="requests-song-file-path"[^>]*>/
+    )?.[0];
+    assert.ok(disabledPath, "path row must stay mounted while file output is off");
+    assert.match(disabledPath, /\sdisabled(=|\s|\/|>)/);
+    assert.match(disabled, /requests\.chooseFilePath/);
+    const chooser = disabled.match(
+        /<button[^>]*aria-label="requests\.chooseFilePath"[^>]*>/
+    )?.[0];
+    assert.ok(chooser, "the Choose path button must stay mounted");
+    assert.match(chooser, /\sdisabled(=|\s|\/|>)/);
 });
 
 test("read-only reward handlers are allowlisted and gated before provider reads", () => {
@@ -615,7 +630,14 @@ test("read-only reward handlers are allowlisted and gated before provider reads"
     );
 });
 
-test("Client ID inputs are visible text while client secrets stay masked", () => {
-    const source = readSource("src/features/settings/components/sections/Secrets.tsx");
-    assert.match(source, /field\.isSecret\s*\?\s*"password"\s*:\s*"text"/);
+test("Credential fields are confined to the password-protected setup dialog", () => {
+    const secrets = readSource(
+        "src/features/settings/components/sections/Secrets.tsx"
+    );
+    const dialog = readSource(
+        "src/features/settings/components/sections/CredentialSetupDialog.tsx"
+    );
+    assert.doesNotMatch(secrets, /<Input/);
+    assert.match(dialog, /label=\{t\("setup\.clientId"\)\}/);
+    assert.match(dialog, /type="password"/);
 });
