@@ -54,7 +54,7 @@
         "autoprefixer": "^10.4.21",
         "copy-webpack-plugin": "^13.0.0",
         "css-loader": "^6.11.0",
-        "electron": "36.5.0",
+        "electron": "45.2.3",
         "eslint": "^8.57.1",
         "eslint-plugin-import": "^2.31.0",
         "fork-ts-checker-webpack-plugin": "^7.3.0",
@@ -67,7 +67,7 @@
         "typescript": "^5.8.3"
     },
     "dependencies": {
-        "basic-electron-updater": "^1.0.6",
+        "basic-electron-updater": "^1.1.0",
         "clsx": "^2.1.1",
         "electron-squirrel-startup": "^1.0.1",
         "i18next": "^25.3.2",

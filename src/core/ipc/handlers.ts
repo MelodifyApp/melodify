@@ -97,7 +97,6 @@ function applyConfigSideEffects(
             if (newStartOnStartup) {
                 app.setLoginItemSettings({
                     openAtLogin: true,
-                    openAsHidden: true,
                 });
                 logInfo("App configured to start on startup", "config:save");
             } else {
@@ -303,7 +302,6 @@ ipcMain.on("startup:setStatus", (_event, enabled: unknown) => {
     if (value) {
         app.setLoginItemSettings({
             openAtLogin: true,
-            openAsHidden: true, // Prevents intrusive startup behavior
         });
         logInfo("App configured to start on startup", "startup:setStatus");
     } else {
@@ -331,7 +329,6 @@ app.on("ready", () => {
     if (startOnStartup) {
         app.setLoginItemSettings({
             openAtLogin: true,
-            openAsHidden: true,
         });
         logInfo("App configured to start on startup", "app:ready");
     }
