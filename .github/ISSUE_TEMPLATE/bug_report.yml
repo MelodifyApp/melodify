@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible problem with Melodify Live
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not paste API secrets, OAuth tokens, real chat
+        contents, personal data or other people's account details. Use dummy
+        values in screenshots and logs.
+  - type: input
+    id: version
+    attributes:
+      label: Melodify Live version
+      description: Shown in the titlebar footer or Settings → Debug.
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2 (build 26100)
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider involved
+      options:
+        - Spotify
+        - Kick
+        - Twitch
+        - Settings / UI
+        - Updater
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows the problem.
+      placeholder: |
+        1. Open Settings → API Keys
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Settings → Logs → Export. Redact tokens, usernames and message contents.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed credentials, tokens and personal data from this report.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true

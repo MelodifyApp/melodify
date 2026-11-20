@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest an improvement for Melodify Live
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first, then the smallest useful solution. Do not
+        include credentials or real chat data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Settings / UI
+        - Song requests
+        - Commands
+        - Spotify
+        - Kick
+        - Twitch
+        - Updater
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for the same request.
+          required: true
