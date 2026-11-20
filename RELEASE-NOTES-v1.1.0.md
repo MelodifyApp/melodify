@@ -1,0 +1,66 @@
+# Melodify Live 1.1.0
+
+Melodify Live lets viewers request songs from Kick and Twitch chat and plays
+them through Spotify. Everything stays on your machine: no accounts, no
+telemetry, no cloud sync and no Melodify server.
+
+## Highlights
+
+- **Queue sessions follow the live stream.** A session starts when a configured
+  provider is confirmed live, survives chat outages, and ends only after every
+  configured provider has been offline for two minutes. The queue resets per
+  stream instead of resetting whenever chat reconnects.
+- **Queue history.** Past sessions are grouped by stream, with played and
+  unplayed requests. History can be exported to JSON or cleared from Settings;
+  clearing keeps the active live session.
+- **Dusk look.** Refreshed titlebar, mark, installer/tray icon rim, consistent
+  Home and Settings rails, and slower, calmer motion.
+- **Runtime.** Electron 45.2.3 (Chromium 156, Node 24) and the Melodify updater
+  1.1.0.
+
+## Security and privacy
+
+- Credentials are encrypted at rest on Windows with Electron `safeStorage`
+  (DPAPI). Client Secrets and OAuth tokens use the `enc:v1:` envelope in
+  `config.json`; the renderer never receives secrets.
+- No telemetry, analytics, crash uploads or background Melodify calls. Network
+  traffic is limited to Spotify/Kick/Twitch APIs, the GitHub update check,
+  artwork CDNs and exports you start yourself.
+- Queue history stores track title/artist, requester display name, platform,
+  timestamps and outcome. It does **not** store artwork URLs, chat message
+  bodies, provider user IDs, IP addresses or tokens.
+- Logs and song-request files are pruned after 30 days. Queue history is pruned
+  after 90 days or 50 sessions; the active session is never pruned.
+- “Clear history” removes past sessions only. The full local profile can be
+  deleted from `%APPDATA%\melodify` after quitting the app.
+
+## Upgrade and migration
+
+- The installer, package and profile identities remain `Melodify` /
+  `%APPDATA%\melodify` so 1.1.0 upgrades in place over 1.0.7.
+- A 1.0.7 plaintext config is encrypted automatically on the first 1.1.0
+  launch. No plaintext pre-encryption backup is kept.
+- **Downgrade is unsupported.** 1.0.7 cannot read `enc:v1:` values. If
+  decryption is unavailable, affected credentials are treated as missing and
+  must be re-entered in Settings → API Keys.
+
+## Fixes carried from 1.0.x
+
+- 1.0.4 replaced the incompatible Kick chat reader with Kick's negotiated
+  anonymous transport.
+- 1.0.5 prevented Kick notifications from targeting windows destroyed during
+  shutdown.
+- 1.0.6 refreshed the cached Spotify client after credential changes.
+- 1.0.7 shipped the maintenance/security work and restored the approved
+  titlebar mark, Twitch credentials in Settings → API Keys, and the English
+  Home back-link.
+
+## Installation notes
+
+- Windows 10/11, x64 only.
+- This build is **unsigned**. SmartScreen may show “Unknown publisher”; verify
+  the SHA-256 checksums published with the release before running it.
+- Uninstalling does not delete `%APPDATA%\melodify`; delete that folder
+  manually for a full reset.
+- Keep a full installer available for recovery. Automatic downgrade to 1.0.7 is
+  not supported.

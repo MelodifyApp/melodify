@@ -4,19 +4,18 @@ Master checklist for publishing the Windows desktop app. The technical tag/publi
 steps live in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); this file covers the
 full launch surface.
 
-**Last updated:** 2026-11-12
-**Status:** not release-ready
+**Last updated:** 2026-11-21
+**Status:** release candidate prep — live QA and legal gates remain
 
 ## 0. Blockers
 
-- [ ] **Electron upgrade merge/QA.** Electron **45.2.3** (Chromium 156, Node 24)
-      builds, packages and smokes on the `electron-45` branch. Merge, live
-      provider QA and release-environment validation remain.
+- [x] **Electron upgrade merged.** Electron **45.2.3** (Chromium 156, Node 24)
+      builds, packages and smokes; the branch is merged locally into `master`.
+- [ ] **Live provider QA** (Spotify/Kick/Twitch) has not run for 1.1.0.
 - [x] **Updater 1.1.0** published on 2026-11-12 with signed provenance; desktop
       dependency and lockfile are on `^1.1.0`.
-- [ ] **Version/metadata** still 1.0.7 in `package.json`, lockfile and
-      `update.json`.
-- [ ] **Live provider test** (Spotify/Kick/Twitch) has not run for 1.1.0.
+- [x] **Version/metadata** set to 1.1.0 in `package.json`, `package-lock.json`
+      and `update.json` with the v1.1.0 asset URL.
 - [ ] **Protected GitHub `release` environment** still needs to exist.
 - [ ] **KVKK controller identity and Turkish legal review** are pending.
 - [ ] **Name clearance** for "Melodify Live" is pending.
@@ -27,6 +26,8 @@ full launch surface.
 - [x] Silent auto-save; no success indicator; inline failure alert only.
 - [x] Dusk look, motion polish and reduced-motion behavior.
 - [x] Credential encryption at rest (DPAPI, `enc:v1:`) with migration.
+- [x] Queue history retention, export, clear and field minimization.
+- [x] Local data lifecycle and irreversible-action approval gate documented.
 - [x] Real-window visual QA at 1200/640/480 in Graphite/Light/Dark.
 - [x] Gallery state matrix for rare states (API failures, Home empty/error,
       filtered logs).
@@ -90,15 +91,20 @@ full launch surface.
 ## 5. Release mechanics
 
 - [x] Updater package 1.1.0 published; desktop dependency/lockfile bumped.
-- [ ] `package.json`, `package-lock.json` and `update.json` at 1.1.0 with the
+- [x] `package.json`, `package-lock.json` and `update.json` at 1.1.0 with the
       correct asset URL.
-- [ ] `RELEASE-NOTES-v1.1.0.md` complete (features, fixes, security, migration,
+- [x] `RELEASE-NOTES-v1.1.0.md` complete (features, fixes, security, migration,
       unsigned warning, downgrade unsupported).
-- [ ] Clean `npm ci`, production build, Squirrel output inspection.
+- [x] Production build and Squirrel output inspection (version 1.1.0).
+- [ ] Clean `npm ci` from the lockfile on a fresh checkout.
 - [ ] Install, launch, upgrade from 1.0.7, uninstall and reinstall.
 - [ ] Windows Sandbox smoke test (no network, temporary profile).
-- [ ] SHA-256 checksums generated and verified.
+- [x] Release assets prepared and verified; SHA-256 checksums match the
+      manifest.
 - [ ] `release` environment, tag, CI draft, asset verification, un-draft.
+- [ ] **Updater tag provenance:** npm 1.1.0 was published from `fb1ab31`;
+      `main` has two CI/test commits after it (`d6a519d`). Leave the tag as the
+      published source or cut a patch tag; do not move it silently.
 
 ## 6. Support and operations
 
@@ -120,7 +126,7 @@ full launch surface.
 
 ## Decisions needed from the owner
 
-1. **Electron:** upgrade before 1.1.0, or accept an EOL runtime risk in writing?
+1. **Electron:** resolved — 45.2.3 is merged; the 36 EOL risk is removed.
 2. **Name:** proceed with "Melodify Live" and run clearance, or clear a new name?
 3. **KVKK:** controller details and legal review owner.
 4. **Distribution:** direct download only, or Microsoft Store/winget as well?
