@@ -50,12 +50,7 @@
         linear-gradient(135deg, color-mix(in srgb, var(--studio-secondary) 7%, transparent), transparent 52%);
 }
 
-.studio-app[data-studio-look="dusk"] .studio-settings-rail {
-    background-image:
-        linear-gradient(180deg, color-mix(in srgb, var(--studio-secondary) 4%, transparent), transparent 44%),
-        linear-gradient(180deg, var(--studio-menu-top), var(--studio-menu-bottom));
-}
-
+.studio-app[data-studio-look="dusk"] .studio-settings-rail,
 .studio-app[data-studio-look="dusk"] .studio-home-rail {
     background-image:
         linear-gradient(180deg, color-mix(in srgb, var(--studio-secondary) 4%, transparent), transparent 44%);

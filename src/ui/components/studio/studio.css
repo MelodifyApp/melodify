@@ -103,8 +103,8 @@ textarea.studio-input { min-height: 76px; resize: vertical; }
 .studio-toggle-copy { display: grid; gap: 3px; min-width: 0; max-width: 65ch; }
 .studio-toggle-copy label { cursor: pointer; }
 .studio-toggle-row[data-disabled="true"] label { color: var(--studio-muted); cursor: not-allowed; }
-.studio-toggle { position: relative; appearance: none; flex: none; width: 40px; height: 24px; margin: 0; border: 1px solid var(--studio-control-line); border-radius: 999px; background-color: var(--studio-input); cursor: pointer; transition: background-color var(--studio-motion-fast) var(--studio-motion-ease), border-color var(--studio-motion-fast) var(--studio-motion-ease); }
-.studio-toggle::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background-color: var(--studio-muted); transition: transform var(--studio-motion-base) var(--studio-motion-ease), background-color var(--studio-motion-fast) var(--studio-motion-ease); }
+.studio-toggle { position: relative; appearance: none; flex: none; width: 40px; height: 24px; margin: 0; border: 1px solid var(--studio-control-line); border-radius: 999px; background-color: var(--studio-input); cursor: pointer; transition: background-color var(--studio-motion-toggle-track) var(--studio-motion-ease), border-color var(--studio-motion-toggle-track) var(--studio-motion-ease); }
+.studio-toggle::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background-color: var(--studio-muted); transition: transform var(--studio-motion-toggle-thumb) var(--studio-motion-ease), background-color var(--studio-motion-toggle-track) var(--studio-motion-ease); }
 .studio-toggle:checked { background-color: var(--studio-accent); border-color: var(--studio-accent); }
 .studio-toggle:checked::after { transform: translateX(16px); background-color: var(--studio-accent-ink); }
 .studio-toggle:disabled { cursor: not-allowed; }
@@ -163,7 +163,25 @@ textarea.studio-input { min-height: 76px; resize: vertical; }
 .studio-save-dock[data-mode="api"] .studio-save-status-slot { flex: 0 0 132px; width: 132px; min-width: 132px; }
 
 .studio-nav { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.studio-button.studio-nav-home { width: 100%; justify-content: flex-start; background-color: color-mix(in srgb, var(--studio-ink) 3%, transparent); border-radius: 6px; }
+.studio-button.studio-nav-home {
+    width: 100%;
+    margin-top: auto;
+    min-height: 38px;
+    justify-content: flex-start;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 6px;
+    background-color: transparent;
+    color: var(--studio-muted);
+    font: 500 13.5px/1.4 "Segoe UI", sans-serif;
+    gap: 8px;
+}
+.studio-button.studio-nav-home:not(:disabled):hover {
+    color: var(--studio-ink);
+    background-color: color-mix(in srgb, var(--studio-ink) 5%, transparent);
+    border-color: transparent;
+    transform: none;
+}
 .studio-nav-title { margin: 0; color: var(--studio-ink); font-size: 15px; font-weight: 650; line-height: 1.4; }
 .studio-nav-label { margin: 0 0 8px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--studio-muted); }
 .studio-nav-items { display: grid; gap: 2px; }

@@ -62,12 +62,12 @@ body {
 }
 
 .inline-error {
-    animation: inline-error-enter 160ms ease-out 1;
+    animation: inline-error-enter 240ms ease-out 1;
 }
 
 /* Motion-only variant for inline helper text that keeps its own layout. */
 .error-motion {
-    animation: inline-error-enter 160ms ease-out 1;
+    animation: inline-error-enter 240ms ease-out 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

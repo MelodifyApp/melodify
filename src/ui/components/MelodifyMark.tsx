@@ -33,6 +33,17 @@ export default function MelodifyMark({ className }: MelodifyMarkProps) {
                 rx="16"
                 fill="url(#melodify-mark-gradient)"
             />
+            <rect
+                x="1.5"
+                y="1.5"
+                width="61"
+                height="61"
+                rx="14.5"
+                fill="none"
+                stroke="#ffffff"
+                strokeOpacity="0.55"
+                strokeWidth="3"
+            />
             <g
                 transform="translate(14 14) scale(1.5)"
                 fill="none"

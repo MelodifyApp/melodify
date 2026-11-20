@@ -1,12 +1,14 @@
 /* Single source of visual timing/easing for all Studio primitives. */
 .studio {
-    --studio-motion-fast: 120ms;
-    --studio-motion-base: 180ms;
-    --studio-motion-switch: 140ms;
-    --studio-motion-theme: 160ms;
-    --studio-motion-surface: 240ms;
-    --studio-motion-check: 260ms;
-    --studio-motion-spin: 700ms;
+    --studio-motion-fast: 180ms;
+    --studio-motion-base: 270ms;
+    --studio-motion-switch: 210ms;
+    --studio-motion-theme: 240ms;
+    --studio-motion-surface: 360ms;
+    --studio-motion-check: 390ms;
+    --studio-motion-toggle-track: 240ms;
+    --studio-motion-toggle-thumb: 360ms;
+    --studio-motion-spin: 1050ms;
     --studio-motion-ease: cubic-bezier(.2, .8, .2, 1);
     --studio-motion-lift: -1px;
     --studio-motion-press: .985;

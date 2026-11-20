@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import MelodifyMark from "./MelodifyMark";
+import { SettingsIcon } from "./studio/icons";
 import { STUDIO_THEMES } from "@/ui/theme";
 import type { StudioThemeName } from "@/ui/components/studio";
 import "./titlebarStudio.css";
@@ -105,21 +106,7 @@ export default function Titlebar({
                         aria-label={t("settings.title")}
                         title={t("settings.title")}
                     >
-                        <svg
-                            viewBox="0 0 16 16"
-                            width="15"
-                            height="15"
-                            aria-hidden="true"
-                        >
-                            <path
-                                d="M3 5h10M3 11h10"
-                                stroke="currentColor"
-                                strokeWidth="1.2"
-                                strokeLinecap="round"
-                            />
-                            <circle cx="6" cy="5" r="1.6" fill="currentColor" />
-                            <circle cx="10" cy="11" r="1.6" fill="currentColor" />
-                        </svg>
+                        <SettingsIcon width={15} height={15} />
                     </button>
                 )}
 

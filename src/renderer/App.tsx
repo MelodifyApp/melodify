@@ -57,6 +57,10 @@ export default function App() {
         setRequestedSection("secrets");
         setSettingsVisibility(openSettingsView);
     }, []);
+    const handleOpenHistory = useCallback(() => {
+        setRequestedSection("history");
+        setSettingsVisibility(openSettingsView);
+    }, []);
     const handleRequestedSectionHandled = useCallback(
         () => setRequestedSection(null),
         []
@@ -151,12 +155,12 @@ export default function App() {
                         />
                     </div>
                 )}
-                {!settingsVisibility.open && (
-                    <HomePage
-                        theme={theme}
-                        onOpenSettings={handleOpenApiKeys}
-                    />
-                )}
+                <HomePage
+                    theme={theme}
+                    onOpenSettings={handleOpenApiKeys}
+                    onOpenHistory={handleOpenHistory}
+                    hidden={settingsVisibility.open}
+                />
                 {showUpdateDialog && <UpdateDialog />}
             </StudioTheme>
         </ErrorBoundary>

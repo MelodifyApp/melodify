@@ -1,6 +1,6 @@
 /** Timing shared by the credential dialog's enter/exit lifecycle. */
 
-export const CREDENTIAL_DIALOG_EXIT_MS = 180;
+export const CREDENTIAL_DIALOG_EXIT_MS = 270;
 
 /**
  * Reduced motion suppresses the CSS animation, so the close callback must run

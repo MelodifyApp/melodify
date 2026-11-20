@@ -1,0 +1,5 @@
+/* Development harness chrome only. */
+.settings-preview-host { min-height: 100dvh; background: #18181b; color: #fff; }
+.settings-preview-host > div:first-child { position: sticky; top: 0; z-index: 50; }
+.settings-preview-home { display: grid; place-content: center; gap: 14px; min-height: calc(100dvh - 36px); color: #d4d4d8; }
+.settings-preview-home p { margin: 0; font-size: 13px; }

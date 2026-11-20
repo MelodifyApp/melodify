@@ -1,0 +1,30 @@
+/* Development harness layout only; no production entry point imports it. */
+.studio-preview { min-height: 100dvh; }
+.studio-preview-wrap { max-width: 1160px; margin: 0 auto; padding: 28px 20px 48px; display: grid; gap: 20px; }
+.studio-preview-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.studio-preview-header h1 { margin: 0; font-size: 28px; font-weight: 650; line-height: 1.15; letter-spacing: -.7px; }
+.studio-preview-header p { max-width: 65ch; margin: 9px 0 0; color: var(--studio-muted); font-size: 12px; line-height: 1.5; }
+.studio-preview-themes { display: flex; flex-wrap: wrap; gap: 4px; }
+.studio-preview-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.studio-preview-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; }
+.studio-preview-note { margin: 0; color: var(--studio-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.studio-preview .studio-group:first-child { border-top: 0; padding-top: 0; }
+.studio-preview-motion { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.studio-preview-motion-status { display: flex; align-items: center; min-height: 34px; width: 150px; }
+.studio-preview-brand-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.studio-preview-composition { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 24px; align-items: start; }
+.studio-preview-docks { display: grid; gap: 14px; min-width: 0; }
+.studio-preview-dock-frame { min-width: 0; height: 230px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--studio-line); border-radius: 8px; }
+.studio-preview-scroll { min-height: 0; overflow: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--studio-control-line) transparent; }
+.studio-preview-scroll-content { min-height: 300px; padding: 12px; color: var(--studio-muted); font-size: 12px; }
+.studio-preview-scroll-content p { margin: 20px 0; line-height: 1.6; }
+.studio-preview .studio-service-card { min-width: 0; }
+@media (max-width: 700px) {
+    .studio-preview-wrap { padding: 20px 12px 36px; gap: 16px; }
+    .studio-preview-header { flex-direction: column; gap: 14px; }
+    .studio-preview-header h1 { font-size: 26px; }
+    .studio-preview-composition { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+}
+@media (max-width: 600px) {
+    .studio-preview-fields, .studio-preview-brand-cards { grid-template-columns: minmax(0, 1fr); }
+}

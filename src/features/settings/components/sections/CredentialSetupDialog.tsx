@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { Button, IconButton, Input } from "@/ui/components/studio";
@@ -214,7 +215,7 @@ export default function CredentialSetupDialog({
               ? t("common.replaceCredentialsTitle", { service: serviceName })
               : t("common.pasteCredentialsTitle", { service: serviceName });
 
-    return (
+    return createPortal(
         <div
             className="studio-setup-overlay"
             role="presentation"
@@ -368,6 +369,7 @@ export default function CredentialSetupDialog({
                     </>
                 )}
             </section>
-        </div>
+        </div>,
+        document.querySelector(".studio") ?? document.body
     );
 }

@@ -1,0 +1,539 @@
+/* Development-only gallery chrome. Never part of the product bundle. */
+html,
+body,
+#app {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+}
+
+.gallery-embed {
+    height: 100%;
+    background: var(--studio-canvas, #151719);
+}
+
+.gallery-embed .studio-app {
+    height: 100%;
+}
+
+/* ---------- gallery shell ---------- */
+.gal-shell {
+    height: 100vh;
+    display: flex;
+    background: #0a0c0e;
+    color: #e7edf3;
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.gal-nav {
+    flex: 0 0 248px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 10px 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    background: #101316;
+    overflow: hidden;
+}
+
+.gal-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 2px 8px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 6px;
+}
+
+.gal-mark {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: linear-gradient(160deg, #2b4a3f, #17241f);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: #34d399;
+    font-weight: 650;
+    font-size: 13px;
+}
+
+.gal-brand strong {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.gal-brand small {
+    display: block;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6f7b89;
+}
+
+.gal-groups {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 0 12px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.gal-group h2 {
+    margin: 16px 8px 5px;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6f7b89;
+}
+
+.gal-item {
+    display: block;
+    width: 100%;
+    padding: 6px 9px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #97a4b3;
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gal-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #dbe3ec;
+}
+
+.gal-item.is-active {
+    background: rgba(52, 211, 153, 0.12);
+    color: #f2f5fa;
+    box-shadow: inset 2px 0 0 #34d399;
+}
+
+.gal-note {
+    margin: 10px 8px 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    color: #5f6b78;
+    font-size: 10.5px;
+    line-height: 1.5;
+}
+
+.gal-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.gal-top {
+    flex: none;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 13px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: #0e1114;
+}
+
+.gal-heading h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.gal-heading p {
+    margin: 3px 0 0;
+    max-width: 66ch;
+    color: #8d99a8;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.gal-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: none;
+}
+
+.gal-seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+    background: #14181c;
+}
+
+.gal-seg button {
+    padding: 4px 9px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #8d99a8;
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.gal-seg button:hover {
+    color: #dbe3ec;
+}
+
+.gal-seg button.is-active {
+    background: #2a3036;
+    color: #fff;
+}
+
+.gal-reload {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+    background: #14181c;
+    color: #b5c0cc;
+    cursor: pointer;
+}
+
+.gal-reload:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.gal-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    color: #7ee7bb;
+    font-size: 11.5px;
+    text-decoration: none;
+}
+
+.gal-open:hover {
+    background: rgba(52, 211, 153, 0.1);
+}
+
+.gal-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    overflow: auto;
+    padding: 20px;
+    background: #0a0c0e;
+}
+
+.gal-frame {
+    position: relative;
+    flex: none;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: #151719;
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+}
+
+.gal-frame iframe {
+    display: block;
+    border: 0;
+    transform-origin: top left;
+    background: #151719;
+}
+
+.gal-foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 28px;
+    padding: 0 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: #0e1114;
+    color: #6f7b89;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- component catalogue ---------- */
+.gallery-catalog {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 28px 32px 64px;
+    background-color: var(--studio-canvas);
+    color: var(--studio-ink);
+    scrollbar-width: thin;
+    scrollbar-color: var(--studio-control-line) transparent;
+}
+
+.cat-head {
+    max-width: 1040px;
+    margin: 0 auto 8px;
+}
+
+.cat-head h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+}
+
+.cat-head p {
+    margin: 6px 0 0;
+    max-width: 72ch;
+    color: var(--studio-muted);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.cat-section {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 22px 0;
+    border-top: 1px solid var(--studio-line);
+}
+
+.cat-section:first-of-type {
+    border-top: 0;
+}
+
+.cat-section h2 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.cat-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.cat-row + .cat-row {
+    margin-top: 10px;
+}
+
+.cat-stack {
+    display: grid;
+    gap: 12px;
+    max-width: 560px;
+}
+
+.cat-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    max-width: 820px;
+}
+
+.cat-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.cat-cards .studio-service-card {
+    min-width: 0;
+}
+
+.cat-desc {
+    margin: 0 0 12px;
+    color: var(--studio-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.cat-meta {
+    color: var(--studio-muted);
+    font-size: 12px;
+}
+
+@media (max-width: 900px) {
+    .cat-grid-2,
+    .cat-cards {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .gal-top {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 760px) {
+    .gal-nav {
+        flex-basis: 208px;
+    }
+
+    .gal-heading p {
+        display: none;
+    }
+}
+
+/* ---------- Ambient looks: gallery-only visual directions ---------- */
+.look-rich {
+    --look-a: 12%;
+    --look-b: 10%;
+    --look-color-a: var(--studio-accent);
+    --look-color-b: var(--studio-secondary);
+    --look-base-top: color-mix(in srgb, var(--studio-canvas) 94%, #fff);
+    --look-base-bottom: color-mix(in srgb, var(--studio-canvas) 95%, #000);
+    --look-main-a: 16%;
+    --look-main-b: 12%;
+    --look-card-tint: 6%;
+    --look-card-glow: 7%;
+    --look-card-edge: color-mix(in srgb, var(--studio-ink) 10%, transparent);
+    --look-card-shadow: 0 12px 30px color-mix(in srgb, #000 24%, transparent);
+    --look-art-glow: 0 12px 30px color-mix(in srgb, var(--studio-accent) 9%, transparent);
+    --look-primary-glow: 0 4px 12px color-mix(in srgb, var(--studio-accent) 9%, transparent);
+}
+
+.look-aurora {
+    --look-a: 14%;
+    --look-b: 11%;
+    --look-main-a: 18%;
+    --look-main-b: 13%;
+    --look-base-top: var(--studio-canvas);
+    --look-base-bottom: color-mix(in srgb, var(--studio-canvas) 96%, #000);
+    --look-card-tint: 6%;
+    --look-card-glow: 7%;
+    --look-card-glow-b: 4%;
+    --look-card-shadow: 0 12px 30px color-mix(in srgb, #000 22%, transparent);
+    --look-art-glow: 0 10px 26px color-mix(in srgb, var(--studio-accent) 7%, transparent);
+    --look-primary-glow: 0 3px 10px color-mix(in srgb, var(--studio-accent) 7%, transparent);
+}
+
+.look-bloom {
+    --look-a: 18%;
+    --look-b: 10%;
+    --look-main-a: 22%;
+    --look-main-b: 11%;
+    --look-color-a: var(--studio-secondary);
+    --look-color-b: var(--studio-accent);
+    --look-base-top: var(--studio-canvas);
+    --look-base-bottom: color-mix(in srgb, var(--studio-canvas) 96%, #000);
+    --look-card-tint: 8%;
+    --look-card-glow: 9%;
+    --look-card-glow-b: 5%;
+    --look-card-edge: color-mix(in srgb, var(--studio-ink) 11%, transparent);
+    --look-card-shadow: 0 8px 22px color-mix(in srgb, #000 20%, transparent);
+    --look-art-glow: 0 8px 20px color-mix(in srgb, var(--studio-secondary) 6%, transparent);
+    --look-primary-glow: 0 2px 7px color-mix(in srgb, var(--studio-accent) 4%, transparent);
+}
+
+.studio-app.look-rich {
+    background-color: var(--look-base-bottom);
+    background-image:
+        radial-gradient(70% 55% at 0% 0%, color-mix(in srgb, var(--look-color-a) var(--look-a), transparent), transparent 68%),
+        radial-gradient(62% 55% at 100% 100%, color-mix(in srgb, var(--look-color-b) var(--look-b), transparent), transparent 70%),
+        linear-gradient(180deg, var(--look-base-top) 0%, var(--look-base-bottom) 100%);
+}
+
+.look-rich .studio-home {
+    background-color: transparent;
+}
+
+.look-rich .studio-home-main::before {
+    background: none;
+}
+
+.look-rich .studio-settings-main {
+    background-color: transparent;
+    background-image:
+        radial-gradient(70% 60% at 0% 0%, color-mix(in srgb, var(--look-color-a) var(--look-main-a), transparent), transparent 66%),
+        radial-gradient(65% 60% at 100% 100%, color-mix(in srgb, var(--look-color-b) var(--look-main-b), transparent), transparent 68%);
+}
+
+.look-rich .studio-card,
+.look-rich .studio-settings-content,
+.look-rich .studio-home-now-playing,
+.look-rich .studio-home-queue,
+.look-rich .studio-home-summary,
+.look-rich .studio-updates {
+    background-image:
+        radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--look-color-a) var(--look-card-glow), transparent), transparent 62%),
+        radial-gradient(110% 75% at 100% 100%, color-mix(in srgb, var(--look-color-b) var(--look-card-glow-b), transparent), transparent 60%),
+        linear-gradient(180deg, color-mix(in srgb, var(--studio-ink) 4%, transparent), transparent 46%),
+        linear-gradient(135deg, color-mix(in srgb, var(--look-color-a) var(--look-card-tint), transparent), transparent 52%);
+    border-color: var(--look-card-edge);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--studio-ink) 7%, transparent),
+        var(--look-card-shadow);
+}
+
+.look-rich .studio-settings-rail {
+    background-image:
+        linear-gradient(180deg, color-mix(in srgb, var(--look-color-a) 4%, transparent), transparent 44%),
+        linear-gradient(180deg, var(--studio-menu-top), var(--studio-menu-bottom));
+}
+
+.look-rich .studio-home-rail {
+    background-image: linear-gradient(180deg, color-mix(in srgb, var(--look-color-a) 4%, transparent), transparent 44%);
+}
+
+.look-rich .studio-home-footer {
+    background-image: linear-gradient(90deg, color-mix(in srgb, var(--look-color-a) 4%, transparent), transparent 45%);
+}
+
+.look-rich .studio-nav-item[aria-current="page"] {
+    background-image: linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 18%, transparent), color-mix(in srgb, var(--studio-accent) 5%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-accent) 14%, transparent);
+}
+
+.look-rich .studio-settings-title {
+    font-size: 30px;
+    letter-spacing: -0.9px;
+}
+
+.look-rich .studio-home-request-title {
+    font-size: 24px;
+}
+
+@media (min-width: 641px) {
+    .look-rich .studio-home-art {
+        width: 128px;
+        height: 128px;
+        border-color: color-mix(in srgb, var(--look-color-a) 34%, transparent);
+        box-shadow: var(--look-art-glow);
+    }
+}
+
+.look-rich .studio-button[data-variant="primary"] {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+        var(--look-primary-glow);
+}
+
+.look-rich .studio-button[data-variant="primary"]:not(:disabled):hover {
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 36%, transparent),
+        0 6px 16px color-mix(in srgb, var(--studio-accent) 10%, transparent);
+}
+/* Toggle motion lab (gallery-only) */
+.motion-toggle-slow .studio-toggle { transition-duration: 200ms; }
+.motion-toggle-slow .studio-toggle::after { transition-duration: 260ms; }
+.motion-toggle-soft .studio-toggle { transition-duration: 220ms; }
+.motion-toggle-soft .studio-toggle::after { transition-duration: 300ms; transition-timing-function: cubic-bezier(.16, 1, .3, 1); }
+.motion-toggle-spring .studio-toggle { transition-duration: 220ms; }
+.motion-toggle-spring .studio-toggle::after { transition-duration: 300ms; transition-timing-function: cubic-bezier(.3, 1.15, .5, 1); }

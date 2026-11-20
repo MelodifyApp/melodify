@@ -103,7 +103,7 @@
     border: 0;
     color: var(--studio-muted);
     cursor: pointer;
-    transition: background-color 150ms var(--studio-motion-ease), color 150ms var(--studio-motion-ease);
+    transition: background-color 225ms var(--studio-motion-ease), color 225ms var(--studio-motion-ease);
 }
 
 .studio-window-btn:hover {
@@ -154,7 +154,7 @@
     background-color: var(--studio-dialog);
     color: var(--studio-ink);
     box-shadow: 0 16px 40px color-mix(in srgb, #000 42%, transparent);
-    animation: studio-theme-enter 140ms var(--studio-motion-ease) 1;
+    animation: studio-theme-enter 210ms var(--studio-motion-ease) 1;
     scrollbar-width: thin;
     scrollbar-color: var(--studio-control-line) transparent;
 }

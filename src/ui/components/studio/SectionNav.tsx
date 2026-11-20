@@ -20,12 +20,12 @@ export const SectionNav = forwardRef<HTMLElement, SectionNavProps>(
         const prefix = useId();
         return (
             <nav {...props} ref={ref} className={cn("studio-nav", className)} aria-label={props["aria-label"] || "Settings sections"}>
-                <Button variant="ghost" className="studio-nav-home" onClick={onHome} aria-label={homeAriaLabel}><BackIcon />{homeLabel}</Button>
                 {navTitle && <h2 className="studio-nav-title">{navTitle}</h2>}
                 {groups.map(group => <div className="studio-nav-group" key={group.id} role="group" aria-labelledby={`${prefix}-${group.id}`}>
                     <h3 className="studio-nav-label" id={`${prefix}-${group.id}`}>{group.label}</h3>
                     <div className="studio-nav-items">{group.items.map(item => <button type="button" className="studio-nav-item" key={item.id} disabled={item.disabled} aria-current={activeId === item.id ? "page" : undefined} onClick={() => onSelect(item.id)}>{item.label}</button>)}</div>
                 </div>)}
+                <Button variant="ghost" className="studio-nav-home" onClick={onHome} aria-label={homeAriaLabel}><BackIcon />{homeLabel}</Button>
             </nav>
         );
     }

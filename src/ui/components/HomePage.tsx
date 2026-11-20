@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button, StudioTheme } from "@/ui/components/studio";
 import type { StudioThemeName } from "@/ui/components/studio";
+import { SettingsIcon } from "@/ui/components/studio/icons";
 import { useUpdateStatus } from "@/ui/hooks/useUpdateStatus";
 import { homeUpdatePresentation } from "@/ui/homeUpdateStatus";
 import SpotifyIcon from "@/features/spotify/components/SpotifyIcon";
@@ -70,9 +71,13 @@ function ConnectionRow({
 export default function HomePage({
     theme = "graphite",
     onOpenSettings,
+    onOpenHistory,
+    hidden = false,
 }: {
     theme?: StudioThemeName;
     onOpenSettings?: () => void;
+    onOpenHistory?: () => void;
+    hidden?: boolean;
 }) {
     const { t } = useTranslation();
     const [now, setNow] = useState(() => Date.now());
@@ -155,7 +160,7 @@ export default function HomePage({
     const updateTone = presentation.tone;
 
     return (
-        <StudioTheme className="studio-home" theme={theme}>
+        <StudioTheme className="studio-home" theme={theme} hidden={hidden}>
             <div className="studio-home-body">
                 <main
                     className="studio-home-main"
@@ -179,6 +184,7 @@ export default function HomePage({
                         loading={sessionLoading}
                         error={sessionError}
                         now={now}
+                        onOpenHistory={onOpenHistory}
                     />
                 </main>
 
@@ -190,6 +196,17 @@ export default function HomePage({
                         <h2 id="home-connections-title">
                             {t("home.connections.title")}
                         </h2>
+                        {onOpenSettings && (
+                            <button
+                                type="button"
+                                className="studio-home-rail-settings"
+                                onClick={onOpenSettings}
+                                aria-label={t("home.connections.settings")}
+                                title={t("home.connections.settings")}
+                            >
+                                <SettingsIcon width={15} height={15} />
+                            </button>
+                        )}
                     </div>
 
                     <div
