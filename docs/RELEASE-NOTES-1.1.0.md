@@ -1,4 +1,13 @@
-# Melodify 1.1.0 — release-note planning
+# Melodify Live 1.1.0 — release-note planning
+
+## Branding
+
+- The public display brand is **Melodify Live**, matching
+  [melodifylive.app](https://melodifylive.app).
+- The Windows installer identity remains `Melodify`, and the Squirrel identity
+  remains `Melodify` in 1.1.0 for upgrade compatibility with 1.0.7.
+  `package.json` keeps `name` and `productName` as `melodify`, and the local
+  profile remains `%APPDATA%\melodify`.
 
 ## Security
 

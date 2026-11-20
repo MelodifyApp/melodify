@@ -1,4 +1,4 @@
-# Melodify — Kişisel Verilerin Korunması Aydınlatma Metni
+# Melodify Live — Kişisel Verilerin Korunması Aydınlatma Metni
 
 **Son güncelleme:** [LAST UPDATED]
 **Uygulama sürümü:** 1.1.0
@@ -8,12 +8,12 @@
 **Web sitesi:** [WEBSITE]
 
 Bu metin, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında,
-Melodify Windows masaüstü uygulamasını kullanan kişileri bilgilendirmek için
+Melodify Live Windows masaüstü uygulamasını kullanan kişileri bilgilendirmek için
 hazırlanmıştır.
 
 ## 1. Kapsam ve çalışma modeli
 
-Melodify, kullanıcının kendi bilgisayarında çalışan bir masaüstü uygulamasıdır.
+Melodify Live, kullanıcının kendi bilgisayarında çalışan bir masaüstü uygulamasıdır.
 Uygulama:
 
 - kullanıcı hesabı oluşturmaz,

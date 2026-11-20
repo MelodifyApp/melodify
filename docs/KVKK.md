@@ -1,8 +1,8 @@
-# Melodify — KVKK assessment (internal, draft)
+# Melodify Live — KVKK assessment (internal, draft)
 
 **Status:** draft for owner and legal review
 **Prepared:** 2026-11-10
-**App:** Melodify 1.1.0, Windows desktop, local-first
+**App:** Melodify Live 1.1.0, Windows desktop, local-first
 **Controller identity:** [CONTROLLER NAME] — to be completed
 
 This is an internal engineering/operations note, not legal advice. The public
@@ -108,7 +108,7 @@ Contact: [EMAIL]. Security reports: GitHub private advisories (see
 Add to the docs/site:
 
 - Tell viewers that chat commands and song requests are processed by the
-  streamer's local Melodify instance.
+  streamer's local Melodify Live instance.
 - Do not publish logs containing usernames or request history.
 - Keep the Windows account and platform credentials secure.
 - Delete `%APPDATA%\melodify` when retiring the setup.

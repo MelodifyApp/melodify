@@ -3,6 +3,9 @@
 This checklist covers the Windows `v*.*.*` release path. The workflow is
 `.github/workflows/build-and-publish.yml`.
 
+> The wider launch surface — legal, brand, Electron runtime, support and
+> distribution — is tracked in [RELEASE-READINESS.md](RELEASE-READINESS.md).
+
 ## One-time GitHub repository settings the owner must create
 
 1. **Workflow permissions:** Settings → Actions → General → Workflow permissions

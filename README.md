@@ -1,8 +1,12 @@
-# Melodify
+# Melodify Live
 
-Melodify is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Melodify runs locally and does not require a Melodify account or cloud service.
+Melodify Live is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Melodify Live runs locally and does not require a Melodify Live account or cloud service.
 
 **Stable release:** 1.0.7 — [download the latest installer](https://github.com/MelodifyApp/melodify/releases/latest)
+
+**Website:** [melodifylive.app](https://melodifylive.app)
+
+**Branding:** Melodify Live is the public display name. The Windows installer identity remains `Melodify`, and the Squirrel identity remains `Melodify` in 1.1.0 for upgrade compatibility with 1.0.7; `package.json` keeps its internal `melodify` name and the local profile remains `%APPDATA%\melodify`.
 
 ## Features
 
@@ -11,9 +15,9 @@ Melodify is a Windows desktop app for streamers. It connects Spotify with Kick a
 - **Spotify queue insertion** — searches Spotify (or resolves a track URL/URI) and adds the track to the active Spotify queue. A request counts as successful only after Spotify accepts it.
 - **Configurable request rules** — permissions/badges, global and per-user cooldowns, reply templates, prefix, and optional current-song text file output.
 - **Commands** — built-in `!sr` and moderator-only `!volume`, with editable aliases and moderators.
-- **Local data** — credentials, settings, request logs and counters stay on the local machine. There is no Melodify API, account system, cloud sync, web dashboard or persistent server-side queue.
+- **Local data** — credentials, settings, request logs and counters stay on the local machine. There is no Melodify Live API, account system, cloud sync, web dashboard or persistent server-side queue.
 - **English and Turkish** UI.
-- **GitHub Releases updater** — checks for stable updates; Melodify does not install one silently.
+- **GitHub Releases updater** — checks for stable updates; Melodify Live does not install one silently.
 
 ## Requirements
 
@@ -22,7 +26,7 @@ Melodify is a Windows desktop app for streamers. It connects Spotify with Kick a
 - Spotify Premium and an active Spotify playback device for queue additions
 - Your own Spotify, Kick and (optional) Twitch developer-app credentials
 
-Melodify does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
+Melodify Live does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
 
 ## Getting started (development)
 
@@ -60,10 +64,10 @@ Release preparation and the local Windows Sandbox smoke-test boundary are docume
 1. Connect Spotify, Kick, and optionally Twitch in Settings.
 2. Start the stream and open chat.
 3. A viewer types `!sr <song>` or redeems the configured reward.
-4. Melodify searches Spotify and adds the track to the active Spotify queue.
-5. If enabled, Melodify posts a configurable reply in chat and records the accepted request locally.
+4. Melodify Live searches Spotify and adds the track to the active Spotify queue.
+5. If enabled, Melodify Live posts a configurable reply in chat and records the accepted request locally.
 
-A request is not a promise of playback order: Spotify controls the playback queue, and Melodify does not implement reordering, removal or Undo.
+A request is not a promise of playback order: Spotify controls the playback queue, and Melodify Live does not implement reordering, removal or Undo.
 
 ## Project structure
 
@@ -79,7 +83,7 @@ A request is not a promise of playback order: Spotify controls the playback queu
 
 ## Privacy
 
-Melodify is local-first: no account, no telemetry and no developer-operated
+Melodify Live is local-first: no account, no telemetry and no developer-operated
 server. It stores its profile under `%APPDATA%\melodify` and keeps 30 days of
 local logs.
 
@@ -95,4 +99,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Please read [CODE_OF_CONDUCT.md](CODE_OF
 
 [MIT](LICENSE)
 
-Melodify is not affiliated with Kick, Twitch or Spotify. Use at your own risk.
+Melodify Live is not affiliated with Kick, Twitch or Spotify. Use at your own risk.
