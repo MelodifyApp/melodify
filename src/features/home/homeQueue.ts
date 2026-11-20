@@ -18,6 +18,7 @@ export interface HomeQueueStore {
     }): HomeQueueEntry | null;
     snapshot(): HomeQueueEntry[];
     subscribe(listener: (entries: HomeQueueEntry[]) => void): () => void;
+    subscribePlayed(listener: (entry: HomeQueueEntry) => void): () => void;
     reset(): void;
 }
 
@@ -72,6 +73,7 @@ export function createHomeQueueStore({
     let entries: StoredEntry[] = [];
     let sequence = 0;
     const listeners = new Set<(entries: HomeQueueEntry[]) => void>();
+    const playedListeners = new Set<(entry: HomeQueueEntry) => void>();
     const makeId = nextId || (() => `home-queue-${++sequence}`);
 
     const publicEntries = (): HomeQueueEntry[] =>
@@ -124,6 +126,13 @@ export function createHomeQueueStore({
                 ...removed,
                 position: index + 1,
             };
+            for (const listener of [...playedListeners]) {
+                try {
+                    listener(publicRemoved);
+                } catch {
+                    // A history subscriber must not break queue state.
+                }
+            }
             notify();
             return publicRemoved;
         },
@@ -134,6 +143,12 @@ export function createHomeQueueStore({
             listeners.add(listener);
             return () => {
                 listeners.delete(listener);
+            };
+        },
+        subscribePlayed(listener) {
+            playedListeners.add(listener);
+            return () => {
+                playedListeners.delete(listener);
             };
         },
         reset() {

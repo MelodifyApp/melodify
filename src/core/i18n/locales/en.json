@@ -1,6 +1,6 @@
 {
     "app": {
-        "name": "Melodify"
+        "name": "Melodify Live"
     },
     "commands": {
         "title": "Commands",
@@ -86,6 +86,37 @@
         "installErrorCopy": "The downloaded update could not be started. You can retry the install safely.",
         "installRetry": "Retry install"
     },
+    "history": {
+        "description": "Requests grouped by the queue session they were accepted in.",
+        "empty": "No queue history yet",
+        "emptyCopy": "Requests will appear here after your first queue session.",
+        "loading": "Loading queue history…",
+        "error": "Could not load queue history.",
+        "retry": "Retry",
+        "durationMinutes": "{{count}} min",
+        "durationHours": "{{hours}} h {{minutes}} min",
+        "requests": "{{count}} requests",
+        "played": "{{count}} played",
+        "unplayed": "{{count}} not played",
+        "showRequests": "Show requests ({{count}})",
+        "active": "In progress",
+        "offline": "Ended",
+        "interrupted": "Interrupted",
+        "appQuit": "App closed",
+        "noProviders": "No chat provider",
+        "outcomePlayed": "Played",
+        "outcomeUnplayed": "Not played",
+        "open": "Queue history",
+        "actions": "History actions",
+        "export": "Export",
+        "exported": "Queue history exported",
+        "clear": "Clear history",
+        "confirmClear": "Confirm clear",
+        "cancel": "Cancel",
+        "clearHint": "Past sessions are removed. The current live session stays.",
+        "cleared": "Cleared {{count}} sessions",
+        "actionFailed": "Action failed"
+    },
     "home": {
         "byArtist": "by {{artist}}",
         "nowPlaying": "Now playing",
@@ -95,6 +126,7 @@
         "playbackUnavailable": "Playback unavailable",
         "playbackUnavailableCopy": "Check the Spotify connection and try again.",
         "queueTitle": "Queue",
+        "queueStreamScope": "This stream",
         "queueEmpty": "No requests waiting",
         "queueEmptyCopy": "Accepted requests will appear here until they start playing.",
         "queueLoading": "Loading queue…",
@@ -122,6 +154,7 @@
             "kickRole": "Chat and requests",
             "twitchRole": "Chat and requests",
             "manage": "Manage connections",
+            "settings": "Connection settings",
             "setUp": "Set up connections",
             "checking": "Checking",
             "connecting": "Connecting…",
@@ -151,6 +184,7 @@
         "secrets": "API Keys",
         "general": "General",
         "requests": "Song Requests",
+        "history": "Queue history",
         "commands": "Commands",
         "logs": "Logs",
         "debug": "Debug",

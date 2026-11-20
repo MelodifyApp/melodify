@@ -86,6 +86,32 @@ class TwitchClient {
         }
     }
 
+    public async getLiveStatus(): Promise<boolean | null> {
+        const userId = Config.get("twitchUserId");
+        const clientId = Config.get("twitchClientId");
+        if (!userId || !clientId || !this.hasTokens()) return null;
+        const token = await this.getValidAccessToken();
+        if (!token) return null;
+        try {
+            const response = await fetch(
+                `https://api.twitch.tv/helix/streams?user_id=${encodeURIComponent(userId)}`,
+                {
+                    headers: {
+                        "Client-Id": clientId,
+                        Authorization: `Bearer ${token}`,
+                    },
+                    signal: AbortSignal.timeout(10000),
+                }
+            );
+            if (!response.ok) return null;
+            const data = (await response.json()) as { data?: unknown };
+            if (!Array.isArray(data.data)) return null;
+            return data.data.length > 0;
+        } catch {
+            return null;
+        }
+    }
+
     private async refreshAccessToken(generation: number): Promise<string | null> {
         const refreshToken = this.refreshToken;
         const clientId = Config.get("twitchClientId");

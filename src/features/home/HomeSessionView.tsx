@@ -1,5 +1,6 @@
 import { Clock, Headphones } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/ui/components/studio";
 import { timeAgoParts } from "./homeTime";
 import type {
     HomeNowPlaying,
@@ -151,11 +152,13 @@ export default function HomeSessionView({
     loading,
     error,
     now,
+    onOpenHistory,
 }: {
     session: HomeSessionSnapshot | null;
     loading: boolean;
     error: boolean;
     now: number;
+    onOpenHistory?: () => void;
 }) {
     const { t } = useTranslation();
     const queue = session?.queue ?? [];
@@ -174,7 +177,19 @@ export default function HomeSessionView({
                 aria-busy={queueLoading}
             >
                 <div className="studio-home-queue-head">
-                    <h2 id="home-queue-title">{t("home.queueTitle")}</h2>
+                    <div className="studio-home-queue-title">
+                        <h2 id="home-queue-title">{t("home.queueTitle")}</h2>
+                        <span>{t("home.queueStreamScope")}</span>
+                    </div>
+                    {onOpenHistory && (
+                        <Button
+                            variant="ghost"
+                            size="small"
+                            onClick={onOpenHistory}
+                        >
+                            {t("history.open")}
+                        </Button>
+                    )}
                 </div>
                 {queueError ? (
                     <div className="studio-home-queue-state">

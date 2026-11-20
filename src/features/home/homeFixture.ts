@@ -66,6 +66,6 @@ export function createHomeFixtureSnapshot(): HomeSessionSnapshot {
                 index % 3 === 0 ? "#c084fc" : "#34d399"
             ),
         })),
-        queueScope: "session",
+        queueScope: "stream",
     };
 }

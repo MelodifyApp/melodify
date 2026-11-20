@@ -399,7 +399,6 @@ ipcMain.handle("kick:setSecrets", async (_event, secrets) => {
 });
 
 ipcMain.handle("kick:isListeningToChat", async () => {
-    logDebug("kick:isListeningToChat called");
     return isListening;
 });
 

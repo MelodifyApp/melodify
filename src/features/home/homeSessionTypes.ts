@@ -25,7 +25,7 @@ export interface HomeSessionSnapshot {
     revision: number;
     current: HomeNowPlaying;
     queue: HomeQueueEntry[];
-    queueScope: "session";
+    queueScope: "stream";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,6 +123,6 @@ export function normalizeHomeSessionSnapshot(
             error,
         },
         queue,
-        queueScope: "session",
+        queueScope: "stream",
     };
 }

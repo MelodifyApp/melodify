@@ -12,6 +12,7 @@ import Requests from "./sections/Requests";
 import Commands from "./sections/Commands";
 import Logs from "./sections/Logs";
 import Debug from "./sections/Debug";
+import QueueHistory from "./sections/QueueHistory";
 import { Button, SectionNav, StudioTheme } from "@/ui/components/studio";
 import type { SectionNavGroup, StudioThemeName } from "@/ui/components/studio";
 import InlineError from "@/ui/components/InlineError";
@@ -28,13 +29,14 @@ import type { SecretServiceId } from "../secretsSave";
 import { mergeLogEntries } from "./logFeed";
 import "./settingsStudio.css";
 
-const SECTION_IDS = ["general", "secrets", "requests", "commands", "logs", "debug"] as const;
+const SECTION_IDS = ["general", "secrets", "requests", "history", "commands", "logs", "debug"] as const;
 type SectionId = (typeof SECTION_IDS)[number];
 export type SettingsSectionId = SectionId;
 const SECTION_TITLE_KEYS: Record<SectionId, string> = {
     general: "settings.general",
     secrets: "settings.secrets",
     requests: "settings.requests",
+    history: "settings.history",
     commands: "settings.commands",
     logs: "settings.logs",
     debug: "settings.debug",
@@ -369,6 +371,7 @@ export default function Settings({ onClose, theme = "graphite", active = true, r
         ] },
         { id: "requests", label: t("settings.groups.requests"), items: [
             { id: "requests", label: t("settings.requests") },
+            { id: "history", label: t("settings.history") },
             { id: "commands", label: t("settings.commands") },
         ] },
         { id: "diagnostics", label: t("settings.groups.diagnostics"), items: [
@@ -463,6 +466,9 @@ export default function Settings({ onClose, theme = "graphite", active = true, r
                             )}
                             {activeSection === "requests" && (
                                 <Requests config={drafts.draftConfig} onConfigChange={handleConfigChange} />
+                            )}
+                            {activeSection === "history" && (
+                                <QueueHistory active={active} />
                             )}
                             {activeSection === "commands" && (
                                 <Commands

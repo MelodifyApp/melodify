@@ -38,7 +38,7 @@ function buildSnapshot(): HomeSessionSnapshot {
         revision,
         current: toNowPlaying(getCurrentPlaybackSnapshot()),
         queue: homeQueue.snapshot(),
-        queueScope: "session",
+        queueScope: "stream",
     };
 }
 
@@ -53,7 +53,7 @@ function publish(): void {
         revision,
         current,
         queue,
-        queueScope: "session",
+        queueScope: "stream",
     };
     for (const listener of [...listeners]) {
         try {

@@ -32,6 +32,7 @@ interface KickChannel {
     id: number;
     slug: string;
     broadcaster_user_id: number;
+    stream?: { is_live?: unknown } | null;
 }
 
 interface KickTokenResponse {
@@ -382,6 +383,72 @@ class KickClient {
         }
 
         return this.accessToken;
+    }
+
+    public async getLiveStatus(): Promise<boolean | null> {
+        // The authenticated channel list is the primary source. Some API
+        // versions omit the stream object, so the public channel endpoint is
+        // the fallback used by the existing chatroom lookup.
+        if (this.hasTokens()) {
+            try {
+                const accessToken = await this.getValidAccessToken();
+                if (accessToken) {
+                    const response = await fetch(
+                        `${this.baseUrl}/public/v1/channels`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                            },
+                            signal: AbortSignal.timeout(10000),
+                        }
+                    );
+                    if (response.ok) {
+                        const body =
+                            (await response.json()) as KickChannelsResponse;
+                        const channel = Array.isArray(body.data)
+                            ? body.data[0]
+                            : null;
+                        if (
+                            channel?.stream &&
+                            typeof channel.stream.is_live === "boolean"
+                        ) {
+                            return channel.stream.is_live;
+                        }
+                    }
+                }
+            } catch {
+                // Fall through to the public channel endpoint.
+            }
+        }
+
+        const username = Config.get("username");
+        if (!username) return null;
+        try {
+            const response = await fetch(
+                `https://kick.com/api/v2/channels/${encodeURIComponent(username)}`,
+                {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        Referer: "https://kick.com/",
+                    },
+                    signal: AbortSignal.timeout(10000),
+                }
+            );
+            if (!response.ok) return null;
+            const body = (await response.json()) as {
+                livestream?: { is_live?: unknown } | null;
+            };
+            if (body.livestream === null) return false;
+            if (body.livestream && typeof body.livestream === "object") {
+                return typeof body.livestream.is_live === "boolean"
+                    ? body.livestream.is_live
+                    : true;
+            }
+            return null;
+        } catch {
+            return null;
+        }
     }
 
     /**

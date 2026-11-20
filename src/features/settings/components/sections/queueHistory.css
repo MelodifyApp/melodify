@@ -1,0 +1,214 @@
+.studio-history {
+    display: grid;
+    gap: 14px;
+}
+
+.studio-history-lead {
+    margin: 0;
+    color: var(--studio-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.studio-history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.studio-history-actions .studio-button {
+    min-height: 30px;
+}
+
+.studio-history-actions .studio-history-clear-confirm {
+    color: var(--studio-warning);
+    border-color: color-mix(in srgb, var(--studio-warning) 34%, transparent);
+}
+
+.studio-history-action-message {
+    color: var(--studio-muted);
+    font-size: 12px;
+}
+
+.studio-history-clear-hint {
+    margin: 0;
+    color: var(--studio-warning);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.studio-history-state {
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+    padding: 28px 18px;
+    border: 1px dashed var(--studio-line);
+    border-radius: 12px;
+    color: var(--studio-muted);
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.studio-history-state p {
+    margin: 0;
+}
+
+.studio-history-state-copy {
+    font-size: 12px;
+}
+
+.studio-history-sessions {
+    display: grid;
+    gap: 12px;
+}
+
+.studio-history-session {
+    padding: 16px 18px;
+}
+
+.studio-history-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.studio-history-head h3 {
+    margin: 0;
+    color: var(--studio-ink);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.studio-history-head p {
+    margin: 4px 0 0;
+    color: var(--studio-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.studio-history-status {
+    flex: none;
+    padding: 3px 9px;
+    border: 1px solid var(--studio-control-line);
+    border-radius: 999px;
+    color: var(--studio-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.studio-history-status[data-status="active"] {
+    color: var(--studio-accent);
+    border-color: color-mix(in srgb, var(--studio-accent) 28%, transparent);
+    background-color: color-mix(in srgb, var(--studio-accent) 10%, transparent);
+}
+
+.studio-history-status[data-status="interrupted"] {
+    color: var(--studio-warning);
+    border-color: color-mix(in srgb, var(--studio-warning) 30%, transparent);
+    background-color: color-mix(in srgb, var(--studio-warning) 10%, transparent);
+}
+
+.studio-history-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.studio-history-stats span {
+    padding: 3px 8px;
+    border: 1px solid var(--studio-line);
+    border-radius: 999px;
+    color: var(--studio-muted);
+    font-size: 11.5px;
+}
+
+.studio-history-stats span[data-tone="played"] {
+    color: var(--studio-accent);
+    border-color: color-mix(in srgb, var(--studio-accent) 28%, transparent);
+}
+
+.studio-history-details {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--studio-line);
+}
+
+.studio-history-details summary {
+    color: var(--studio-muted);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.studio-history-list {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding: 0;
+}
+
+.studio-history-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.studio-history-track {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.studio-history-track strong {
+    color: var(--studio-ink);
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.studio-history-track span {
+    color: var(--studio-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.studio-history-meta {
+    flex: none;
+    display: grid;
+    gap: 2px;
+    justify-items: end;
+    color: var(--studio-muted);
+    font-size: 11.5px;
+    text-align: right;
+}
+
+.studio-history-outcome {
+    font-weight: 600;
+}
+
+.studio-history-outcome[data-outcome="played"] {
+    color: var(--studio-accent);
+}
+
+.studio-history-outcome[data-outcome="unplayed"] {
+    color: var(--studio-muted);
+}
+
+@media (max-width: 600px) {
+    .studio-history-row {
+        flex-direction: column;
+    }
+
+    .studio-history-meta {
+        justify-items: start;
+        text-align: left;
+    }
+}

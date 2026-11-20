@@ -75,6 +75,9 @@ export const INVOKE_CHANNELS: readonly string[] = Object.freeze([
     "log:getAll",
     "songRequest:getCount",
     "home:getSession",
+    "queue:getHistory",
+    "queue:clearHistory",
+    "queue:exportHistory",
     // Spotify
     "spotify:getUserData",
     "spotify:checkAuth",

@@ -1,6 +1,6 @@
 {
     "app": {
-        "name": "Melodify"
+        "name": "Melodify Live"
     },
     "commands": {
         "title": "Komutlar",
@@ -86,6 +86,37 @@
         "installErrorCopy": "İndirilen güncelleme başlatılamadı. Yüklemeyi güvenle yeniden deneyebilirsiniz.",
         "installRetry": "Yüklemeyi yeniden dene"
     },
+    "history": {
+        "description": "İstekler, kabul edildikleri kuyruk oturumuna göre gruplanır.",
+        "empty": "Henüz kuyruk geçmişi yok",
+        "emptyCopy": "İstekler ilk kuyruk oturumunuzdan sonra burada görünecek.",
+        "loading": "Kuyruk geçmişi yükleniyor…",
+        "error": "Kuyruk geçmişi yüklenemedi.",
+        "retry": "Yeniden dene",
+        "durationMinutes": "{{count}} dk",
+        "durationHours": "{{hours}} sa {{minutes}} dk",
+        "requests": "{{count}} istek",
+        "played": "{{count}} çalındı",
+        "unplayed": "{{count}} çalınmadı",
+        "showRequests": "İstekleri göster ({{count}})",
+        "active": "Devam ediyor",
+        "offline": "Bitti",
+        "interrupted": "Kesildi",
+        "appQuit": "Uygulama kapandı",
+        "noProviders": "Sohbet sağlayıcısı yok",
+        "outcomePlayed": "Çalındı",
+        "outcomeUnplayed": "Çalınmadı",
+        "open": "Kuyruk geçmişi",
+        "actions": "Geçmiş işlemleri",
+        "export": "Dışa aktar",
+        "exported": "Kuyruk geçmişi dışa aktarıldı",
+        "clear": "Geçmişi temizle",
+        "confirmClear": "Temizlemeyi onayla",
+        "cancel": "Vazgeç",
+        "clearHint": "Geçmiş oturumlar silinir. Devam eden yayın kalır.",
+        "cleared": "{{count}} oturum temizlendi",
+        "actionFailed": "İşlem başarısız"
+    },
     "home": {
         "byArtist": "{{artist}} tarafından",
         "nowPlaying": "Şimdi çalıyor",
@@ -95,6 +126,7 @@
         "playbackUnavailable": "Oynatma kullanılamıyor",
         "playbackUnavailableCopy": "Spotify bağlantısını kontrol edip yeniden deneyin.",
         "queueTitle": "Kuyruk",
+        "queueStreamScope": "Bu yayın",
         "queueEmpty": "Bekleyen istek yok",
         "queueEmptyCopy": "Kabul edilen istekler çalmaya başlayana kadar burada görünür.",
         "queueLoading": "Kuyruk yükleniyor…",
@@ -122,6 +154,7 @@
             "kickRole": "Sohbet ve istekler",
             "twitchRole": "Sohbet ve istekler",
             "manage": "Bağlantıları yönet",
+            "settings": "Bağlantı ayarları",
             "setUp": "Bağlantıları ayarla",
             "checking": "Kontrol ediliyor",
             "connecting": "Bağlanıyor…",
@@ -151,6 +184,7 @@
         "secrets": "API Anahtarları",
         "general": "Genel",
         "requests": "Şarkı İstekleri",
+        "history": "Kuyruk geçmişi",
         "commands": "Komutlar",
         "logs": "Günlükler",
         "debug": "Hata Ayıklama",

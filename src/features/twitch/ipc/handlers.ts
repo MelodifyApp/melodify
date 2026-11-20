@@ -211,7 +211,6 @@ ipcMain.handle("twitch:setSecrets", async (_event, secrets) => {
 });
 
 ipcMain.handle("twitch:isListeningToChat", async () => {
-    logDebug("twitch:isListeningToChat called");
     return isListening;
 });
 
