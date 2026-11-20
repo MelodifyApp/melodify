@@ -86,7 +86,7 @@ test("error animation is a short single entrance disabled by reduced motion", ()
     // Helper-text errors reuse the same entrance without changing their layout.
     const motionRule = css.match(/\.error-motion\s*\{[^}]*\}/);
     assert.ok(motionRule, "globals.css must define the .error-motion class");
-    assert.match(motionRule[0], /animation\s*:[^;]*160ms[^;]*;/);
+    assert.match(motionRule[0], /animation\s*:[^;]*240ms[^;]*;/);
     assert.doesNotMatch(motionRule[0], /infinite|shake|flash|pulse|blink/i);
 });
 

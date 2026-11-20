@@ -21,7 +21,7 @@ test("the credential dialog uses one exit duration and resolves instantly for re
         dialogExitDuration,
     } = require("../src/features/settings/components/sections/dialogMotion");
 
-    assert.equal(CREDENTIAL_DIALOG_EXIT_MS, 180);
+    assert.equal(CREDENTIAL_DIALOG_EXIT_MS, 270);
     assert.equal(dialogExitDuration(false), CREDENTIAL_DIALOG_EXIT_MS);
     assert.equal(dialogExitDuration(true), 0);
 });
@@ -84,7 +84,7 @@ test("dialog enter and exit animate the overlay and panel with token timing", ()
     );
 });
 
-test("Settings remounts the active section through a keyed 140ms enter", () => {
+test("Settings remounts the active section through a keyed 210ms enter", () => {
     const settings = read("src/features/settings/components/Settings.tsx");
     const css = read(
         "src/features/settings/components/settingsStudio.css"
@@ -155,12 +155,12 @@ test("the update latest block gets an opacity and 4px rise without height machin
     assert.match(css, /\.studio-update-progress/);
 });
 
-test("theme switching crossfades surfaces for 160ms without transitioning text or layout", () => {
+test("theme switching crossfades surfaces for 240ms without transitioning text or layout", () => {
     const motion = read("src/ui/components/studio/motion.css");
     const studio = read("src/ui/components/studio/studio.css");
 
-    assert.match(motion, /--studio-motion-switch:\s*140ms;/);
-    assert.match(motion, /--studio-motion-theme:\s*160ms;/);
+    assert.match(motion, /--studio-motion-switch:\s*210ms;/);
+    assert.match(motion, /--studio-motion-theme:\s*240ms;/);
     assert.match(
         motion,
         /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.studio,\s*\.studio \*/s

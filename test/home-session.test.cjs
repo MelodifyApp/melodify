@@ -34,7 +34,7 @@ const valid = {
             spotifyRefreshToken: "must-not-cross",
         },
     ],
-    queueScope: "session",
+    queueScope: "stream",
     spotifyAccessToken: "must-not-cross",
 };
 

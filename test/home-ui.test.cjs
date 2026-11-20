@@ -559,7 +559,7 @@ test("HomeSessionView renders playing, idle, loading and error states truthfully
             error: null,
         },
         queue: [],
-        queueScope: "session",
+        queueScope: "stream",
     };
     const playingHtml = renderComponent(
         "src/features/home/HomeSessionView.tsx",
@@ -643,7 +643,7 @@ test("HomeSessionView renders artwork-led local queue entries with requester and
                 artworkUrl: null,
             },
         ],
-        queueScope: "session",
+        queueScope: "stream",
     };
     const html = renderComponent(
         "src/features/home/HomeSessionView.tsx",
@@ -668,7 +668,7 @@ test("Home queue remains keyboard reachable and preserves full dense-row text", 
     const session = {
         revision: 4,
         current: null,
-        queueScope: "session",
+        queueScope: "stream",
         queue: Array.from({ length: 17 }, (_, index) => ({
             id: `queue-${index}`,
             title: `${title} ${index}`,
