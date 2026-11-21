@@ -5,8 +5,9 @@ steps live in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); this file covers the
 full launch surface.
 
 **Last updated:** 2026-11-21
-**Status:** free public release candidate — live QA and install testing remain.
-Legal/store/monetization items are parked by the owner's no-lawyer-zone decision.
+**Status:** Quelody 1.1.0 published on 2026-11-21. Live provider QA remains
+outstanding. Legal/store/monetization items are parked by the owner's
+no-lawyer-zone decision.
 
 ## 0. Blockers
 
@@ -124,7 +125,10 @@ Legal/store/monetization items are parked by the owner's no-lawyer-zone decision
       manifest.
 - [x] Protected `release` environment created with the owner as required
       reviewer.
-- [ ] Tag, CI draft, asset verification, un-draft.
+- [x] Tag, CI build, draft, asset verification and publication completed:
+      <https://github.com/MelodifyApp/melodify/releases/tag/v1.1.0>.
+- [x] Fresh install from the published CI artifact; signature and SHA-256
+      verified before install.
 - [x] **Updater release provenance:** 2.0.0 was published from `v2.0.0`
       (`d6d0e2f`) with provenance; the older 1.1.0 tag mismatch is superseded.
 

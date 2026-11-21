@@ -32,7 +32,8 @@ first.
   re-entered in 1.1.0 if decryption is unavailable; no plaintext backup is kept.
 - **`basic-electron-updater@2.0.0` is published to npm.** The 1.1.0 package is
   superseded; published versions cannot be deleted, only deprecated.
-- **No Quelody 1.1.0 desktop release, public tag or download exists yet.**
+- **Quelody 1.1.0 is published** from tag `v1.1.0`; its installer, signed
+  manifest and checksums are public. Do not move or rewrite the tag silently.
 
 ## Not irreversible
 
