@@ -60,7 +60,7 @@ function getNestedKeys(obj: TranslationObject, prefix = ""): string[] {
     let keys: string[] = [];
 
     for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
             const fullKey = prefix ? `${prefix}.${key}` : key;
 
             if (
