@@ -20,7 +20,7 @@ telemetry, no cloud sync and no Melodify server.
   when no stream session is active.
 - **Dusk look.** Refreshed titlebar, mark, installer/tray icon rim, consistent
   Home and Settings rails, and slower, calmer motion.
-- **Runtime.** Electron 45.2.3 (Chromium 156, Node 24) and the Melodify updater
+- **Runtime.** Electron 45.4.1 (Chromium 156, Node 24) and the Melodify updater
   1.1.0.
 
 ## Security and privacy

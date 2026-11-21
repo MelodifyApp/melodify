@@ -9,7 +9,7 @@ full launch surface.
 
 ## 0. Blockers
 
-- [x] **Electron upgrade merged.** Electron **45.2.3** (Chromium 156, Node 24)
+- [x] **Electron upgrade merged.** Electron **45.4.1** (Chromium 156, Node 24)
       builds, packages and smokes; the branch is merged locally into `master`.
 - [ ] **Live provider QA** (Spotify/Kick/Twitch) has not run for 1.1.0.
 - [x] **Updater 1.1.0** published on 2026-11-12 with signed provenance; desktop
@@ -129,7 +129,7 @@ full launch surface.
 
 ## Decisions needed from the owner
 
-1. **Electron:** resolved — 45.2.3 is merged; the 36 EOL risk is removed.
+1. **Electron:** resolved — 45.2.3→45.4.1 is merged; the 36 EOL risk is removed.
 2. **Name:** proceed with "Melodify Live" and run clearance, or clear a new name?
 3. **KVKK:** controller details and legal review owner.
 4. **Distribution:** direct download only, or Microsoft Store/winget as well?
