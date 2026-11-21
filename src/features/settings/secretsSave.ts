@@ -70,6 +70,31 @@ export function getSecretService(
     return service;
 }
 
+export interface CredentialSaveFollowUp {
+    /** Primary dialog button label for this service. */
+    readonly actionKey: string;
+    /** OAuth channel to start after a successful save, when required. */
+    readonly authChannel: "spotify:auth" | null;
+}
+
+/**
+ * App credentials alone never authorize a Spotify account, so saving them in
+ * Settings continues straight into OAuth and "Save and connect" really does
+ * both. Kick can read chat as a guest without OAuth and Twitch keeps its
+ * explicit connection step, so they only save the credentials here.
+ */
+export function credentialSaveFollowUp(
+    id: SecretServiceId
+): CredentialSaveFollowUp {
+    if (id === "spotify") {
+        return {
+            actionKey: "common.saveAndConnect",
+            authChannel: "spotify:auth",
+        };
+    }
+    return { actionKey: "common.save", authChannel: null };
+}
+
 const SETUP_DASHBOARD_URLS: Record<SecretServiceId, string> = {
     spotify: "https://developer.spotify.com/dashboard",
     kick: "https://kick.com/settings/developer",

@@ -7,6 +7,7 @@ import type {
     HomeQueueEntry,
     HomeSessionSnapshot,
 } from "./homeSessionTypes";
+import type { HomeConnectionView } from "./homeConnections";
 
 function timeAgoLabel(
     acceptedAt: number,
@@ -25,14 +26,78 @@ function timeAgoLabel(
     return t("home.timeDays", { count: parts.count });
 }
 
+interface PlaybackPrompt {
+    title: string;
+    copy: string;
+    actionLabel: string | null;
+    onAction: (() => void) | null;
+}
+
+/**
+ * When Spotify is not ready, the empty card must explain the real reason and
+ * offer the matching action instead of claiming nothing is playing.
+ */
+function spotifyPlaybackPrompt(
+    spotify: HomeConnectionView | undefined,
+    t: (key: string) => string,
+    onConnectSpotify?: () => void,
+    onOpenSettings?: () => void
+): PlaybackPrompt | null {
+    if (!spotify) return null;
+    switch (spotify.state) {
+        case "setup":
+            return {
+                title: t("home.spotifyNotSetUp"),
+                copy: t("home.spotifyNotSetUpCopy"),
+                actionLabel: onOpenSettings
+                    ? t("home.connections.actionSetUp")
+                    : null,
+                onAction: onOpenSettings ?? null,
+            };
+        case "connect":
+            return {
+                title: t("home.spotifyNotConnected"),
+                copy: t("home.spotifyNotConnectedCopy"),
+                actionLabel: onConnectSpotify
+                    ? t("home.connections.actionConnect")
+                    : null,
+                onAction: onConnectSpotify ?? null,
+            };
+        case "auth-error":
+            return {
+                title: t("home.spotifyConnectFailed"),
+                copy: t("home.spotifyConnectFailedCopy"),
+                actionLabel: onConnectSpotify
+                    ? t("home.connections.actionRetry")
+                    : null,
+                onAction: onConnectSpotify ?? null,
+            };
+        case "pending":
+            return {
+                title: t("home.spotifyConnecting"),
+                copy: t("home.spotifyConnectingCopy"),
+                actionLabel: null,
+                onAction: null,
+            };
+        default:
+            return null;
+    }
+}
+
 function NowPlayingCard({
     current,
     loading,
     error,
+    spotify,
+    onConnectSpotify,
+    onOpenSettings,
 }: {
     current: HomeNowPlaying | null;
     loading: boolean;
     error: boolean;
+    spotify?: HomeConnectionView;
+    onConnectSpotify?: () => void;
+    onOpenSettings?: () => void;
 }) {
     const { t } = useTranslation();
     const isLoading = loading || current?.status === "loading";
@@ -44,6 +109,12 @@ function NowPlayingCard({
         !!current.artist;
     const failed = error || current?.status === "error";
     const isIdle = !isLoading && !failed && !playing;
+    const prompt = spotifyPlaybackPrompt(
+        spotify,
+        t,
+        onConnectSpotify,
+        onOpenSettings
+    );
 
     return (
         <section
@@ -77,6 +148,27 @@ function NowPlayingCard({
                             {t("home.byArtist", { artist: current.artist })}
                         </p>
                     </>
+                ) : isLoading ? (
+                    <p className="studio-home-request-title">
+                        {t("home.nowPlayingLoading")}
+                    </p>
+                ) : prompt ? (
+                    <>
+                        <p className="studio-home-request-title">
+                            {prompt.title}
+                        </p>
+                        <p className="studio-home-empty-copy">{prompt.copy}</p>
+                        {prompt.actionLabel && prompt.onAction && (
+                            <Button
+                                variant="secondary"
+                                size="small"
+                                className="studio-home-now-playing-action"
+                                onClick={prompt.onAction}
+                            >
+                                {prompt.actionLabel}
+                            </Button>
+                        )}
+                    </>
                 ) : failed ? (
                     <>
                         <p className="studio-home-request-title">
@@ -86,10 +178,6 @@ function NowPlayingCard({
                             {t("home.playbackUnavailableCopy")}
                         </p>
                     </>
-                ) : isLoading ? (
-                    <p className="studio-home-request-title">
-                        {t("home.nowPlayingLoading")}
-                    </p>
                 ) : isIdle ? (
                     <>
                         <p className="studio-home-request-title">
@@ -153,12 +241,18 @@ export default function HomeSessionView({
     error,
     now,
     onOpenHistory,
+    spotify,
+    onConnectSpotify,
+    onOpenSettings,
 }: {
     session: HomeSessionSnapshot | null;
     loading: boolean;
     error: boolean;
     now: number;
     onOpenHistory?: () => void;
+    spotify?: HomeConnectionView;
+    onConnectSpotify?: () => void;
+    onOpenSettings?: () => void;
 }) {
     const { t } = useTranslation();
     const queue = session?.queue ?? [];
@@ -170,6 +264,9 @@ export default function HomeSessionView({
                 current={session?.current ?? null}
                 loading={loading}
                 error={error}
+                spotify={spotify}
+                onConnectSpotify={onConnectSpotify}
+                onOpenSettings={onOpenSettings}
             />
             <section
                 className="studio-home-queue"

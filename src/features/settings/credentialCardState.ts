@@ -45,7 +45,9 @@ const NOT_SET_UP: CredentialCardView = {
 const CONNECTED: CredentialCardView = {
     state: "connected",
     chipStatus: "verified",
-    labelKey: "common.connected",
+    // API Keys stores app credentials; the account OAuth connection lives on
+    // Home. "Credentials saved" avoids claiming the Spotify account is linked.
+    labelKey: "common.credentialsSaved",
     action: "replace",
 };
 

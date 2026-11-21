@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, ServiceCard } from "@/ui/components/studio";
 import {
     SECRET_SERVICES,
+    credentialSaveFollowUp,
     getSecretService,
     getSetupGuide,
     type SecretServiceId,
@@ -64,6 +65,10 @@ export default function Secrets({
         markCredentialSaved(serviceId, clientId);
         onCredentialsSaved?.(serviceId, clientId);
         setDialog(null);
+        const { authChannel } = credentialSaveFollowUp(serviceId);
+        if (authChannel) {
+            window.electronAPI.send(authChannel);
+        }
     };
 
     const retryService = (serviceId: SecretServiceId) => {

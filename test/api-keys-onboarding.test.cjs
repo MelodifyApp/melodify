@@ -21,7 +21,7 @@ test("credential cards map store states without flashing Unverified", () => {
         [undefined, true, false, "checking", "verifying", "common.checking", null],
         ["unverified", true, true, "checking", "verifying", "common.checking", null],
         ["verifying", true, true, "checking", "verifying", "common.checking", null],
-        ["verified", true, true, "connected", "verified", "common.connected", "replace"],
+        ["verified", true, true, "connected", "verified", "common.credentialsSaved", "replace"],
         [
             "verification-failed",
             true,
@@ -163,6 +163,7 @@ test("global disabled button styling remains in place", () => {
 test("onboarding copy and card state labels exist in both locales", () => {
     const expected = {
         notSetUp: "Not set up",
+        credentialsSaved: "Credentials saved",
         connected: "Connected",
         couldntVerify: "Couldn't verify",
         couldntReachProvider: "Couldn't reach provider",
@@ -174,6 +175,7 @@ test("onboarding copy and card state labels exist in both locales", () => {
         copy: "Copy",
         copied: "Copied",
         connect: "Connect",
+        saveAndConnect: "Save and connect",
         setUpServiceTitle: "Set up {{service}}",
         replaceCredentialsTitle: "Replace {{service}} credentials",
         pasteCredentialsTitle: "Paste {{service}} credentials",
@@ -181,7 +183,7 @@ test("onboarding copy and card state labels exist in both locales", () => {
         pasteCredentialsStep: "Paste credentials",
         setupSteps: "Setup steps",
         credentialsVerifiedOnConnect:
-            "Credentials are verified automatically when you connect.",
+            "Credentials are verified automatically before they are saved.",
         secretsPersistenceError:
             "Credentials were verified, but couldn't be saved. Please try again.",
     };

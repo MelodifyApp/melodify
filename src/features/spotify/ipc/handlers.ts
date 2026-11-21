@@ -18,6 +18,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { logInfo, logError, logDebug } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
+import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import { verifyAppCredentials } from "../../../shared/utils/credentialVerification";
 
 const execAsync = promisify(exec);
@@ -186,7 +187,7 @@ ipcMain.handle("spotify:verifySecrets", async (_event, secrets) => {
     return verifyAppCredentials("spotify", { clientId, clientSecret });
 });
 
-ipcMain.handle("spotify:setSecrets", async (_event, secrets) => {
+ipcMain.handle("spotify:setSecrets", async (event, secrets) => {
     const { clientId, clientSecret } = readSpotifyCredentialPair(secrets);
     if (!clientId || !clientSecret) {
         return { success: false, code: "missing_credentials" };
@@ -209,6 +210,13 @@ ipcMain.handle("spotify:setSecrets", async (_event, secrets) => {
         logError("Spotify credential persistence failed", "spotify:setSecrets");
         return { success: false, code: "persistence_failed" };
     }
+    // Home keeps its rail mounted while Settings is open; tell it to re-read
+    // the credential flags so "Needs setup" becomes "Connect" immediately.
+    sendToWindowIfAlive(
+        BrowserWindow.fromWebContents(event.sender),
+        "credentials:updated",
+        { service: "spotify" }
+    );
     return { success: true };
 });
 

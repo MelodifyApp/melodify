@@ -175,6 +175,7 @@ function twitchHarness(mode) {
 function spotifyHarness(mode) {
     const { config, values, writes } = configStub(mode);
     const ipc = createIpc();
+    const sent = [];
     let resetCalls = 0;
     const player = {
         getSpotifyApi: () => ({}),
@@ -207,12 +208,19 @@ function spotifyHarness(mode) {
             startSpotifyAuthServer: async () => "state",
             stopSpotifyAuthServer() {},
         },
+        "@/shared/utils/windowSend": {
+            sendToWindowIfAlive(_window, channel, payload) {
+                sent.push([channel, payload]);
+                return true;
+            },
+        },
     });
     return {
         handler: ipc.handlers.get("spotify:setSecrets"),
         values,
         writes,
         getResetCalls: () => resetCalls,
+        getSentEvents: () => sent,
     };
 }
 
@@ -293,6 +301,38 @@ for (const [provider, fixture] of Object.entries(HARNESSES)) {
         });
     });
 }
+
+test("saving Spotify credentials tells the mounted Home view to refresh", async () => {
+    await withSuccessfulFetch(async () => {
+        const harness = spotifyHarness("ok");
+        const result = await harness.handler(
+            { sender: {} },
+            HARNESSES.spotify.payload
+        );
+        assert.deepEqual(result, { success: true });
+        assert.deepEqual(harness.getSentEvents(), [
+            ["credentials:updated", { service: "spotify" }],
+        ]);
+    });
+});
+
+test("only Spotify continues into OAuth after a credential save", () => {
+    const {
+        credentialSaveFollowUp,
+    } = require("../src/features/settings/secretsSave");
+    assert.deepEqual(credentialSaveFollowUp("spotify"), {
+        actionKey: "common.saveAndConnect",
+        authChannel: "spotify:auth",
+    });
+    assert.deepEqual(credentialSaveFollowUp("kick"), {
+        actionKey: "common.save",
+        authChannel: null,
+    });
+    assert.deepEqual(credentialSaveFollowUp("twitch"), {
+        actionKey: "common.save",
+        authChannel: null,
+    });
+});
 
 test("persistence_failed is a stable generic save error for the renderer", () => {
     const { credentialFailureMessageKey } = require("../src/shared/utils/credentialFailure");

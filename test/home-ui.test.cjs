@@ -319,6 +319,50 @@ test("Home connections load only through read channels", async () => {
     );
 });
 
+test("Home connection state moves from setup to connect after credentials are saved", async () => {
+    let saved = false;
+    const bridge = {
+        invoke: async (channel) => {
+            switch (channel) {
+                case "spotify:hasSecrets":
+                    return saved;
+                case "spotify:checkAuth":
+                    return { authenticated: false };
+                case "kick:hasSecrets":
+                case "kick:isListeningToChat":
+                    return false;
+                case "kick:checkAuth":
+                    return { authenticated: false };
+                case "twitch:hasSecrets":
+                    return false;
+                case "twitch:checkAuth":
+                    return { authenticated: false };
+                default:
+                    throw new Error(`unexpected ${channel}`);
+            }
+        },
+    };
+
+    const before = homeConnections.deriveHomeConnections(
+        await homeConnections.loadHomeConnections(bridge)
+    );
+    assert.equal(before.spotify.state, "setup");
+
+    saved = true;
+    const after = homeConnections.deriveHomeConnections(
+        await homeConnections.loadHomeConnections(bridge)
+    );
+    assert.equal(after.spotify.state, "connect");
+});
+
+test("Home subscribes to credential saves while Settings is open", () => {
+    const hook = load("src/features/home/useHomeConnections.ts");
+    assert.ok(
+        hook.HOME_CONNECTION_REFRESH_CHANNELS.includes("credentials:updated"),
+        "Home must refresh when Settings saves credentials"
+    );
+});
+
 test("Home connections mark a failed provider as unavailable", async () => {
     const bridge = {
         invoke: async (channel) => {
@@ -611,6 +655,56 @@ test("HomeSessionView renders playing, idle, loading and error states truthfully
     assert.match(errorHtml, /role="alert"/);
 });
 
+test("HomeSessionView prompts for Spotify instead of claiming nothing is playing", () => {
+    const idleSession = {
+        revision: 1,
+        current: {
+            status: "idle",
+            title: null,
+            artist: null,
+            artworkUrl: null,
+            error: null,
+        },
+        queue: [],
+        queueScope: "stream",
+    };
+
+    const notConnected = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        {
+            session: idleSession,
+            loading: false,
+            error: false,
+            now: 1000,
+            spotify: { id: "spotify", state: "connect", tone: "warn" },
+            onConnectSpotify() {},
+            onOpenSettings() {},
+        },
+        translatorFor(en)
+    );
+    assert.match(notConnected, /Spotify isn&#x27;t connected/);
+    assert.match(notConnected, /Connect your Spotify account/);
+    assert.match(notConnected, />Connect</);
+    assert.doesNotMatch(notConnected, /Nothing playing/);
+
+    const notSetUp = renderComponent(
+        "src/features/home/HomeSessionView.tsx",
+        {
+            session: idleSession,
+            loading: false,
+            error: false,
+            now: 1000,
+            spotify: { id: "spotify", state: "setup", tone: "warn" },
+            onConnectSpotify() {},
+            onOpenSettings() {},
+        },
+        translatorFor(en)
+    );
+    assert.match(notSetUp, /Spotify isn&#x27;t set up/);
+    assert.match(notSetUp, />Set up</);
+    assert.doesNotMatch(notSetUp, /Nothing playing/);
+});
+
 test("HomeSessionView renders artwork-led local queue entries with requester and platform", () => {
     const session = {
         revision: 3,
@@ -825,6 +919,14 @@ test("Home connection labels exist in English and Turkish", () => {
         "home.nowPlayingLoading",
         "home.nothingPlaying",
         "home.nothingPlayingCopy",
+        "home.spotifyNotSetUp",
+        "home.spotifyNotSetUpCopy",
+        "home.spotifyNotConnected",
+        "home.spotifyNotConnectedCopy",
+        "home.spotifyConnectFailed",
+        "home.spotifyConnectFailedCopy",
+        "home.spotifyConnecting",
+        "home.spotifyConnectingCopy",
         "home.playbackUnavailable",
         "home.playbackUnavailableCopy",
         "home.queueTitle",

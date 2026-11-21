@@ -181,7 +181,7 @@ ipcMain.handle("twitch:verifySecrets", async (_event, secrets) => {
     return verifyAppCredentials("twitch", { clientId, clientSecret });
 });
 
-ipcMain.handle("twitch:setSecrets", async (_event, secrets) => {
+ipcMain.handle("twitch:setSecrets", async (event, secrets) => {
     const { clientId, clientSecret } = readTwitchCredentialPair(secrets);
     if (!clientId || !clientSecret) {
         logWarn(
@@ -207,6 +207,11 @@ ipcMain.handle("twitch:setSecrets", async (_event, secrets) => {
         return { success: false, code: "persistence_failed" };
     }
     logInfo("twitch:setSecrets persisted credentials");
+    sendToWindowIfAlive(
+        BrowserWindow.fromWebContents(event.sender),
+        "credentials:updated",
+        { service: "twitch" }
+    );
     return { success: true };
 });
 

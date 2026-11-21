@@ -172,6 +172,11 @@
     line-height: 1.5;
 }
 
+.studio-home-now-playing-action {
+    align-self: flex-start;
+    margin-top: 8px;
+}
+
 .studio-home-count {
     margin: 8px 0 0;
     padding-top: 8px;

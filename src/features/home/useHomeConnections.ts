@@ -15,6 +15,25 @@ import {
 const PRESENCE_INTERVAL_MS = 10_000;
 
 /**
+ * Main-process events that can change the credential/auth flags. Saved
+ * credentials are included because Settings writes them while Home is hidden.
+ */
+export const HOME_CONNECTION_REFRESH_CHANNELS = Object.freeze([
+    "spotify:authenticated",
+    "kick:authenticated",
+    "kick:chatConnected",
+    "kick:chatDisconnected",
+    "kick:authenticationFailed",
+    "twitch:authenticated",
+    "twitch:chatConnected",
+    "twitch:chatDisconnected",
+    "twitch:authenticationFailed",
+    // Settings saves credentials in the main process; without this event
+    // Home keeps the pre-save "needs setup" state until restart.
+    "credentials:updated",
+] as const);
+
+/**
  * Home rail status from the same real provider checks the cards use. Auth is
  * refreshed on mount/dialog close; the interval checks presence on every tick,
  * so a session that becomes inactive or unreachable stops looking ready.
@@ -100,25 +119,14 @@ export function useHomeConnections(bridge?: HomeConnectionsBridge) {
             }
         };
         bridge.on?.("spotify:authState", onSpotifyAuthState);
-        const channels = [
-            "spotify:authenticated",
-            "kick:authenticated",
-            "kick:chatConnected",
-            "kick:chatDisconnected",
-            "kick:authenticationFailed",
-            "twitch:authenticated",
-            "twitch:chatConnected",
-            "twitch:chatDisconnected",
-            "twitch:authenticationFailed",
-        ];
-        for (const channel of channels) {
+        for (const channel of HOME_CONNECTION_REFRESH_CHANNELS) {
             bridge.on?.(channel, refreshOnChange);
         }
 
         return () => {
             clearInterval(interval);
             bridge.removeListener?.("spotify:authState", onSpotifyAuthState);
-            for (const channel of channels) {
+            for (const channel of HOME_CONNECTION_REFRESH_CHANNELS) {
                 bridge.removeListener?.(channel, refreshOnChange);
             }
         };

@@ -369,7 +369,7 @@ ipcMain.handle("kick:verifySecrets", async (_event, secrets) => {
     return verifyAppCredentials("kick", { clientId, clientSecret });
 });
 
-ipcMain.handle("kick:setSecrets", async (_event, secrets) => {
+ipcMain.handle("kick:setSecrets", async (event, secrets) => {
     const { clientId, clientSecret } = readKickCredentialPair(secrets);
     if (!clientId || !clientSecret) {
         logWarn(
@@ -395,6 +395,11 @@ ipcMain.handle("kick:setSecrets", async (_event, secrets) => {
         return { success: false, code: "persistence_failed" };
     }
     logInfo("kick:setSecrets persisted credentials");
+    sendToWindowIfAlive(
+        BrowserWindow.fromWebContents(event.sender),
+        "credentials:updated",
+        { service: "kick" }
+    );
     return { success: true };
 });
 

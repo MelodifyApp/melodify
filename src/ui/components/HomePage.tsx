@@ -98,6 +98,15 @@ export default function HomePage({
     const previousConnectionStates =
         useRef<HomeConnectionStateMap | null>(null);
     const connectionSignature = `${views.spotify.state}:${views.kick.state}:${views.twitch.state}`;
+    const wasHidden = useRef(hidden);
+
+    // Settings stays mounted behind Home. When the user comes back after
+    // saving credentials, re-read the flags instead of showing a stale rail.
+    useEffect(() => {
+        const becameVisible = wasHidden.current && !hidden;
+        wasHidden.current = hidden;
+        if (becameVisible) void refreshAll();
+    }, [hidden, refreshAll]);
 
     useEffect(() => {
         const current = homeConnectionStateMap(views);
@@ -185,6 +194,9 @@ export default function HomePage({
                         error={sessionError}
                         now={now}
                         onOpenHistory={onOpenHistory}
+                        spotify={views.spotify}
+                        onConnectSpotify={beginSpotifyAuth}
+                        onOpenSettings={onOpenSettings}
                     />
                 </main>
 

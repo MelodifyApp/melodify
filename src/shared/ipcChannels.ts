@@ -118,6 +118,7 @@ export const LISTEN_CHANNELS: readonly string[] = Object.freeze([
     "log:entry",
     "home:sessionUpdated",
     "songRequest:completed",
+    "credentials:updated",
     "tray:debug",
     // Spotify
     "spotify:authenticated",

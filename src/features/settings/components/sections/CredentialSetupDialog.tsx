@@ -6,6 +6,7 @@ import { Button, IconButton, Input } from "@/ui/components/studio";
 import ExternalLink from "@/ui/components/ExternalLink";
 import InlineError from "@/ui/components/InlineError";
 import {
+    credentialSaveFollowUp,
     getSecretService,
     saveServiceSecrets,
     type SecretServiceId,
@@ -74,6 +75,7 @@ export default function CredentialSetupDialog({
 }: CredentialSetupDialogProps) {
     const { t } = useTranslation();
     const service = getSecretService(serviceId);
+    const followUp = credentialSaveFollowUp(serviceId);
     const serviceName = SERVICE_NAMES[serviceId];
     const placeholderName = PLACEHOLDER_NAMES[serviceId];
     const [step, setStep] = useState<1 | 2>(mode === "replace" ? 2 : 1);
@@ -362,8 +364,8 @@ export default function CredentialSetupDialog({
                                 disabled={!canConnect || busy}
                             >
                                 {busy
-                                    ? t("common.connecting")
-                                    : t("common.connect")}
+                                    ? t("common.saving")
+                                    : t(followUp.actionKey)}
                             </Button>
                         </div>
                     </>
