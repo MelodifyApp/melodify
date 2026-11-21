@@ -26,19 +26,25 @@ function createPersistence(initial = []) {
     };
 }
 
-function createHarness({ graceMs = 30, start = 1000 } = {}) {
+function createHarness({
+    graceMs = 30,
+    start = 1000,
+    initialSessions = [],
+    resumeWindowMs,
+} = {}) {
     let clock = start;
     let sequence = 0;
     const queue = createHomeQueueStore({
         now: () => clock,
         nextId: () => `q-${++sequence}`,
     });
-    const persistence = createPersistence();
+    const persistence = createPersistence(initialSessions);
     const manager = createStreamSessionManager({
         queue,
         persistence,
         now: () => clock,
         graceMs,
+        resumeWindowMs,
         makeId: (startedAt) => `s-${startedAt}`,
     });
     manager.initialize();
@@ -142,7 +148,7 @@ test("records played entries and starts a new session after an end", async () =>
     assert.equal(harness.manager.getHistory().length, 2);
 });
 
-test("marks a session left active by a crash as interrupted", () => {
+test("keeps a session left active by a crash open for the next live check", () => {
     const persistence = createPersistence([
         {
             id: "crashed",
@@ -163,8 +169,8 @@ test("marks a session left active by a crash as interrupted", () => {
 
     const history = manager.getHistory();
     assert.equal(history.length, 1);
-    assert.equal(history[0].endedAt, 5000);
-    assert.equal(history[0].endReason, "interrupted");
+    assert.equal(history[0].endedAt, null);
+    assert.equal(manager.getActive(), null);
 });
 
 test("shutdown ends the active session as app-quit", () => {
@@ -244,4 +250,181 @@ test("queue exposes played entries to history subscribers", () => {
 
     assert.equal(played.length, 1);
     assert.equal(played[0].title, "Song");
+});
+
+test("resumes an app-quit session when the stream is live again", () => {
+    const initial = [
+        {
+            id: "s-500",
+            startedAt: 500,
+            endedAt: 900,
+            endReason: "app-quit",
+            providers: { kick: true, twitch: false },
+            entries: [
+                {
+                    id: "q-1",
+                    title: "Played",
+                    artist: "Artist",
+                    requester: "viewer",
+                    platform: "kick",
+                    acceptedAt: 600,
+                    position: 1,
+                    artworkUrl: "https://example.test/1.jpg",
+                    outcome: "played",
+                    playedAt: 700,
+                },
+                {
+                    id: "q-2",
+                    title: "Pending",
+                    artist: "Artist",
+                    requester: "viewer",
+                    platform: "kick",
+                    acceptedAt: 800,
+                    position: 2,
+                    artworkUrl: "https://example.test/2.jpg",
+                    outcome: "unplayed",
+                    playedAt: null,
+                },
+            ],
+        },
+    ];
+    const harness = createHarness({
+        initialSessions: initial,
+        start: 1000,
+        resumeWindowMs: 1000,
+    });
+    assert.equal(harness.manager.getActive(), null);
+
+    harness.manager.noteLiveStatus("kick", true, true);
+
+    const active = harness.manager.getActive();
+    assert.ok(active);
+    assert.equal(active.id, "s-500");
+    assert.equal(active.startedAt, 500);
+    assert.equal(active.endedAt, null);
+    assert.equal(active.endReason, null);
+    assert.equal(active.entries.length, 2);
+    assert.equal(harness.manager.getHistory().length, 1);
+
+    const queue = harness.queue.snapshot();
+    assert.equal(queue.length, 1);
+    assert.equal(queue[0].id, "q-2");
+    assert.equal(queue[0].title, "Pending");
+});
+
+test("does not resume an app-quit session outside the resume window", () => {
+    const initial = [
+        {
+            id: "s-500",
+            startedAt: 500,
+            endedAt: 600,
+            endReason: "app-quit",
+            providers: { kick: true, twitch: false },
+            entries: [],
+        },
+    ];
+    const harness = createHarness({
+        initialSessions: initial,
+        start: 5000,
+        resumeWindowMs: 1000,
+    });
+
+    harness.manager.noteLiveStatus("kick", true, true);
+
+    const active = harness.manager.getActive();
+    assert.ok(active);
+    assert.equal(active.id, "s-5000");
+    assert.equal(harness.manager.getHistory().length, 2);
+});
+
+test("resumes a crash-left active session on the next live check", () => {
+    const initial = [
+        {
+            id: "s-500",
+            startedAt: 500,
+            endedAt: null,
+            endReason: null,
+            providers: { kick: true, twitch: false },
+            entries: [],
+        },
+    ];
+    const harness = createHarness({
+        initialSessions: initial,
+        start: 1000,
+    });
+
+    harness.manager.noteLiveStatus("kick", true, true);
+
+    const active = harness.manager.getActive();
+    assert.ok(active);
+    assert.equal(active.id, "s-500");
+    assert.equal(active.endedAt, null);
+});
+
+test("ends a crash-left session as interrupted when the provider is offline", () => {
+    const initial = [
+        {
+            id: "s-500",
+            startedAt: 500,
+            endedAt: null,
+            endReason: null,
+            providers: { kick: true, twitch: false },
+            entries: [],
+        },
+    ];
+    const harness = createHarness({
+        initialSessions: initial,
+        start: 1000,
+    });
+
+    harness.manager.noteLiveStatus("kick", false, true);
+
+    assert.equal(harness.manager.getActive(), null);
+    const history = harness.manager.getHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].id, "s-500");
+    assert.equal(history[0].endedAt, 1000);
+    assert.equal(history[0].endReason, "interrupted");
+});
+
+test("an unknown check during grace does not cancel the pending end", async () => {
+    const harness = createHarness({ graceMs: 30 });
+    harness.manager.noteLiveStatus("kick", true, true);
+    harness.manager.noteLiveStatus("kick", false, true);
+    harness.manager.noteLiveStatus("kick", null, true);
+
+    await sleep(60);
+
+    assert.equal(harness.manager.getActive(), null);
+    const history = harness.manager.getHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].endReason, "offline");
+});
+
+test("resumes when one provider is offline and the other is live in the same poll", () => {
+    const initial = [
+        {
+            id: "s-500",
+            startedAt: 500,
+            endedAt: null,
+            endReason: null,
+            providers: { kick: true, twitch: true },
+            entries: [],
+        },
+    ];
+    const harness = createHarness({
+        initialSessions: initial,
+        start: 1000,
+    });
+
+    harness.manager.noteLiveStatuses([
+        { platform: "kick", live: false, configured: true },
+        { platform: "twitch", live: true, configured: true },
+    ]);
+
+    const active = harness.manager.getActive();
+    assert.ok(active);
+    assert.equal(active.id, "s-500");
+    assert.equal(active.endedAt, null);
+    assert.equal(active.providers.twitch, true);
 });

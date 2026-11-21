@@ -2,6 +2,7 @@ import Config from "@/core/config";
 import { kickClient } from "@/features/kick/api/client";
 import { twitchClient } from "@/features/twitch/api/client";
 import { homeQueue } from "./homeQueue";
+import { readLiveStatusWithRetry } from "./liveStatusRetry";
 import { createQueueHistoryPersistence } from "./queueHistory";
 import {
     createStreamSessionManager,
@@ -34,17 +35,27 @@ async function pollLiveStatus(): Promise<void> {
         const twitchConfigured = isTwitchConfigured();
         const [kickLive, twitchLive] = await Promise.all([
             kickConfigured
-                ? kickClient.getLiveStatus().catch((): null => null)
+                ? readLiveStatusWithRetry(() => kickClient.getLiveStatus())
                 : Promise.resolve(null),
             twitchConfigured
-                ? twitchClient.getLiveStatus().catch((): null => null)
+                ? readLiveStatusWithRetry(() => twitchClient.getLiveStatus())
                 : Promise.resolve(null),
         ]);
         if (!manager) return;
-        // A null result means "unknown"; the manager keeps the last confirmed
-        // state so a provider outage never ends or splits the stream.
-        manager.noteLiveStatus("kick", kickLive, kickConfigured);
-        manager.noteLiveStatus("twitch", twitchLive, twitchConfigured);
+        // Apply the whole poll at once so a provider evaluated first cannot
+        // decide the session before the other provider's state is known.
+        manager.noteLiveStatuses([
+            {
+                platform: "kick",
+                live: kickLive,
+                configured: kickConfigured,
+            },
+            {
+                platform: "twitch",
+                live: twitchLive,
+                configured: twitchConfigured,
+            },
+        ]);
     } finally {
         pollInFlight = false;
     }
@@ -74,6 +85,11 @@ export function shutdownStreamSessions(): void {
     pollInFlight = false;
     manager?.shutdown("app-quit");
     manager = null;
+}
+
+export function hasActiveStreamSession(): boolean {
+    if (!manager) initializeStreamSessions();
+    return !!manager?.getActive();
 }
 
 export function getQueueHistory(): QueueStreamSession[] {

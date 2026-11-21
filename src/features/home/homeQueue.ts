@@ -17,6 +17,7 @@ export interface HomeQueueStore {
         artists?: readonly string[];
     }): HomeQueueEntry | null;
     snapshot(): HomeQueueEntry[];
+    restore(entries: HomeQueueEntry[]): void;
     subscribe(listener: (entries: HomeQueueEntry[]) => void): () => void;
     subscribePlayed(listener: (entry: HomeQueueEntry) => void): () => void;
     reset(): void;
@@ -139,6 +140,43 @@ export function createHomeQueueStore({
         snapshot() {
             return publicEntries();
         },
+        restore(inputEntries) {
+            const byId = new Map<string, StoredEntry>();
+            for (const input of inputEntries) {
+                if (!input || typeof input.id !== "string" || !input.id) {
+                    continue;
+                }
+                const acceptedAt =
+                    typeof input.acceptedAt === "number" &&
+                    Number.isFinite(input.acceptedAt)
+                        ? input.acceptedAt
+                        : now();
+                byId.set(input.id, {
+                    id: input.id,
+                    title: String(input.title || ""),
+                    artist: String(input.artist || ""),
+                    requester: String(input.requester || ""),
+                    platform:
+                        input.platform === "twitch" ? "twitch" : "kick",
+                    acceptedAt,
+                    artworkUrl:
+                        typeof input.artworkUrl === "string" &&
+                        input.artworkUrl.length > 0
+                            ? input.artworkUrl
+                            : null,
+                });
+            }
+            entries = [...byId.values()].sort(
+                (a, b) => a.acceptedAt - b.acceptedAt
+            );
+            for (const entry of entries) {
+                const match = /^home-queue-(\d+)$/.exec(entry.id);
+                if (match) {
+                    sequence = Math.max(sequence, Number(match[1]));
+                }
+            }
+            notify();
+        },
         subscribe(listener) {
             listeners.add(listener);
             return () => {
@@ -159,5 +197,8 @@ export function createHomeQueueStore({
     };
 }
 
-/** Main-process session queue. It intentionally does not persist across restarts. */
+/**
+ * Main-process session queue. It does not persist on its own; the stream
+ * session manager restores pending entries from the active session on resume.
+ */
 export const homeQueue = createHomeQueueStore();

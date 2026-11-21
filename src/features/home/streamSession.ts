@@ -24,6 +24,7 @@ export interface QueueHistoryPersistence {
 
 export interface StreamSessionQueue {
     snapshot(): HomeQueueEntry[];
+    restore(entries: HomeQueueEntry[]): void;
     reset(): void;
     subscribe(listener: (entries: HomeQueueEntry[]) => void): () => void;
     subscribePlayed(listener: (entry: HomeQueueEntry) => void): () => void;
@@ -40,10 +41,18 @@ export interface StreamSessionManagerOptions {
     now?: () => number;
     /** How long every configured provider may stay confirmed offline. */
     graceMs?: number;
+    /** How recently an app-quit session may end and still be resumed. */
+    resumeWindowMs?: number;
     maxSessions?: number;
     maxEntries?: number;
     makeId?: (startedAt: number) => string;
     logger?: StreamSessionLogger;
+}
+
+export interface LiveStatusUpdate {
+    platform: HomePlatform;
+    live: boolean | null;
+    configured: boolean;
 }
 
 export interface StreamSessionManager {
@@ -58,6 +67,8 @@ export interface StreamSessionManager {
         live: boolean | null,
         configured: boolean
     ): void;
+    /** Applies one poll for every provider before evaluating the session. */
+    noteLiveStatuses(statuses: readonly LiveStatusUpdate[]): void;
     shutdown(reason?: "app-quit" | "interrupted"): void;
     getHistory(): QueueStreamSession[];
     getActive(): QueueStreamSession | null;
@@ -66,6 +77,7 @@ export interface StreamSessionManager {
 }
 
 const DEFAULT_GRACE_MS = 2 * 60 * 1000;
+const DEFAULT_RESUME_WINDOW_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_SESSIONS = 50;
 const DEFAULT_MAX_ENTRIES = 500;
 
@@ -85,7 +97,8 @@ function cloneSession(session: QueueStreamSession): QueueStreamSession {
  * A stream session starts when a provider confirms live and ends only after
  * every configured provider has been confirmed offline for the grace window.
  * A failed live check (null) keeps the last confirmed state, so an API outage
- * never ends or splits an active stream.
+ * never ends or splits an active stream. A crash or a recent app-quit session
+ * is resumed on the next confirmed live check.
  */
 export function createStreamSessionManager(
     options: StreamSessionManagerOptions
@@ -97,6 +110,10 @@ export function createStreamSessionManager(
         typeof options.graceMs === "number" && options.graceMs >= 0
             ? options.graceMs
             : DEFAULT_GRACE_MS;
+    const resumeWindowMs = Math.max(
+        0,
+        options.resumeWindowMs ?? DEFAULT_RESUME_WINDOW_MS
+    );
     const maxSessions = Math.max(1, options.maxSessions ?? DEFAULT_MAX_SESSIONS);
     const maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_MAX_ENTRIES);
     const makeId =
@@ -108,6 +125,7 @@ export function createStreamSessionManager(
     let initialized = false;
     let sessions: QueueStreamSession[] = [];
     let active: QueueStreamSession | null = null;
+    let resumeCandidate: QueueStreamSession | null = null;
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
     let unsubscribeQueue: (() => void) | null = null;
     let unsubscribePlayed: (() => void) | null = null;
@@ -133,6 +151,9 @@ export function createStreamSessionManager(
         const budget = maxSessions - (active ? 1 : 0);
         const kept = budget > 0 ? ended.slice(-budget) : [];
         sessions = active ? [...kept, active] : kept;
+        if (resumeCandidate && !sessions.includes(resumeCandidate)) {
+            resumeCandidate = null;
+        }
     }
 
     function uniqueId(startedAt: number): string {
@@ -144,6 +165,134 @@ export function createStreamSessionManager(
             id = `${base}_${suffix}`;
         }
         return id;
+    }
+
+    function latestSession(): QueueStreamSession | null {
+        let latest: QueueStreamSession | null = null;
+        for (const session of sessions) {
+            if (!latest || session.startedAt >= latest.startedAt) {
+                latest = session;
+            }
+        }
+        return latest;
+    }
+
+    function selectResumeCandidate(): QueueStreamSession | null {
+        const latest = latestSession();
+        if (!latest) return null;
+        if (latest.endedAt === null) return latest;
+        if (latest.endReason !== "app-quit") return null;
+        if (now() - latest.endedAt > resumeWindowMs) return null;
+        return latest;
+    }
+
+    function resumeSession(platform: HomePlatform): boolean {
+        if (!resumeCandidate) return false;
+        active = resumeCandidate;
+        resumeCandidate = null;
+        active.endedAt = null;
+        active.endReason = null;
+        active.providers.kick =
+            active.providers.kick ||
+            (configured.kick && liveState.kick === true);
+        active.providers.twitch =
+            active.providers.twitch ||
+            (configured.twitch && liveState.twitch === true);
+        played.clear();
+        const unplayed: HomeQueueEntry[] = [];
+        for (const entry of active.entries) {
+            if (entry.outcome === "played") {
+                played.set(entry.id, cloneEntry(entry));
+            } else {
+                unplayed.push({ ...entry });
+            }
+        }
+        queue.restore([...queue.snapshot(), ...unplayed]);
+        syncActive();
+        logger?.info?.("Stream session resumed", {
+            id: active.id,
+            platform,
+        });
+        return true;
+    }
+
+    function reevaluateCandidate(): void {
+        if (active || !resumeCandidate) return;
+        const anyConfigured = configured.kick || configured.twitch;
+        if (!anyConfigured) {
+            if (resumeCandidate.endedAt === null) {
+                resumeCandidate.endedAt = now();
+                resumeCandidate.endReason = "interrupted";
+                persist();
+                logger?.info?.("Recovered interrupted session", {
+                    id: resumeCandidate.id,
+                });
+            }
+            resumeCandidate = null;
+            return;
+        }
+        const anyLive =
+            (configured.kick && liveState.kick === true) ||
+            (configured.twitch && liveState.twitch === true);
+        if (anyLive) return;
+        const allConfirmedOffline =
+            (!configured.kick || liveState.kick === false) &&
+            (!configured.twitch || liveState.twitch === false);
+        if (!allConfirmedOffline) return;
+        if (resumeCandidate.endedAt === null) {
+            resumeCandidate.endedAt = now();
+            resumeCandidate.endReason = "interrupted";
+            persist();
+            logger?.info?.("Recovered interrupted session", {
+                id: resumeCandidate.id,
+            });
+        }
+        resumeCandidate = null;
+    }
+
+    function applyLiveStatus(
+        platform: HomePlatform,
+        live: boolean | null,
+        isConfigured: boolean
+    ): void {
+        configured[platform] = isConfigured;
+        if (!isConfigured) {
+            liveState[platform] = null;
+            return;
+        }
+        if (live === null) return;
+        liveState[platform] = live;
+    }
+
+    function livePlatform(): HomePlatform | null {
+        if (configured.kick && liveState.kick === true) return "kick";
+        if (configured.twitch && liveState.twitch === true) return "twitch";
+        return null;
+    }
+
+    function evaluateAfterStatuses(): void {
+        const platform = livePlatform();
+        if (active) {
+            if (platform) {
+                active.providers.kick =
+                    active.providers.kick ||
+                    (configured.kick && liveState.kick === true);
+                active.providers.twitch =
+                    active.providers.twitch ||
+                    (configured.twitch && liveState.twitch === true);
+                clearGrace();
+                syncActive();
+                return;
+            }
+            reevaluate();
+            return;
+        }
+        if (platform) {
+            if (resumeCandidate) resumeSession(platform);
+            else startSession(platform);
+            return;
+        }
+        if (resumeCandidate) reevaluateCandidate();
     }
 
     function syncActive(): void {
@@ -245,7 +394,12 @@ export function createStreamSessionManager(
             providers: { kick: false, twitch: false },
             entries: [],
         };
-        active.providers[platform] = true;
+        active.providers.kick =
+            active.providers.kick ||
+            (configured.kick && liveState.kick === true);
+        active.providers.twitch =
+            active.providers.twitch ||
+            (configured.twitch && liveState.twitch === true);
         played.clear();
         sessions.push(active);
         trimSessions();
@@ -268,9 +422,11 @@ export function createStreamSessionManager(
                 });
                 sessions = [];
             }
+            resumeCandidate = selectResumeCandidate();
             let recovered = false;
             for (const session of sessions) {
                 if (session.endedAt !== null) continue;
+                if (session === resumeCandidate) continue;
                 session.endedAt = now();
                 session.endReason = "interrupted";
                 recovered = true;
@@ -290,34 +446,25 @@ export function createStreamSessionManager(
 
         noteLiveStatus(platform, live, isConfigured) {
             if (!initialized) this.initialize();
-            configured[platform] = isConfigured;
-            if (!isConfigured) {
-                liveState[platform] = null;
-                reevaluate();
-                return;
+            applyLiveStatus(platform, live, isConfigured);
+            evaluateAfterStatuses();
+        },
+
+        noteLiveStatuses(statuses) {
+            if (!initialized) this.initialize();
+            for (const status of statuses) {
+                applyLiveStatus(
+                    status.platform,
+                    status.live,
+                    status.configured
+                );
             }
-            if (live === null) {
-                // Failed check: retain the last confirmed state and do not end
-                // an active stream just because the provider API is down.
-                clearGrace();
-                return;
-            }
-            liveState[platform] = live;
-            if (live) {
-                clearGrace();
-                if (!active) {
-                    startSession(platform);
-                    return;
-                }
-                active.providers[platform] = true;
-                syncActive();
-                return;
-            }
-            reevaluate();
+            evaluateAfterStatuses();
         },
 
         shutdown(reason = "app-quit") {
             if (active) endActive(reason);
+            resumeCandidate = null;
             clearGrace();
             unsubscribeQueue?.();
             unsubscribePlayed?.();
@@ -341,12 +488,16 @@ export function createStreamSessionManager(
                 (session) => session !== active
             ).length;
             sessions = active ? [active] : [];
+            if (resumeCandidate && resumeCandidate !== active) {
+                resumeCandidate = null;
+            }
             persist();
             return removed;
         },
 
         reset() {
             clearGrace();
+            resumeCandidate = null;
             unsubscribeQueue?.();
             unsubscribePlayed?.();
             unsubscribeQueue = null;
