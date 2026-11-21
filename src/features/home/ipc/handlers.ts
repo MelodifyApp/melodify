@@ -1,5 +1,9 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import fs from "node:fs";
+import {
+    isConfirmedClearPayload,
+    isTrustedIpcSender,
+} from "@/shared/utils/ipcSender";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import {
     getHomeSessionSnapshot,
@@ -11,19 +15,36 @@ import {
     getQueueHistory,
 } from "../streamSessionRuntime";
 
-ipcMain.handle("home:getSession", () => {
+function assertTrustedSender(event: Electron.IpcMainInvokeEvent): void {
+    if (!isTrustedIpcSender(event)) {
+        throw new Error("Untrusted IPC sender");
+    }
+}
+
+ipcMain.handle("home:getSession", (event) => {
+    assertTrustedSender(event);
     initializeHomeSession();
     return getHomeSessionSnapshot();
 });
 
-ipcMain.handle("queue:getHistory", () => getQueueHistory());
+ipcMain.handle("queue:getHistory", (event) => {
+    assertTrustedSender(event);
+    return getQueueHistory();
+});
 
-ipcMain.handle("queue:clearHistory", () => ({
-    ok: true,
-    removed: clearQueueHistory(),
-}));
+ipcMain.handle("queue:clearHistory", (event, payload) => {
+    assertTrustedSender(event);
+    if (!isConfirmedClearPayload(payload)) {
+        return { ok: false, code: "confirmation-required", removed: 0 };
+    }
+    return {
+        ok: true,
+        removed: clearQueueHistory(),
+    };
+});
 
 ipcMain.handle("queue:exportHistory", async (event) => {
+    assertTrustedSender(event);
     const sessions = getQueueHistory();
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {

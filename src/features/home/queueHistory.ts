@@ -39,14 +39,6 @@ function endReason(value: unknown): QueueSessionEndReason | null {
         : null;
 }
 
-function safeArtwork(value: unknown): string | null {
-    const url = text(value);
-    if (!url) return null;
-    return /^https:\/\//i.test(url) || /^data:image\//i.test(url)
-        ? url
-        : null;
-}
-
 function normalizeEntry(value: unknown): QueueSessionEntry | null {
     if (!isRecord(value)) return null;
     const id = text(value.id);
@@ -77,7 +69,6 @@ function normalizeEntry(value: unknown): QueueSessionEntry | null {
         acceptedAt,
         position:
             finite(value.position) ?? 1,
-        artworkUrl: safeArtwork(value.artworkUrl),
         outcome,
         playedAt: outcome === "played" ? playedAt : null,
     };
@@ -124,20 +115,23 @@ function normalizeSessions(value: unknown): QueueStreamSession[] {
           : [];
     return rawSessions
         .map(normalizeSession)
-        .filter((session): session is QueueStreamSession => !!session)
-        .slice(-MAX_SESSIONS);
+        .filter((session): session is QueueStreamSession => !!session);
 }
 
 function retainRecent(
     sessions: QueueStreamSession[]
 ): QueueStreamSession[] {
     const cutoff = Date.now() - MAX_AGE_MS;
-    return sessions
+    const active = sessions.filter((session) => session.endedAt === null);
+    const recent = sessions
         .filter(
             (session) =>
-                session.endedAt === null || session.startedAt >= cutoff
+                session.endedAt !== null && session.startedAt >= cutoff
         )
-        .slice(-MAX_SESSIONS);
+        .slice(-(MAX_SESSIONS - active.length));
+    return [...recent, ...active].sort(
+        (a, b) => a.startedAt - b.startedAt
+    );
 }
 
 export function createQueueHistoryPersistence(

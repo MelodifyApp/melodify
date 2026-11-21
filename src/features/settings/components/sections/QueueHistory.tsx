@@ -32,8 +32,6 @@ function normalizeEntry(value: unknown): QueueSessionEntry | null {
         platform: value.platform,
         acceptedAt: value.acceptedAt,
         position: typeof value.position === "number" ? value.position : 1,
-        artworkUrl:
-            typeof value.artworkUrl === "string" ? value.artworkUrl : null,
         outcome: value.outcome,
         playedAt:
             typeof value.playedAt === "number" ? value.playedAt : null,
@@ -268,10 +266,19 @@ export default function QueueHistory({ active }: { active: boolean }) {
         setActionMessage(null);
         try {
             const result = await window.electronAPI?.invoke?.(
-                "queue:clearHistory"
+                "queue:clearHistory",
+                { confirmed: true }
             );
-            const removed =
-                (result as { removed?: number } | null)?.removed ?? 0;
+            const payload = result as {
+                ok?: boolean;
+                removed?: number;
+            } | null;
+            if (payload?.ok === false) {
+                setConfirmingClear(false);
+                setActionMessage(t("history.actionFailed"));
+                return;
+            }
+            const removed = payload?.removed ?? 0;
             setConfirmingClear(false);
             setActionMessage(t("history.cleared", { count: removed }));
             await load();
