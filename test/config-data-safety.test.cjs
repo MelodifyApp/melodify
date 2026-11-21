@@ -142,6 +142,51 @@ test("corrupt config is quarantined and unrelated saves cannot overwrite it", ()
     assert.equal(Config.get("prefix"), "!");
 });
 
+test("config save retries transient Windows file locks", () => {
+    const userData = path.join(
+        os.tmpdir(),
+        `melodify-retry-user-data-${process.pid}`
+    );
+    const storePath = path.join(userData, "config.json");
+    const fakeFs = fakeFileSystem({ [storePath]: "{}" });
+    let renames = 0;
+    const rename = fakeFs.api.renameSync;
+    fakeFs.api.renameSync = (source, destination) => {
+        renames += 1;
+        if (renames <= 2) {
+            const error = new Error("EPERM: file is locked");
+            error.code = "EPERM";
+            throw error;
+        }
+        return rename(source, destination);
+    };
+    const stubs = {
+        electron: {
+            app: {
+                getPath: () => userData,
+                getVersion: () => "1.1.0",
+                getLocale: () => "en-US",
+                getSystemLocale: () => "en-US",
+            },
+        },
+        fs: fakeFs.api,
+        "@/core/logging": {
+            logInfo() {},
+            logDebug() {},
+            logWarn() {},
+            logError() {},
+        },
+        "@/core/logging/utils": { redactSecrets: (value) => value },
+    };
+
+    const Config = load(stubs, "src/core/config/index.ts").default;
+    renames = 0;
+    Config.set({ prefix: "!" });
+
+    assert.equal(renames, 3);
+    assert.equal(JSON.parse(fakeFs.files.get(storePath)).prefix, "!");
+});
+
 function loadAliasValidation() {
     return require("../src/core/config/rendererConfig");
 }

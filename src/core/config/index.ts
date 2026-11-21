@@ -292,22 +292,36 @@ function cloneConfig(config: AppConfig): AppConfig {
     return JSON.parse(JSON.stringify(config)) as AppConfig;
 }
 
+function isTransientWriteError(error: unknown): boolean {
+    const code =
+        typeof error === "object" && error !== null
+            ? (error as { code?: unknown }).code
+            : undefined;
+    return code === "EPERM" || code === "EBUSY" || code === "EACCES";
+}
+
 function writeConfigAtomically(config: AppConfig): void {
     const temporaryPath = `${storePath}.tmp`;
-    try {
-        fs.writeFileSync(
-            temporaryPath,
-            JSON.stringify(config, null, 2),
-            "utf-8"
-        );
-        fs.renameSync(temporaryPath, storePath);
-    } catch (error) {
+    const maxAttempts = 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-            if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
-        } catch {
-            // The original failure is the actionable one.
+            fs.writeFileSync(
+                temporaryPath,
+                JSON.stringify(config, null, 2),
+                "utf-8"
+            );
+            fs.renameSync(temporaryPath, storePath);
+            return;
+        } catch (error) {
+            try {
+                if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+            } catch {
+                // The original failure is the actionable one.
+            }
+            if (!isTransientWriteError(error) || attempt === maxAttempts - 1) {
+                throw error;
+            }
         }
-        throw error;
     }
 }
 
