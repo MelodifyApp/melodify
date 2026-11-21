@@ -12,6 +12,8 @@ See [IRREVERSIBLE.md](IRREVERSIBLE.md) for actions that need owner approval.
 | Location (under `%APPDATA%\melodify`) | Contents | Retention | Sensitivity |
 | --- | --- | --- | --- |
 | `config.json` | Settings and credentials (`enc:v1:` via DPAPI) | Until reset | High: encrypted credentials |
+| `config.corrupt-*.json` | Quarantined unreadable config copies | Kept until the user deletes them | High: may contain credentials |
+| `queue-history.json.corrupt-*`, `*.tmp-*` | Corrupt history copies and transient atomic-write files | Corrupt copies kept until deleted; temp files removed on failure | Medium/Low |
 | `queue-history.json` | Queue sessions: start/end, providers, track title/artist, requester display name, platform, timestamps, outcome | 90 days or 50 sessions; active session kept | Medium: viewer display names and music choices |
 | `song-requests/*.json` | Per-session and daily request records | 30 days, cleaned on startup | Medium: requester and request data |
 | `logs/*.log` | Session logs; secrets redacted | 30 days, cleaned on startup | Medium: may contain requester/command text |
@@ -25,8 +27,11 @@ only because the history is meant to be readable by the streamer.
 ## Retention
 
 - Logs and song-request files: **30 days**, pruned on application startup.
+  Pruning runs only at startup; an app left running for weeks does not prune
+  until the next launch.
 - Queue history: **90 days or 50 sessions**, whichever comes first; the active
-  session is never pruned automatically.
+  session is never pruned automatically. Clearing history does not delete
+  quarantined `config.corrupt-*` or history `.corrupt-*` copies.
 - The active session’s pending entries are reused to restore the queue after a
   crash or a recent relaunch while the stream is still live. No extra fields
   are stored for this.
@@ -44,6 +49,12 @@ only because the history is meant to be readable by the streamer.
 - **Full deletion:** quit Melodify and delete `%APPDATA%\melodify`. Uninstalling
   the app does **not** currently remove this folder.
 - **Credentials:** reset or replace them in Settings → API Keys.
+
+## Encryption scope
+
+Windows DPAPI protects the profile from other Windows accounts. It does not
+protect against malware, a debugger, or another process running as the same
+Windows user.
 
 ## Outbound network
 

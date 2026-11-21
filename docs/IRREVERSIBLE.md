@@ -11,13 +11,15 @@ first.
 | Action | Why it is hard to undo | Before doing it | Mitigation |
 | --- | --- | --- | --- |
 | Public GitHub release, tag or asset upload | Assets and tags are cloned, cached and mirrored; deleting them is incomplete | Owner approval, release checklist, clean build, checksums | Stage as draft, verify assets, publish deliberately |
+| First public push of the repository | Commit metadata, author name/email and full history become public and are hard to remove | Owner approval, author identity check, secret/history scan | Keep a private bundle/remote until approved; do not rewrite published history silently |
 | `npm publish` | Published versions cannot be reused; unpublish is time-limited and leaves traces | Owner approval, package verification, provenance | Stage/dry-run first; deprecate rather than delete |
 | Profile migration (encryption or schema) | Older builds cannot read the new format; a bad write can strand credentials or history | Owner approval, restore test on a profile copy | No plaintext credential backup is kept; 1.0.7 recovery is unsupported, credentials are re-entered in 1.1.0 |
 | Clearing or deleting local data | The data is gone unless the user exported it | Explicit confirmation; offer export first | Queue-history export; full-profile backup; document deletion |
 | Sending an export or support bundle | Once received, it cannot be recalled | User-initiated, previewed and redacted | No automatic upload; preview before sharing; never include secrets |
-| Public name, brand, legal or platform commitment | Public use creates rights/conflicts and user expectations | Name clearance, legal review, owner approval | Owner-only release until cleared; keep installer identity `Melodify` in 1.1.0 |
+| Public name, brand, legal or platform commitment | Public use creates rights/conflicts and user expectations | Name/trademark clearance, KVKK/legal review, owner approval | Owner-only release until cleared; keep installer identity `Melodify` in 1.1.0; record filings |
 | Installer identity or signing change | Upgrades, shortcuts and trust are anchored to the identity | Migration plan and a transition release | Keep `Melodify` for 1.1.0; plan any rename explicitly |
-| Auto-update rollout | Users install the build; a bad build cannot be pulled back from them | Signed manifest, staged rollout, update-deferral while live | Keep a full-installer recovery link; defer updates during sessions |
+| Signing certificate identity | The certificate embeds a legal identity and is tied to the binary | Legal review, owner approval | Use an organization certificate; document renewal, revocation and incident handling |
+| Auto-update rollout (un-drafting a release) | Users install the build; a bad build cannot be pulled back from them | Signed manifest, install-test the CI artifact, staged rollout, update-deferral while live | Keep a full-installer recovery link; defer updates during sessions |
 
 ## Already irreversible / already done
 

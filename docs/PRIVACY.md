@@ -84,7 +84,9 @@ Data is deleted, destroyed or anonymised when the period ends.
 - Client Secrets and OAuth access/refresh tokens are encrypted at rest with
   Windows DPAPI through Electron `safeStorage`; encrypted values use the
   `enc:v1:` envelope in `config.json`. Client IDs and non-secret preferences
-  remain readable JSON.
+  remain readable JSON. This protects the profile from other Windows accounts;
+  it does not protect against malware or another process running as the same
+  Windows user.
 - Tokens, passwords and secret-like values are redacted from logs, including
   encrypted envelopes.
 - Credentials are not exposed to the renderer process; they stay in the main

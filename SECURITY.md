@@ -33,6 +33,10 @@ This policy covers the Melodify Live desktop application and its updater integra
 
 Spotify, Kick and Twitch services, accounts, developer applications, OAuth provider behavior and third-party platform policy are outside this repository's control. Report those issues to the relevant provider.
 
+## Credentials at rest
+
+Client Secrets and OAuth access/refresh tokens are encrypted with Windows DPAPI through Electron `safeStorage` (`enc:v1:` in `config.json`). This protects the profile from other Windows accounts; it does not protect against malware or another process running as the same Windows user. The renderer never receives credentials.
+
 ## Code signing
 
 Official 1.1.0 Windows builds are currently unsigned. Verify downloads against the SHA-256 checksums published with the release; do not rely on the absence of a Windows warning as proof of authenticity.

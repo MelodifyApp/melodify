@@ -53,8 +53,9 @@ full launch surface.
 - [x] Security policy and private vulnerability reporting.
 - [x] Unsigned-release decision and SHA-256 checksum process.
 - [ ] **Signing decision revisited** for public launch (unsigned means
-      SmartScreen "unknown publisher").
-- [ ] **SmartScreen guidance** in README/release notes.
+      SmartScreen "unknown publisher" and possible Smart App Control blocks).
+- [x] **SmartScreen/SAC guidance** in README and release notes. Smart App
+      Control can block unsigned installers outright; checksums do not bypass it.
 - [ ] **Third-party notices:** Electron, Chromium, Squirrel and npm dependencies
       (MIT app; attribution obligations still apply).
 - [ ] **GitHub account security:** 2FA, branch protection, release environment,

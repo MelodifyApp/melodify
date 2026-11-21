@@ -28,6 +28,10 @@ Melodify Live is a Windows desktop app for streamers. It connects Spotify with K
 
 Melodify Live does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
 
+### Unsigned builds and Smart App Control
+
+The 1.1.0 installer is unsigned. SmartScreen may show “Unknown publisher”; verify the SHA-256 checksums published with the release. On clean Windows 11 installs, Smart App Control can block unsigned apps that Windows cannot vouch for; checksums verify the download but do not bypass SAC. A signed build is the reliable fix.
+
 ## Getting started (development)
 
 ```sh
@@ -85,7 +89,9 @@ A request is not a promise of playback order: Spotify controls the playback queu
 
 Melodify Live is local-first: no account, no telemetry and no developer-operated
 server. It stores its profile under `%APPDATA%\melodify` and keeps 30 days of
-local logs.
+local logs. Credentials are encrypted with Windows DPAPI; this protects the
+profile from other Windows accounts, not from malware or another process running
+as the same Windows user.
 
 - English notice: [docs/PRIVACY.md](docs/PRIVACY.md)
 - KVKK aydınlatma metni: [docs/PRIVACY.tr.md](docs/PRIVACY.tr.md)

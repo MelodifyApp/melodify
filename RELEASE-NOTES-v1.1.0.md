@@ -65,6 +65,9 @@ telemetry, no cloud sync and no Melodify server.
 - Windows 10/11, x64 only.
 - This build is **unsigned**. SmartScreen may show “Unknown publisher”; verify
   the SHA-256 checksums published with the release before running it.
+- On clean Windows 11 installs, **Smart App Control** can block unsigned apps
+  that Windows cannot vouch for. Checksums verify the download but do not bypass
+  SAC; a signed build is the reliable fix.
 - Uninstalling does not delete `%APPDATA%\melodify`; delete that folder
   manually for a full reset.
 - Keep a full installer available for recovery. Automatic downgrade to 1.0.7 is

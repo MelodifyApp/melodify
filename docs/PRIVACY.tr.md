@@ -94,7 +94,9 @@ Süre sonunda veriler silinir, yok edilir veya anonim hale getirilir.
 - Client Secret ve OAuth erişim/yenileme tokenları, Windows DPAPI üzerinden
   Electron `safeStorage` ile diskte şifrelenir; şifreli değerler `config.json`
   içinde `enc:v1:` zarfını kullanır. Client ID'ler ve hassas olmayan tercihler
-  okunabilir JSON olarak kalır.
+  okunabilir JSON olarak kalır. Bu, profili diğer Windows hesaplarına karşı
+  korur; kötü amaçlı yazılımlara veya aynı Windows kullanıcısı olarak çalışan
+  başka bir sürece karşı korumaz.
 - Günlüklerde token, parola ve gizli anahtar benzeri değerler, şifreli zarflar
   dahil, redakte edilir.
 - Kimlik bilgileri renderer sürecine verilmez; yalnızca ana süreçte kullanılır.
