@@ -17,9 +17,12 @@ Legal/store/monetization items are parked by the owner's no-lawyer-zone decision
       dependency and lockfile are pinned to `2.0.0` and require signed manifests.
 - [x] **Version/metadata** set to 1.1.0 in `package.json`, `package-lock.json`
       and `update.json` with the v1.1.0 asset URL.
-- [ ] **Protected GitHub `release` environment** still needs to exist.
-- [ ] **KVKK controller identity and Turkish legal review** are pending.
-- [ ] **Name clearance** for "Quelody" is pending.
+- [x] **Protected GitHub `release` environment** exists with the owner as a
+      required reviewer.
+- [ ] **KVKK controller identity and Turkish legal review** are parked until a
+      store or monetized launch.
+- [x] **Name check** recorded for "Quelody"; formal clearance is deferred until
+      a store or wider launch.
 
 ## 1. Product and quality
 
@@ -111,11 +114,17 @@ Legal/store/monetization items are parked by the owner's no-lawyer-zone decision
       unsigned warning, downgrade unsupported).
 - [x] Production build and Squirrel output inspection (version 1.1.0).
 - [ ] Clean `npm ci` from the lockfile on a fresh checkout.
-- [ ] Install, launch, upgrade from 1.0.7, uninstall and reinstall.
+- [x] Fresh install, launch, uninstall and reinstall on the owner PC. The
+      Melodify 1.0.7 install remains separate; this is a rename, not an in-place
+      upgrade. Uninstall removes the registry entry but may leave
+      `%LOCALAPPDATA%\Quelody`; `%APPDATA%\quelody` remains by design.
+- [ ] Live provider QA before publishing.
 - [ ] Windows Sandbox smoke test (no network, temporary profile).
 - [x] Release assets prepared and verified; SHA-256 checksums match the
       manifest.
-- [ ] `release` environment, tag, CI draft, asset verification, un-draft.
+- [x] Protected `release` environment created with the owner as required
+      reviewer.
+- [ ] Tag, CI draft, asset verification, un-draft.
 - [x] **Updater release provenance:** 2.0.0 was published from `v2.0.0`
       (`d6d0e2f`) with provenance; the older 1.1.0 tag mismatch is superseded.
 
