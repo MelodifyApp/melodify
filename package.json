@@ -67,7 +67,7 @@
         "typescript": "^5.8.3"
     },
     "dependencies": {
-        "basic-electron-updater": "^1.1.0",
+        "basic-electron-updater": "2.0.0",
         "clsx": "^2.1.1",
         "electron-squirrel-startup": "^1.0.1",
         "i18next": "^25.3.2",

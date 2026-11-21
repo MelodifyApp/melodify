@@ -12,8 +12,8 @@ full launch surface.
 - [x] **Electron upgrade merged.** Electron **45.4.1** (Chromium 156, Node 24)
       builds, packages and smokes; the branch is merged locally into `master`.
 - [ ] **Live provider QA** (Spotify/Kick/Twitch) has not run for 1.1.0.
-- [x] **Updater 1.1.0** published on 2026-11-12 with signed provenance; desktop
-      dependency and lockfile are on `^1.1.0`.
+- [x] **Updater 2.0.0** published on 2026-11-21 with signed provenance; desktop
+      dependency and lockfile are pinned to `2.0.0` and require signed manifests.
 - [x] **Version/metadata** set to 1.1.0 in `package.json`, `package-lock.json`
       and `update.json` with the v1.1.0 asset URL.
 - [ ] **Protected GitHub `release` environment** still needs to exist.
@@ -51,6 +51,9 @@ full launch surface.
       deprecated in 45 and removed in 46.
 - [x] Log redaction, CSP preconditions, navigation guards.
 - [x] Security policy and private vulnerability reporting.
+- [x] Ed25519 update-manifest verification; public key pinned in the app,
+      private key outside the repo, signing secret configured in GitHub Actions.
+- [x] Signed `update-manifest.json` + `.sig` release assets.
 - [x] Unsigned-release decision and SHA-256 checksum process.
 - [ ] **Signing decision revisited** for public launch (unsigned means
       SmartScreen "unknown publisher" and possible Smart App Control blocks).
@@ -93,7 +96,7 @@ full launch surface.
 
 ## 5. Release mechanics
 
-- [x] Updater package 1.1.0 published; desktop dependency/lockfile bumped.
+- [x] Updater package 2.0.0 published; desktop dependency/lockfile pinned.
 - [x] `package.json`, `package-lock.json` and `update.json` at 1.1.0 with the
       correct asset URL.
 - [x] `RELEASE-NOTES-v1.1.0.md` complete (features, fixes, security, migration,
@@ -105,9 +108,8 @@ full launch surface.
 - [x] Release assets prepared and verified; SHA-256 checksums match the
       manifest.
 - [ ] `release` environment, tag, CI draft, asset verification, un-draft.
-- [ ] **Updater tag provenance:** npm 1.1.0 was published from `fb1ab31`;
-      `main` has two CI/test commits after it (`d6a519d`). Leave the tag as the
-      published source or cut a patch tag; do not move it silently.
+- [x] **Updater release provenance:** 2.0.0 was published from `v2.0.0`
+      (`d6d0e2f`) with provenance; the older 1.1.0 tag mismatch is superseded.
 
 ## 6. Support and operations
 

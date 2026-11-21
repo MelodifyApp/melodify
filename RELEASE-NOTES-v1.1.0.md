@@ -25,6 +25,8 @@ telemetry, no cloud sync and no Melodify server.
 
 ## Security and privacy
 
+- Updates are authenticated by an Ed25519-signed manifest pinned to the
+  Melodify publisher key. Unsigned, expired or mismatched updates are refused.
 - Credentials are encrypted at rest on Windows with Electron `safeStorage`
   (DPAPI). Client Secrets and OAuth tokens use the `enc:v1:` envelope in
   `config.json`; the renderer never receives secrets.

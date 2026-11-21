@@ -10,6 +10,7 @@ import Updater from "basic-electron-updater";
 import { createUpdateController, statUpdateArtifact } from "./updateController";
 import { createAppLifecycle } from "./appLifecycle";
 import { createUpdateStatusSnapshot } from "./updateSnapshot";
+import { UPDATE_APP_ID, UPDATE_SIGNING_KEYS } from "./updateSecurity";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
 import path from "path";
 import fs from "fs";
@@ -94,6 +95,10 @@ if (isIsolatedPreview) {
             autoDownload: false, // Don't auto-download, let user choose
             allowPrerelease: false, // Only stable releases
             debug: false, // Enable debug in dev
+            security: {
+                appId: UPDATE_APP_ID,
+                publicKeys: UPDATE_SIGNING_KEYS,
+            },
             logger: {
                 info: (message: string) => logInfo(message, "updater"),
                 debug: (message: string) => logDebug(message, "updater"),

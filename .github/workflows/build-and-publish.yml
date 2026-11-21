@@ -42,6 +42,13 @@ jobs:
               shell: pwsh
               run: node scripts/release-assets.cjs prepare --tag "$env:GITHUB_REF_NAME"
 
+            - name: Sign update manifest
+              shell: pwsh
+              env:
+                  MELODIFY_UPDATE_SIGNING_KEY: ${{ secrets.MELODIFY_UPDATE_SIGNING_KEY }}
+                  MELODIFY_UPDATE_SIGNING_KEY_ID: melodify-release-2026-11
+              run: node scripts/sign-update-manifest.cjs --dir release-assets --tag "$env:GITHUB_REF_NAME"
+
             - name: Upload release assets
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
@@ -89,7 +96,9 @@ jobs:
                   $PSNativeCommandUseErrorActionPreference = $false
                   $tag = $env:GITHUB_REF_NAME
                   $manifest = Get-Content -LiteralPath 'release-assets/release-manifest.json' -Raw | ConvertFrom-Json
-                  $assetNames = @($manifest.files | ForEach-Object { $_.name })
+                  $securityAssets = @('update-manifest.json', 'update-manifest.json.sig') | Where-Object { Test-Path (Join-Path 'release-assets' $_) }
+                  if ($securityAssets.Count -ne 2) { throw "Signed update manifest assets are missing." }
+                  $assetNames = @(@($manifest.files | ForEach-Object { $_.name }) + $securityAssets)
 
                   $existing = gh release view $tag --json isDraft,assets 2>$null
                   if ($LASTEXITCODE -eq 0) {
@@ -123,7 +132,8 @@ jobs:
                   $ErrorActionPreference = 'Stop'
                   $tag = $env:GITHUB_REF_NAME
                   $manifest = Get-Content -LiteralPath 'release-assets/release-manifest.json' -Raw | ConvertFrom-Json
-                  $expectedNames = @($manifest.files | ForEach-Object { $_.name })
+                  $securityAssets = @('update-manifest.json', 'update-manifest.json.sig')
+                  $expectedNames = @(@($manifest.files | ForEach-Object { $_.name }) + $securityAssets)
                   $remote = gh release view $tag --json isDraft,assets | ConvertFrom-Json
                   if ($LASTEXITCODE -ne 0) { throw "Could not read draft release $tag." }
                   if (-not $remote.isDraft) { throw "Release $tag is no longer a draft; refusing to publish." }
@@ -138,6 +148,11 @@ jobs:
                       if (-not $asset) { throw "Draft release is missing $($file.name)." }
                       if ([int64]$asset.size -le 0) { throw "Draft asset $($file.name) is empty." }
                       if ([int64]$asset.size -ne [int64]$file.size) { throw "Draft asset $($file.name) size mismatch." }
+                  }
+                  foreach ($name in $securityAssets) {
+                      $asset = @($remote.assets | Where-Object { $_.name -eq $name })[0]
+                      if (-not $asset) { throw "Draft release is missing $name." }
+                      if ([int64]$asset.size -le 0) { throw "Draft asset $name is empty." }
                   }
 
             - name: Publish release

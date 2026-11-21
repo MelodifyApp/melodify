@@ -19,6 +19,7 @@ first.
 | Public name, brand, legal or platform commitment | Public use creates rights/conflicts and user expectations | Name/trademark clearance, KVKK/legal review, owner approval | Owner-only release until cleared; keep installer identity `Melodify` in 1.1.0; record filings |
 | Installer identity or signing change | Upgrades, shortcuts and trust are anchored to the identity | Migration plan and a transition release | Keep `Melodify` for 1.1.0; plan any rename explicitly |
 | Signing certificate identity | The certificate embeds a legal identity and is tied to the binary | Legal review, owner approval | Use an organization certificate; document renewal, revocation and incident handling |
+| Update signing key generation or rotation | Losing the key blocks signed updates; leaking it allows malicious signed updates | Offline backup, restricted ACL, rotation plan | Private key outside the repo and in the release secret store; ship the next public key before rotating |
 | Auto-update rollout (un-drafting a release) | Users install the build; a bad build cannot be pulled back from them | Signed manifest, install-test the CI artifact, staged rollout, update-deferral while live | Keep a full-installer recovery link; defer updates during sessions |
 
 ## Already irreversible / already done
