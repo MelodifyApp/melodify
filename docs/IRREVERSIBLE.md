@@ -34,6 +34,9 @@ first.
   superseded; published versions cannot be deleted, only deprecated.
 - **Quelody 1.1.0 is published** from tag `v1.1.0`; its installer, signed
   manifest and checksums are public. Do not move or rewrite the tag silently.
+- **Quelody 1.1.1 is published** from tag `v1.1.1` with the Spotify connection
+  and Now Playing fixes. Its installer, signed manifest and checksums are
+  public. Do not move or rewrite the tag silently.
 
 ## Not irreversible
 

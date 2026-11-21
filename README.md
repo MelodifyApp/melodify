@@ -2,7 +2,7 @@
 
 Quelody is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Quelody runs locally and does not require a Quelody account or cloud service.
 
-**Current release:** Quelody 1.1.0 — [download](https://github.com/MelodifyApp/melodify/releases/tag/v1.1.0)
+**Current release:** Quelody 1.1.1 — [download](https://github.com/MelodifyApp/melodify/releases/tag/v1.1.1)
 
 **Legacy:** Melodify 1.0.7. Windows installs of Melodify do not upgrade in place; install Quelody separately.
 

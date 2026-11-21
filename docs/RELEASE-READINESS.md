@@ -1,23 +1,25 @@
-# Quelody 1.1.0 — release readiness
+# Quelody 1.1.1 — release readiness
 
 Master checklist for publishing the Windows desktop app. The technical tag/publish
 steps live in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); this file covers the
 full launch surface.
 
 **Last updated:** 2026-11-21
-**Status:** Quelody 1.1.0 published on 2026-11-21. Live provider QA remains
-outstanding. Legal/store/monetization items are parked by the owner's
-no-lawyer-zone decision.
+**Status:** Quelody 1.1.1 published on 2026-11-21 with the Spotify connection
+and Now Playing fixes. Live provider QA remains outstanding. Legal/store/
+monetization items are parked by the owner's no-lawyer-zone decision.
 
 ## 0. Blockers
 
 - [x] **Electron upgrade merged.** Electron **45.4.1** (Chromium 156, Node 24)
       builds, packages and smokes; the branch is merged locally into `master`.
-- [ ] **Live provider QA** (Spotify/Kick/Twitch) has not run for 1.1.0.
+- [ ] **Live provider QA** (Spotify/Kick/Twitch) has not run for 1.1.x. The
+      owner connected Spotify and verified the account login in the installed
+      1.1.1 build; song playback, Kick and Twitch still need a live pass.
 - [x] **Updater 2.0.0** published on 2026-11-21 with signed provenance; desktop
       dependency and lockfile are pinned to `2.0.0` and require signed manifests.
-- [x] **Version/metadata** set to 1.1.0 in `package.json`, `package-lock.json`
-      and `update.json` with the v1.1.0 asset URL.
+- [x] **Version/metadata** set to 1.1.1 in `package.json`, `package-lock.json`
+      and `update.json` with the v1.1.1 asset URL.
 - [x] **Protected GitHub `release` environment** exists with the owner as a
       required reviewer.
 - [ ] **KVKK controller identity and Turkish legal review** are parked until a
@@ -109,11 +111,12 @@ no-lawyer-zone decision.
 ## 5. Release mechanics
 
 - [x] Updater package 2.0.0 published; desktop dependency/lockfile pinned.
-- [x] `package.json`, `package-lock.json` and `update.json` at 1.1.0 with the
+- [x] `package.json`, `package-lock.json` and `update.json` at 1.1.1 with the
       correct asset URL.
-- [x] `RELEASE-NOTES-v1.1.0.md` complete (features, fixes, security, migration,
-      unsigned warning, downgrade unsupported).
-- [x] Production build and Squirrel output inspection (version 1.1.0).
+- [x] `RELEASE-NOTES-v1.1.0.md` and `RELEASE-NOTES-v1.1.1.md` complete
+      (features, fixes, security, migration, unsigned warning, downgrade
+      unsupported).
+- [x] Production build and Squirrel output inspection (version 1.1.1).
 - [ ] Clean `npm ci` from the lockfile on a fresh checkout.
 - [x] Fresh install, launch, uninstall and reinstall on the owner PC. The
       Melodify 1.0.7 install remains separate; this is a rename, not an in-place
@@ -126,7 +129,8 @@ no-lawyer-zone decision.
 - [x] Protected `release` environment created with the owner as required
       reviewer.
 - [x] Tag, CI build, draft, asset verification and publication completed:
-      <https://github.com/MelodifyApp/melodify/releases/tag/v1.1.0>.
+      <https://github.com/MelodifyApp/melodify/releases/tag/v1.1.0> and
+      <https://github.com/MelodifyApp/melodify/releases/tag/v1.1.1>.
 - [x] Fresh install from the published CI artifact; signature and SHA-256
       verified before install.
 - [x] **Updater release provenance:** 2.0.0 was published from `v2.0.0`
