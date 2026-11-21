@@ -244,6 +244,8 @@
         "anyoneCanRequest": "Anyone can request songs",
         "anyoneCanRequestDesc": "Allow all viewers to request songs via chat commands",
         "allowedRolesOnly": "Only moderators and allowed badge roles can request songs when this is off.",
+        "requireLive": "Only accept requests while live",
+        "requireLiveHelper": "Reject song requests when no stream session is active.",
         "commandPrefix": "Command Prefix",
         "commandPrefixDesc": "Character(s) that trigger commands",
         "filePath": "File Path",

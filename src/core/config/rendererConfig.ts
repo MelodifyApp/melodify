@@ -130,6 +130,7 @@ export const RENDERER_SETTABLE_KEYS = new Set([
     "allowedBadges",
     "customModerators",
     "canAnyonePlaySong",
+    "requireLiveForRequests",
     "rewardTitle",
     "rewardId",
     "twitchRewardTitle",
@@ -167,6 +168,7 @@ const SUPPORTED_LANGUAGES = new Set(["en", "tr"]);
 const BOOLEAN_SETTING_KEYS = new Set([
     "autoFollowLanguageDefaults",
     "canAnyonePlaySong",
+    "requireLiveForRequests",
     "replyOnSongRequest",
     "replyOnSongRequestError",
     "replyOnVolumeChange",

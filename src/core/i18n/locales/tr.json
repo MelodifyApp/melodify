@@ -244,6 +244,8 @@
         "anyoneCanRequest": "Herkes şarkı isteyebilir",
         "anyoneCanRequestDesc": "Tüm izleyiciler şarkı isteyebilir",
         "allowedRolesOnly": "Bu kapalıyken yalnızca moderatörler ve izin verilen rozet rolleri şarkı isteyebilir.",
+        "requireLive": "Yalnızca yayındayken istek kabul et",
+        "requireLiveHelper": "Etkin bir yayın oturumu yokken şarkı isteklerini reddet.",
         "commandPrefix": "Komut Öneki",
         "commandPrefixDesc": "Komutları başlatan karakter",
         "filePath": "Dosya Yolu",

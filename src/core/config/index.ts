@@ -49,6 +49,7 @@ interface AppConfig {
     userId?: string;
     chatroomId?: string;
     canAnyonePlaySong?: boolean;
+    requireLiveForRequests?: boolean;
     prefix?: string;
     rewardTitle?: string;
     rewardId?: string;
@@ -190,6 +191,7 @@ function getTranslatedDefaults(language = "en") {
 
 const defaultConfig: AppConfig = {
     canAnyonePlaySong: false,
+    requireLiveForRequests: false,
     prefix: "!",
     language: "en",
     autoUpdateEnabled: true,

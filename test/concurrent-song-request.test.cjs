@@ -69,12 +69,14 @@ function createHarness() {
         globalCooldownSeconds: "30",
         perUserCooldownEnabled: true,
         perUserCooldownSeconds: "60",
+        requireLiveForRequests: false,
     };
     const effects = {
         playCalls: 0,
         queue: [],
         count: 0,
         history: 0,
+        hasActiveSession: true,
     };
     let playbackGate = deferred();
     let failNext = false;
@@ -119,6 +121,9 @@ function createHarness() {
             },
         },
         "@/features/spotify/playback/player": player,
+        "@/features/home/streamSessionRuntime": {
+            hasActiveStreamSession: () => effects.hasActiveSession,
+        },
     };
     return {
         values,
@@ -285,5 +290,66 @@ test("an empty query releases the admission without consuming cooldown", async (
         const admission = manager.reserveSongRequestAdmission("dummy-viewer");
         assert.equal(admission.admitted, true);
         admission.release();
+    });
+});
+
+test("requireLiveForRequests rejects before playback when no session is active", async () => {
+    const harness = createHarness();
+    harness.values.requireLiveForRequests = true;
+    harness.effects.hasActiveSession = false;
+
+    await withStubs(harness.stubs, async () => {
+        const { executeSongRequest } = load(
+            "src/core/commands/songRequest.ts"
+        );
+        let outcome = null;
+        const accepted = await executeSongRequest(
+            {
+                username: "viewer",
+                message: "!sr song",
+                badges: [],
+                platform: "kick",
+            },
+            "dummy song",
+            undefined,
+            {
+                onOutcome(value) {
+                    outcome = value;
+                },
+            }
+        );
+
+        assert.equal(accepted, false);
+        assert.equal(harness.effects.playCalls, 0);
+        assert.equal(outcome.status, "rejected");
+        assert.equal(outcome.reason, "offline");
+    });
+});
+
+test("allows a request with no session when requireLiveForRequests is off", async () => {
+    const harness = createHarness();
+    harness.effects.hasActiveSession = false;
+    const gate = harness.resetGate();
+
+    await withStubs(harness.stubs, async () => {
+        const { executeSongRequest } = load(
+            "src/core/commands/songRequest.ts"
+        );
+        const request = executeSongRequest(
+            {
+                username: "viewer",
+                message: "!sr song",
+                badges: [],
+                platform: "kick",
+            },
+            "dummy song"
+        );
+
+        await waitFor(
+            () => harness.effects.playCalls === 1,
+            "playback to start"
+        );
+        gate.resolve();
+        assert.equal(await request, true);
     });
 });

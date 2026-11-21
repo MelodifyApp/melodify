@@ -3,6 +3,7 @@ import { playSong } from "@/features/spotify/playback/player";
 import { incrementSongRequestCount } from "@/core/ipc/handlers";
 import { recordSongRequestOutcome } from "../songRequestHistory";
 import { homeQueue } from "@/features/home/homeQueue";
+import { hasActiveStreamSession } from "@/features/home/streamSessionRuntime";
 import { logDebug, logError, logWarn, logSongRequest } from "@/core/logging";
 import {
     songRequestErrorMessage,
@@ -101,6 +102,19 @@ export async function executeSongRequest(
             }
             return result;
         }
+    }
+
+    if (
+        Config.get("requireLiveForRequests") === true &&
+        !hasActiveStreamSession()
+    ) {
+        const result = reject("offline");
+        if (Config.get("replyOnSongRequestError") && sendReply) {
+            await sendReply(
+                `@${ctx.username} ${songRequestErrorMessage("offline")}`
+            );
+        }
+        return result;
     }
 
     let admission: SongRequestAdmission | undefined;

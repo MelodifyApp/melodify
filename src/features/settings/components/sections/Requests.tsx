@@ -260,6 +260,15 @@ export default function Requests({ config, onConfigChange }: RequestsProps) {
                         onConfigChange("canAnyonePlaySong", checked)
                     }
                 />
+                <Toggle
+                    id="requests-require-live"
+                    label={t("requests.requireLive")}
+                    helper={t("requests.requireLiveHelper")}
+                    checked={config.requireLiveForRequests === true}
+                    onCheckedChange={(checked) =>
+                        onConfigChange("requireLiveForRequests", checked)
+                    }
+                />
             </SettingGroup>
 
             <SettingGroup heading={t("requests.currentSongDisplay")}>

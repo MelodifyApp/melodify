@@ -641,3 +641,19 @@ test("Credential fields are confined to the password-protected setup dialog", ()
     assert.match(dialog, /label=\{t\("setup\.clientId"\)\}/);
     assert.match(dialog, /type="password"/);
 });
+
+test("Requests exposes the optional live-only request gate", () => {
+    const disabled = renderRequests({
+        canAnyonePlaySong: false,
+        requireLiveForRequests: false,
+    });
+    assert.match(disabled, /id="requests-require-live"/);
+    assert.match(disabled, /requests\.requireLive/);
+    assert.match(disabled, /id="requests-require-live"[^>]*aria-checked="false"/);
+
+    const enabled = renderRequests({
+        canAnyonePlaySong: false,
+        requireLiveForRequests: true,
+    });
+    assert.match(enabled, /id="requests-require-live"[^>]*aria-checked="true"/);
+});

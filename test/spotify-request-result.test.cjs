@@ -113,6 +113,9 @@ try {
                 },
             };
         }
+        if (request === "@/features/home/streamSessionRuntime") {
+            return { hasActiveStreamSession: () => true };
+        }
         if (request === "@/features/spotify/playback/player") return player;
         return originalLoad.call(this, request, parent, isMain);
     };

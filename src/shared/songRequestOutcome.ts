@@ -11,6 +11,7 @@ export type SongRequestFailureReason =
     | "permission"
     | "cooldown"
     | "empty-query"
+    | "offline"
     | "unknown";
 
 export type SongRequestSource = "command" | "reward";
@@ -56,6 +57,7 @@ const FAILURE_MESSAGES: Record<SongRequestFailureReason, string> = {
     permission: "Permission to request songs is unavailable.",
     cooldown: "Please wait before requesting another song.",
     "empty-query": "Please provide a song name or Spotify URL.",
+    offline: "Song requests are only accepted while the stream is live.",
     unknown: "Request failed for an unknown reason.",
 };
 
