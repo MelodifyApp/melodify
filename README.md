@@ -1,12 +1,14 @@
-# Melodify Live
+# Quelody
 
-Melodify Live is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Melodify Live runs locally and does not require a Melodify Live account or cloud service.
+Quelody is a Windows desktop app for streamers. It connects Spotify with Kick and Twitch so viewers can request songs through chat commands or channel-point rewards. Requests are added to the active Spotify playback queue; Quelody runs locally and does not require a Quelody account or cloud service.
 
-**Stable release:** 1.0.7 — [download the latest installer](https://github.com/MelodifyApp/melodify/releases/latest)
+**Legacy public release:** Melodify 1.0.7 — [download](https://github.com/MelodifyApp/melodify/releases/latest)
 
-**Website:** [melodifylive.app](https://melodifylive.app)
+**Status:** Quelody 1.1.0 is a free, local-only release candidate; live QA and install testing remain. Windows installs of Melodify 1.0.7 do not upgrade in place; install Quelody separately.
 
-**Branding:** Melodify Live is the public display name. The Windows installer identity remains `Melodify`, and the Squirrel identity remains `Melodify` in 1.1.0 for upgrade compatibility with 1.0.7; `package.json` keeps its internal `melodify` name and the local profile remains `%APPDATA%\melodify`.
+**Website:** `quelody.app` (planned).
+
+**Branding:** Quelody is the public display and installer name. `package.json` uses the internal name `quelody`, the app id is `com.emirhanpisgin.quelody`, and the local profile is `%APPDATA%\quelody`. Existing `%APPDATA%\melodify` config and queue history are copied once on first launch.
 
 ## Features
 
@@ -15,9 +17,9 @@ Melodify Live is a Windows desktop app for streamers. It connects Spotify with K
 - **Spotify queue insertion** — searches Spotify (or resolves a track URL/URI) and adds the track to the active Spotify queue. A request counts as successful only after Spotify accepts it.
 - **Configurable request rules** — permissions/badges, global and per-user cooldowns, reply templates, prefix, and optional current-song text file output.
 - **Commands** — built-in `!sr` and moderator-only `!volume`, with editable aliases and moderators.
-- **Local data** — credentials, settings, request logs and counters stay on the local machine. There is no Melodify Live API, account system, cloud sync, web dashboard or persistent server-side queue.
+- **Local data** — credentials, settings, request logs and counters stay on the local machine. There is no Quelody API, account system, cloud sync, web dashboard or persistent server-side queue.
 - **English and Turkish** UI.
-- **GitHub Releases updater** — checks for stable updates; Melodify Live does not install one silently.
+- **GitHub Releases updater** — checks for stable updates; Quelody does not install one silently.
 
 ## Requirements
 
@@ -26,7 +28,7 @@ Melodify Live is a Windows desktop app for streamers. It connects Spotify with K
 - Spotify Premium and an active Spotify playback device for queue additions
 - Your own Spotify, Kick and (optional) Twitch developer-app credentials
 
-Melodify Live does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
+Quelody does not ship shared API credentials. Create your own Spotify/Kick/Twitch applications and enter the Client ID/Secret values in **Settings → API Keys**. Secrets are stored locally in the Electron user-data `config.json`; treat that file as sensitive.
 
 ### Unsigned builds and Smart App Control
 
@@ -68,10 +70,10 @@ Release preparation and the local Windows Sandbox smoke-test boundary are docume
 1. Connect Spotify, Kick, and optionally Twitch in Settings.
 2. Start the stream and open chat.
 3. A viewer types `!sr <song>` or redeems the configured reward.
-4. Melodify Live searches Spotify and adds the track to the active Spotify queue.
-5. If enabled, Melodify Live posts a configurable reply in chat and records the accepted request locally.
+4. Quelody searches Spotify and adds the track to the active Spotify queue.
+5. If enabled, Quelody posts a configurable reply in chat and records the accepted request locally.
 
-A request is not a promise of playback order: Spotify controls the playback queue, and Melodify Live does not implement reordering, removal or Undo.
+A request is not a promise of playback order: Spotify controls the playback queue, and Quelody does not implement reordering, removal or Undo.
 
 ## Project structure
 
@@ -85,10 +87,21 @@ A request is not a promise of playback order: Spotify controls the playback queu
 - `test/` — focused `node:test` suites
 - `scripts/` — translation validation and maintenance scripts
 
+## Free and local
+
+Quelody is free for private use and is provided **as-is, without
+warranty**. The developer collects no data, runs no server and receives no
+telemetry. Everything stays on the user's PC.
+
+Each user supplies their own Spotify, Kick and Twitch developer credentials and
+is responsible for following those platforms' terms. Quelody is **not
+affiliated with or endorsed by Spotify, Kick or Twitch**; platform names are
+used descriptively as plain text, and no platform logos are shipped.
+
 ## Privacy
 
-Melodify Live is local-first: no account, no telemetry and no developer-operated
-server. It stores its profile under `%APPDATA%\melodify` and keeps 30 days of
+Quelody is local-first: no account, no telemetry and no developer-operated
+server. It stores its profile under `%APPDATA%\quelody` and keeps 30 days of
 local logs. Credentials are encrypted with Windows DPAPI; this protects the
 profile from other Windows accounts, not from malware or another process running
 as the same Windows user.
@@ -105,4 +118,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Please read [CODE_OF_CONDUCT.md](CODE_OF
 
 [MIT](LICENSE)
 
-Melodify Live is not affiliated with Kick, Twitch or Spotify. Use at your own risk.
+Quelody is not affiliated with Kick, Twitch or Spotify. Use at your own risk.

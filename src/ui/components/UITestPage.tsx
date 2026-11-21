@@ -313,7 +313,7 @@ function MockService({ service, setupOpen = false, compact = false, credentialSt
                         <label className="text-[10px] text-zinc-400">Client Secret<input readOnly type="password" value={credentialState === "saving" ? "sampleonly" : ""} placeholder="Never use real credentials here" className="mt-1 block w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-[11px] text-zinc-400" /></label>
                     </div>
                     {credentialState === "validation-error" ? <p className="mt-1 text-[9px] text-red-300">Client ID format is invalid.</p> : null}
-                    <div className="mt-2 flex justify-end gap-2"><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400">Cancel</button><button type="button" disabled={credentialState === "saving"} className="rounded bg-melodify-primary px-2 py-1 text-[10px] font-medium text-black disabled:opacity-60">{credentialState === "saving" ? "Saving…" : "Save credentials"}</button></div>
+                    <div className="mt-2 flex justify-end gap-2"><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400">Cancel</button><button type="button" disabled={credentialState === "saving"} className="rounded bg-Quelody-primary px-2 py-1 text-[10px] font-medium text-black disabled:opacity-60">{credentialState === "saving" ? "Saving…" : "Save credentials"}</button></div>
                     <p className="m-0 mt-2 text-[9px] text-zinc-500">Mock data only · never enter real credentials here.</p>
                 </div>
             ) : null}
@@ -363,7 +363,7 @@ function MockSettingsContent({ section, state }: { section: SettingsSection; sta
                 <div className="rounded border border-zinc-700 bg-zinc-900 p-3">
                     <p className="m-0 text-[10px] text-zinc-500">CHAT REPLY · SAMPLE</p>
                     <p className="mt-3 text-xs text-zinc-200"><span className="text-purple-300">viewer</span> !sr Midnight City</p>
-                    <p className="text-xs text-zinc-200"><span className="text-green-300">Melodify</span> Added “Midnight City” by M83.</p>
+                    <p className="text-xs text-zinc-200"><span className="text-green-300">Quelody</span> Added “Midnight City” by M83.</p>
                     <p className="m-0 mt-3 text-[10px] text-zinc-500">This is a visual sample, not a live API result.</p>
                 </div>
             </div>
@@ -404,7 +404,7 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 function CommandPreview({ command, title, state, aliases }: { command: string; title: string; state: string; aliases: string }) {
-    return <div className="grid grid-cols-[90px_minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-700 py-3"><code className="text-xs text-melodify-primary">{command}</code><span><span className="block text-xs text-zinc-200">{title}</span><span className="block text-[10px] text-zinc-500">Aliases: {aliases}</span></span><span className="text-[10px] text-zinc-400">{state}</span></div>;
+    return <div className="grid grid-cols-[90px_minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-700 py-3"><code className="text-xs text-Quelody-primary">{command}</code><span><span className="block text-xs text-zinc-200">{title}</span><span className="block text-[10px] text-zinc-500">Aliases: {aliases}</span></span><span className="text-[10px] text-zinc-400">{state}</span></div>;
 }
 
 function LogPreview({ time, level, message }: { time: string; level: string; message: string }) {
@@ -453,12 +453,12 @@ function MockUpdateDialog({
                 </div>
                 {state === "downloading" && (
                     <div className="mt-3 h-1 overflow-hidden rounded bg-zinc-700" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-                        <div className="h-full bg-melodify-primary transition-[width]" style={{ width: `${progress}%` }} />
+                        <div className="h-full bg-Quelody-primary transition-[width]" style={{ width: `${progress}%` }} />
                     </div>
                 )}
                 <div className="mt-4 flex justify-end gap-2">
-                    {state === "available" && <><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400" onClick={onClose}>Later</button><button type="button" className="rounded bg-melodify-primary px-2.5 py-1 text-[10px] font-medium text-black" onClick={onDownload}>Download</button></>}
-                    {state === "downloaded" && <><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400" onClick={onClose}>Later</button><button type="button" className="rounded bg-melodify-primary px-2.5 py-1 text-[10px] font-medium text-black" onClick={onInstall}>Install and restart</button></>}
+                    {state === "available" && <><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400" onClick={onClose}>Later</button><button type="button" className="rounded bg-Quelody-primary px-2.5 py-1 text-[10px] font-medium text-black" onClick={onDownload}>Download</button></>}
+                    {state === "downloaded" && <><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400" onClick={onClose}>Later</button><button type="button" className="rounded bg-Quelody-primary px-2.5 py-1 text-[10px] font-medium text-black" onClick={onInstall}>Install and restart</button></>}
                     {state === "error" && <><button type="button" className="rounded px-2 py-1 text-[10px] text-zinc-400" onClick={onClose}>Dismiss</button><button type="button" className="rounded border border-zinc-600 px-2.5 py-1 text-[10px]" onClick={onRetry}>Try again</button></>}
                 </div>
             </section>
@@ -573,7 +573,7 @@ export default function UITestPage() {
         <div className="flex min-h-0 flex-1 flex-col bg-zinc-900 text-white">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-700/70 bg-zinc-900 px-4 py-3">
                 <div className="flex items-center gap-2">
-                    <TestTube size={18} className="text-melodify-primary" aria-hidden="true" />
+                    <TestTube size={18} className="text-Quelody-primary" aria-hidden="true" />
                     <div><h1 className="m-0 text-sm font-semibold">UI state lab</h1><p className="m-0 text-[10px] text-zinc-500">Development only · mock data · no live integrations</p></div>
                 </div>
                 <div className="flex items-end gap-2">
@@ -609,7 +609,7 @@ export default function UITestPage() {
                             <button type="button" className="rounded border border-zinc-600 px-2 py-1.5 text-[10px] text-zinc-300 hover:bg-zinc-800" onClick={simulateUpdateCheck}>Run update flow</button>
                             <button type="button" className="rounded border border-red-500/40 px-2 py-1.5 text-[10px] text-red-300 hover:bg-red-500/10" onClick={() => selectUpdateState("error")}>Force error</button>
                         </div>
-                        {updateState !== "idle" && !showUpdatePreview && <button type="button" className="w-full rounded px-2 py-1 text-left text-[10px] text-melodify-primary hover:bg-zinc-800" onClick={() => setShowUpdatePreview(true)}>Show current update state</button>}
+                        {updateState !== "idle" && !showUpdatePreview && <button type="button" className="w-full rounded px-2 py-1 text-left text-[10px] text-Quelody-primary hover:bg-zinc-800" onClick={() => setShowUpdatePreview(true)}>Show current update state</button>}
                     </div>
                     <div className="my-3 border-t border-zinc-700" />
                     <h2 className="mb-2 text-[11px] font-semibold text-zinc-200">Overview data</h2>
@@ -621,7 +621,7 @@ export default function UITestPage() {
                         <SelectControl label="Section" value={settingsSection} options={UI_TEST_SETTINGS_SECTIONS} onChange={(value) => { const next = value as SettingsSection; setSettingsSection(next); setSettingsState(UI_TEST_SETTINGS_STATES[next][0]); }} />
                         <SelectControl label="Variant" value={activeSettingsState} options={UI_TEST_SETTINGS_STATES[settingsSection]} onChange={setSettingsState} />
                     </>}
-                    <p className="mt-4 border-l-2 border-melodify-secondary pl-2 text-[9px] leading-4 text-zinc-500">Controls in this window only change the preview. They never read or write the real app profile.</p>
+                    <p className="mt-4 border-l-2 border-Quelody-secondary pl-2 text-[9px] leading-4 text-zinc-500">Controls in this window only change the preview. They never read or write the real app profile.</p>
                 </aside>
 
                 <main className="relative min-w-0 flex-1 overflow-auto bg-zinc-950 p-5" aria-label="UI state preview">
@@ -632,7 +632,7 @@ export default function UITestPage() {
 
                     {route === "home" && <>
                         <div className="mb-5 flex items-center justify-between gap-4 border-b border-zinc-700 py-3">
-                            <div><p className="m-0 text-[11px] text-zinc-400">Requests today · this session</p><p className="m-0 mt-1 text-3xl font-semibold text-melodify-primary">{songRequests}</p></div>
+                            <div><p className="m-0 text-[11px] text-zinc-400">Requests today · this session</p><p className="m-0 mt-1 text-3xl font-semibold text-Quelody-primary">{songRequests}</p></div>
                             <div className="text-right">{showLastRequest ? <><p className="m-0 text-[10px] text-zinc-500">Last processed · sample</p><p className="m-0 mt-1 text-xs text-zinc-100">Midnight City <span className="text-zinc-400">by M83</span></p></> : <p className="m-0 max-w-48 text-[11px] text-zinc-500">No request in the sample session.</p>}</div>
                         </div>
                         <div className="grid grid-cols-3 gap-3">
@@ -643,7 +643,7 @@ export default function UITestPage() {
 
                     {route === "settings" && <div className="max-w-[700px]">
                         <nav className="mb-4 flex flex-wrap gap-1 border-b border-zinc-700" aria-label="Settings preview sections">
-                            {UI_TEST_SETTINGS_SECTIONS.map((section) => <button key={section} type="button" className={`border-b-2 px-2.5 py-2 text-[10px] ${settingsSection === section ? "border-melodify-primary text-white" : "border-transparent text-zinc-400 hover:text-white"}`} onClick={() => { setSettingsSection(section); setSettingsState(UI_TEST_SETTINGS_STATES[section][0]); }}>{titleFor(section)}</button>)}
+                            {UI_TEST_SETTINGS_SECTIONS.map((section) => <button key={section} type="button" className={`border-b-2 px-2.5 py-2 text-[10px] ${settingsSection === section ? "border-Quelody-primary text-white" : "border-transparent text-zinc-400 hover:text-white"}`} onClick={() => { setSettingsSection(section); setSettingsState(UI_TEST_SETTINGS_STATES[section][0]); }}>{titleFor(section)}</button>)}
                         </nav>
                         <div className="space-y-3"><div className="mb-2"><p className="m-0 text-[10px] text-zinc-500">{titleFor(settingsSection)}</p><p className="m-0 mt-1 text-[11px] text-zinc-300">State: {titleFor(activeSettingsState)}</p></div><MockSettingsContent section={settingsSection} state={activeSettingsState} /></div>
                     </div>}

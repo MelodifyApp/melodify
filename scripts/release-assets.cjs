@@ -10,7 +10,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const REPOSITORY = "MelodifyApp/melodify";
+const brand = require("../src/shared/brand.json");
+
+const REPOSITORY = brand.githubRepo;
 const UPDATE_METADATA_FILE = "update.json";
 const CHECKSUM_FILE = "SHA256SUMS.txt";
 const MANIFEST_FILE = "release-manifest.json";
@@ -52,14 +54,14 @@ function validateReleaseIdentity({ tag, version }) {
 function expectedAssetNames(version) {
     const normalized = normalizeVersion(version);
     return [
-        "Melodify.Setup.exe",
-        `Melodify-${normalized}-full.nupkg`,
+        brand.installerName,
+        `${brand.productName}-${normalized}-full.nupkg`,
         "RELEASES",
     ];
 }
 
 function expectedUpdateUrl(tag) {
-    return `https://github.com/${REPOSITORY}/releases/download/${tag}/Melodify.Setup.exe`;
+    return `https://github.com/${REPOSITORY}/releases/download/${tag}/${brand.installerName}`;
 }
 
 function validateUpdateMetadata(metadata, { tag, version }) {

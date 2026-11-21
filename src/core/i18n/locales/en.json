@@ -1,6 +1,6 @@
 {
     "app": {
-        "name": "Melodify Live"
+        "name": "Quelody"
     },
     "commands": {
         "title": "Commands",
@@ -131,9 +131,9 @@
         "queueEmptyCopy": "Accepted requests will appear here until they start playing.",
         "queueLoading": "Loading queue…",
         "queueUnavailable": "Queue unavailable",
-        "queueUnavailableCopy": "Reconnect Melodify to restore the local session queue.",
+        "queueUnavailableCopy": "Reconnect Quelody to restore the local session queue.",
         "queueRequester": "{{requester}} · {{platform}}",
-        "queueSessionNote": "Session queue — resets when Melodify restarts.",
+        "queueSessionNote": "Session queue — resets when Quelody restarts.",
         "timeNow": "just now",
         "timeMinutes": "{{count}}m ago",
         "timeHours": "{{count}}h ago",
@@ -194,7 +194,7 @@
         "saveRejected": "Settings were not saved. Rejected values: {{keys}}.",
         "saveWriteFailed": "Settings were not saved to disk. Your changes remain here; retry the save.",
         "loadFailedTitle": "Settings could not be loaded",
-        "loadFailedDescription": "Melodify could not read your saved settings, so editing is disabled to avoid replacing them. Retry to load them again.",
+        "loadFailedDescription": "Quelody could not read your saved settings, so editing is disabled to avoid replacing them. Retry to load them again.",
         "retry": "Retry",
         "groups": {
             "application": "Application",
@@ -206,6 +206,10 @@
         "title": "General Settings",
         "application": "Application",
         "updates": "Updates",
+        "about": "About",
+        "aboutBody": "Quelody is free for private use and provided as-is, without warranty. The developer collects no data; everything stays on this PC.",
+        "aboutPlatforms": "Not affiliated with or endorsed by Spotify, Kick or Twitch. Each user supplies their own developer credentials and follows platform terms.",
+        "aboutVersion": "Version {{version}}",
         "language": "Language",
         "interfaceLanguage": "Interface Language",
         "interfaceLanguageDesc": "Select the language for the application interface",
@@ -218,7 +222,7 @@
         "startWithSystem": "Start with system",
         "startWithSystemDesc": "Launch automatically when computer starts",
         "minimizeToTray": "Minimize to tray",
-        "minimizeToTrayDesc": "Closing the window keeps Melodify running.",
+        "minimizeToTrayDesc": "Closing the window keeps Quelody running.",
         "autoUpdate": "Check for updates at startup",
         "autoUpdateDesc": "Download and install manually.",
         "current": "Current",
@@ -324,7 +328,7 @@
         "warnings": "Warnings",
         "info": "Info",
         "debug": "Debug",
-        "logsRetentionNotice": "Logs older than 30 days are removed when Melodify starts. Export to save a copy; there is no Clear action."
+        "logsRetentionNotice": "Logs older than 30 days are removed when Quelody starts. Export to save a copy; there is no Clear action."
     },
     "common": {
         "save": "Save",

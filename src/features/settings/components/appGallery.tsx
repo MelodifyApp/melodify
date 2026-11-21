@@ -387,7 +387,7 @@ function ComponentCatalog() {
                     />
                     <Toggle
                         label="Minimize to tray"
-                        helper="Closing the window keeps Melodify running."
+                        helper="Closing the window keeps Quelody running."
                         checked={false}
                     />
                     <Toggle label="Disabled toggle" checked disabled />
@@ -572,7 +572,7 @@ function GalleryShell() {
                         M
                     </span>
                     <div>
-                        <strong>Melodify Live</strong>
+                        <strong>Quelody</strong>
                         <small>UI gallery</small>
                     </div>
                 </div>

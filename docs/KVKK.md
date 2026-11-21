@@ -1,8 +1,8 @@
-# Melodify Live — KVKK assessment (internal, draft)
+# Quelody — KVKK assessment (internal, draft)
 
 **Status:** draft for owner and legal review
 **Prepared:** 2026-11-10
-**App:** Melodify Live 1.1.0, Windows desktop, local-first
+**App:** Quelody 1.1.0, Windows desktop, local-first
 **Controller identity:** [CONTROLLER NAME] — to be completed
 
 This is an internal engineering/operations note, not legal advice. The public
@@ -26,11 +26,11 @@ short notice for viewers.
 
 | Data | Where | Purpose | Basis | Retention | Recipients |
 |---|---|---|---|---|---|
-| Language, theme, window layout, templates, commands | `%APPDATA%\melodify\config.json` | App operation | Contract / legitimate interest | Until uninstall | None |
+| Language, theme, window layout, templates, commands | `%APPDATA%\quelody\config.json` | App operation | Contract / legitimate interest | Until uninstall | None |
 | Client ID/Secret, OAuth tokens | `config.json` | Platform API access | Contract | Until replaced / uninstall | Spotify, Kick, Twitch |
 | Platform username/user ID/chatroom ID | `config.json` | Chat and requests | Contract | Until uninstall | Relevant platform |
 | Song requests, requester username, title/artist | Local logs + `song-requests` | Request handling and diagnostics | Contract / legitimate interest | 30 days | None |
-| Session logs, errors, event metadata | `%APPDATA%\melodify\logs` | Debugging, security | Legitimate interest | 30 days | None |
+| Session logs, errors, event metadata | `%APPDATA%\quelody\logs` | Debugging, security | Legitimate interest | 30 days | None |
 | Current-song file | User-chosen path | User-requested export | Contract | User-controlled | None |
 | Support email | Owner mailbox | Support | Legitimate interest | Resolution + legal retention | None |
 | Update checks (IP) | GitHub | Update delivery | Legitimate interest | GitHub policy | GitHub |
@@ -108,10 +108,10 @@ Contact: [EMAIL]. Security reports: GitHub private advisories (see
 Add to the docs/site:
 
 - Tell viewers that chat commands and song requests are processed by the
-  streamer's local Melodify Live instance.
+  streamer's local Quelody instance.
 - Do not publish logs containing usernames or request history.
 - Keep the Windows account and platform credentials secure.
-- Delete `%APPDATA%\melodify` when retiring the setup.
+- Delete `%APPDATA%\quelody` when retiring the setup.
 - Do not use the app to build a viewer database beyond the request workflow.
 
 ## 8. Release actions

@@ -202,17 +202,17 @@ function write(filePath, contents) {
 }
 
 function releaseFixture(version = "9.9.9") {
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "melodify-release-"));
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "Quelody-release-"));
     const sourceDir = path.join(temp, "source");
     const outputDir = path.join(temp, "release-assets");
-    write(path.join(sourceDir, "Melodify.Setup.exe"), "setup-binary");
+    write(path.join(sourceDir, "Quelody.Setup.exe"), "setup-binary");
     write(
-        path.join(sourceDir, `Melodify-${version}-full.nupkg`),
+        path.join(sourceDir, `Quelody-${version}-full.nupkg`),
         "nupkg-binary"
     );
     write(
         path.join(sourceDir, "RELEASES"),
-        `ABC123 ${`Melodify-${version}-full.nupkg`} 123\n`
+        `ABC123 ${`Quelody-${version}-full.nupkg`} 123\n`
     );
     write(
         path.join(temp, "update.json"),
@@ -220,14 +220,14 @@ function releaseFixture(version = "9.9.9") {
             version,
             platforms: {
                 "win32-x64": {
-                    url: `https://github.com/MelodifyApp/melodify/releases/download/v${version}/Melodify.Setup.exe`,
+                    url: `https://github.com/MelodifyApp/melodify/releases/download/v${version}/Quelody.Setup.exe`,
                 },
             },
         })
     );
     write(
         path.join(temp, `RELEASE-NOTES-v${version}.md`),
-        `# Melodify ${version}\n`
+        `# Quelody ${version}\n`
     );
     return { temp, sourceDir, outputDir };
 }
@@ -250,8 +250,8 @@ test("prepare records hashes, metadata, and only expected files", (t) => {
     assert.deepEqual(
         manifest.files.map((file) => file.name),
         [
-            "Melodify-9.9.9-full.nupkg",
-            "Melodify.Setup.exe",
+            "Quelody-9.9.9-full.nupkg",
+            "Quelody.Setup.exe",
             "RELEASES",
             "SHA256SUMS.txt",
             "update.json",
@@ -265,8 +265,8 @@ test("prepare records hashes, metadata, and only expected files", (t) => {
         path.join(fixture.outputDir, "SHA256SUMS.txt"),
         "utf8"
     );
-    assert.match(checksums, /Melodify\.Setup\.exe/);
-    assert.match(checksums, /Melodify-9\.9\.9-full\.nupkg/);
+    assert.match(checksums, /Quelody\.Setup\.exe/);
+    assert.match(checksums, /Quelody-9\.9\.9-full\.nupkg/);
     assert.match(checksums, /update\.json/);
     assert.ok(
         fs.existsSync(path.join(fixture.outputDir, "release-notes.md"))
@@ -302,7 +302,7 @@ test("prepare rejects version/tag mismatches and missing metadata", (t) => {
             version: "9.9.8",
             platforms: {
                 "win32-x64": {
-                    url: "https://github.com/MelodifyApp/melodify/releases/download/v9.9.8/Melodify.Setup.exe",
+                    url: "https://github.com/MelodifyApp/melodify/releases/download/v9.9.8/Quelody.Setup.exe",
                 },
             },
         })
@@ -325,7 +325,7 @@ test("prepare rejects missing, empty, and unpublished-notes assets", (t) => {
     const fixture = releaseFixture();
     t.after(() => fs.rmSync(fixture.temp, { recursive: true, force: true }));
 
-    fs.rmSync(path.join(fixture.sourceDir, "Melodify.Setup.exe"));
+    fs.rmSync(path.join(fixture.sourceDir, "Quelody.Setup.exe"));
     assert.throws(
         () =>
             release.prepareReleaseAssets({
@@ -335,10 +335,10 @@ test("prepare rejects missing, empty, and unpublished-notes assets", (t) => {
                 tag: "v9.9.9",
                 version: "9.9.9",
             }),
-        /Melodify\.Setup\.exe|missing/i
+        /Quelody\.Setup\.exe|missing/i
     );
 
-    fs.writeFileSync(path.join(fixture.sourceDir, "Melodify.Setup.exe"), "");
+    fs.writeFileSync(path.join(fixture.sourceDir, "Quelody.Setup.exe"), "");
     assert.throws(
         () =>
             release.prepareReleaseAssets({
@@ -352,7 +352,7 @@ test("prepare rejects missing, empty, and unpublished-notes assets", (t) => {
     );
 
     fs.writeFileSync(
-        path.join(fixture.sourceDir, "Melodify.Setup.exe"),
+        path.join(fixture.sourceDir, "Quelody.Setup.exe"),
         "setup-binary"
     );
     fs.rmSync(path.join(fixture.temp, "RELEASE-NOTES-v9.9.9.md"));
@@ -383,7 +383,7 @@ test("verify rejects tampered files and mismatched release identity", (t) => {
     });
 
     fs.writeFileSync(
-        path.join(fixture.outputDir, "Melodify.Setup.exe"),
+        path.join(fixture.outputDir, "Quelody.Setup.exe"),
         "tampered-binary"
     );
     assert.throws(
@@ -396,7 +396,7 @@ test("verify rejects tampered files and mismatched release identity", (t) => {
     );
 
     fs.writeFileSync(
-        path.join(fixture.outputDir, "Melodify.Setup.exe"),
+        path.join(fixture.outputDir, "Quelody.Setup.exe"),
         "setup-binary"
     );
     assert.throws(

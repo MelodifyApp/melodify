@@ -99,7 +99,7 @@ export default function Logs({ logs }: LogsProps) {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `melodify-logs-${
+        anchor.download = `Quelody-logs-${
             new Date().toISOString().split("T")[0]
         }.txt`;
         document.body.appendChild(anchor);

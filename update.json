@@ -2,7 +2,7 @@
     "version": "1.1.0",
     "platforms": {
         "win32-x64": {
-            "url": "https://github.com/MelodifyApp/melodify/releases/download/v1.1.0/Melodify.Setup.exe"
+            "url": "https://github.com/MelodifyApp/melodify/releases/download/v1.1.0/Quelody.Setup.exe"
         }
     }
 }

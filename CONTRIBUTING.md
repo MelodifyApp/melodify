@@ -1,4 +1,4 @@
-# Contributing to Melodify
+# Contributing to Quelody
 
 Thank you for your interest in contributing!
 

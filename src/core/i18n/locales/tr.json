@@ -1,6 +1,6 @@
 {
     "app": {
-        "name": "Melodify Live"
+        "name": "Quelody"
     },
     "commands": {
         "title": "Komutlar",
@@ -131,9 +131,9 @@
         "queueEmptyCopy": "Kabul edilen istekler çalmaya başlayana kadar burada görünür.",
         "queueLoading": "Kuyruk yükleniyor…",
         "queueUnavailable": "Kuyruk kullanılamıyor",
-        "queueUnavailableCopy": "Yerel oturum kuyruğunu geri yüklemek için Melodify'a yeniden bağlanın.",
+        "queueUnavailableCopy": "Yerel oturum kuyruğunu geri yüklemek için Quelody'a yeniden bağlanın.",
         "queueRequester": "{{requester}} · {{platform}}",
-        "queueSessionNote": "Oturum kuyruğu — Melodify yeniden başlatıldığında sıfırlanır.",
+        "queueSessionNote": "Oturum kuyruğu — Quelody yeniden başlatıldığında sıfırlanır.",
         "timeNow": "az önce",
         "timeMinutes": "{{count}} dk önce",
         "timeHours": "{{count}} sa önce",
@@ -194,7 +194,7 @@
         "saveRejected": "Ayarlar kaydedilmedi. Reddedilen değerler: {{keys}}.",
         "saveWriteFailed": "Ayarlar diske kaydedilemedi. Değişiklikleriniz burada kaldı; kaydetmeyi yeniden deneyin.",
         "loadFailedTitle": "Ayarlar yüklenemedi",
-        "loadFailedDescription": "Melodify kayıtlı ayarlarınızı okuyamadı; üzerine yazmamak için düzenleme kapatıldı. Yeniden yüklemeyi deneyin.",
+        "loadFailedDescription": "Quelody kayıtlı ayarlarınızı okuyamadı; üzerine yazmamak için düzenleme kapatıldı. Yeniden yüklemeyi deneyin.",
         "retry": "Tekrar dene",
         "groups": {
             "application": "Uygulama",
@@ -206,6 +206,10 @@
         "title": "Genel",
         "application": "Uygulama",
         "updates": "Güncellemeler",
+        "about": "Hakkında",
+        "aboutBody": "Quelody özel kullanım için ücretsizdir ve olduğu gibi, garanti olmadan sunulur. Geliştirici veri toplamaz; her şey bu bilgisayarda kalır.",
+        "aboutPlatforms": "Spotify, Kick veya Twitch ile bağlantılı veya onlar tarafından onaylanmış değildir. Her kullanıcı kendi geliştirici kimlik bilgilerini sağlar ve platform koşullarına uyar.",
+        "aboutVersion": "Sürüm {{version}}",
         "language": "Dil",
         "interfaceLanguage": "Arayüz Dili",
         "interfaceLanguageDesc": "Uygulama dilini seçin",
@@ -218,7 +222,7 @@
         "startWithSystem": "Sistem ile başlat",
         "startWithSystemDesc": "Bilgisayar açılışında başlat",
         "minimizeToTray": "Sistem tepsisine küçült",
-        "minimizeToTrayDesc": "Pencereyi kapatmak Melodify’ı kapatmaz.",
+        "minimizeToTrayDesc": "Pencereyi kapatmak Quelody’ı kapatmaz.",
         "autoUpdate": "Başlangıçta güncellemeleri kontrol et",
         "autoUpdateDesc": "İndirme ve kurulum manueldir.",
         "current": "Mevcut",
@@ -325,7 +329,7 @@
         "warnings": "Uyarılar",
         "info": "Bilgi",
         "debug": "Hata Ayıklama",
-        "logsRetentionNotice": "30 günden eski günlükler Melodify başlarken silinir. Bir kopya kaydetmek için dışa aktarın; Temizle işlemi yoktur."
+        "logsRetentionNotice": "30 günden eski günlükler Quelody başlarken silinir. Bir kopya kaydetmek için dışa aktarın; Temizle işlemi yoktur."
     },
     "common": {
         "save": "Kaydet",

@@ -295,6 +295,18 @@ export default function General({ config, onConfigChange }: GeneralProps) {
                     </div>
                 </div>
             </SettingGroup>
+
+            <SettingGroup heading={t("general.about")}>
+                <div className="studio-about-note">
+                    <p>{t("general.aboutBody")}</p>
+                    <p>{t("general.aboutPlatforms")}</p>
+                    <p>
+                        {t("general.aboutVersion", {
+                            version: currentVersion || "—",
+                        })}
+                    </p>
+                </div>
+            </SettingGroup>
         </>
     );
 }

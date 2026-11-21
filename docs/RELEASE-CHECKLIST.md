@@ -26,7 +26,7 @@ This checklist covers the Windows `v*.*.*` release path. The workflow is
 
 - Update the release version in `package.json`, `package-lock.json`, and
   `update.json`, and make the `update.json` Windows URL point at the new
-  `v<version>/Melodify.Setup.exe` asset.
+  `v<version>/Quelody.Setup.exe` asset.
 - Add `RELEASE-NOTES-v<version>.md`. The workflow uses it as the draft release
   body and fails if it is missing or empty.
 - Run the local checks, including `npm run test:release`.
@@ -66,8 +66,8 @@ This checklist covers the Windows `v*.*.*` release path. The workflow is
 After owner approval, push a `v<version>` tag. The workflow then:
 
 1. Builds in a read-only job with checkout credentials disabled.
-2. Prepares `release-assets/` with `Melodify.Setup.exe`,
-   `Melodify-<version>-full.nupkg`, `RELEASES`, `update.json`, `SHA256SUMS.txt`,
+2. Prepares `release-assets/` with `Quelody.Setup.exe`,
+   `Quelody-<version>-full.nupkg`, `RELEASES`, `update.json`, `SHA256SUMS.txt`,
    a release manifest, and the release notes.
 3. Uploads those files as a workflow artifact.
 4. Downloads the artifact **as data only** into the protected `release`
@@ -88,8 +88,8 @@ the failure is fixed and the workflow reruns successfully.
 
 ## Expected Windows release assets
 
-- `Melodify.Setup.exe`
-- `Melodify-<version>-full.nupkg`
+- `Quelody.Setup.exe`
+- `Quelody-<version>-full.nupkg`
 - `RELEASES`
 - `update.json`
 - `SHA256SUMS.txt`

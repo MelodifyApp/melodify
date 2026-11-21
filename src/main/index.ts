@@ -12,9 +12,15 @@ import { createAppLifecycle } from "./appLifecycle";
 import { createUpdateStatusSnapshot } from "./updateSnapshot";
 import { UPDATE_APP_ID, UPDATE_SIGNING_KEYS } from "./updateSecurity";
 import { sendToWindowIfAlive } from "@/shared/utils/windowSend";
+import { APP_NAME, GITHUB_REPO, PROFILE_NAME } from "@/shared/brand";
 import path from "path";
 import fs from "fs";
 import os from "os";
+
+// Keep the Electron userData path explicit so a display-name change does not
+// silently move the profile. The config layer performs the one-time migration.
+app.setName(APP_NAME);
+app.setPath("userData", path.join(app.getPath("appData"), PROFILE_NAME));
 
 // Import IPC handlers for different features
 import "@/core/ipc";
@@ -78,20 +84,20 @@ const appLifecycle = createAppLifecycle({
 });
 const isPrimaryInstance = appLifecycle.acquireSingleInstanceLock();
 if (!isPrimaryInstance) {
-    logWarn("Duplicate Melodify launch exited", "main:singleInstance");
+    logWarn(`Duplicate ${APP_NAME} launch exited`, "main:singleInstance");
 }
 
 // Initialize the updater with configuration
 let updater: Updater | null = null;
 const isIsolatedPreview =
     process.env.NODE_ENV === "development" &&
-    !!process.env.MELODIFY_PREVIEW_USER_DATA;
+    !!process.env.APP_PREVIEW_USER_DATA;
 if (isIsolatedPreview) {
     logInfo("Updater disabled for isolated UI preview", "updater:init");
 } else {
     try {
         updater = new Updater({
-            repo: "MelodifyApp/melodify",
+            repo: GITHUB_REPO,
             autoDownload: false, // Don't auto-download, let user choose
             allowPrerelease: false, // Only stable releases
             debug: false, // Enable debug in dev
@@ -285,7 +291,7 @@ const createTray = () => {
         },
     ]);
 
-    tray.setToolTip("Melodify");
+    tray.setToolTip(APP_NAME);
     tray.setContextMenu(contextMenu);
     tray.on("click", () => {
         mainWindow?.show();
@@ -438,7 +444,7 @@ const createMainWindow = (): void => {
         // Open DevTools in development mode; fixture review can disable it.
         if (
             process.env.NODE_ENV === "development" &&
-            process.env.MELODIFY_DISABLE_DEVTOOLS !== "1"
+            process.env.APP_DISABLE_DEVTOOLS !== "1"
         ) {
             mainWindow.webContents.openDevTools({ mode: "detach" });
             logDebug("DevTools opened in development mode");

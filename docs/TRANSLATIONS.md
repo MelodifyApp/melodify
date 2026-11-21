@@ -1,6 +1,6 @@
 # Translation System Documentation
 
-This document provides comprehensive information about the internationalization (i18n) system in Melodify.
+This document provides comprehensive information about the internationalization (i18n) system in Quelody.
 
 ## Overview
 
@@ -87,7 +87,7 @@ const status = isConnected ? t("common.connected") : t("common.disconnected");
 ```json
 {
     "app": {
-        "name": "Melodify",
+        "name": "Quelody",
         "description": "..."
     },
     "navigation": {

@@ -45,14 +45,14 @@ jobs:
             - name: Sign update manifest
               shell: pwsh
               env:
-                  MELODIFY_UPDATE_SIGNING_KEY: ${{ secrets.MELODIFY_UPDATE_SIGNING_KEY }}
-                  MELODIFY_UPDATE_SIGNING_KEY_ID: melodify-release-2026-11
+                  UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+                  UPDATE_SIGNING_KEY_ID: quelody-release-2026-11
               run: node scripts/sign-update-manifest.cjs --dir release-assets --tag "$env:GITHUB_REF_NAME"
 
             - name: Upload release assets
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: melodify-windows-${{ github.ref_name }}
+                  name: quelody-windows-${{ github.ref_name }}
                   path: release-assets
                   if-no-files-found: error
                   retention-days: 7
@@ -79,7 +79,7 @@ jobs:
             - name: Download Windows release artifacts
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
               with:
-                  name: melodify-windows-${{ github.ref_name }}
+                  name: quelody-windows-${{ github.ref_name }}
                   path: release-assets
 
             - name: Verify release assets
@@ -112,10 +112,10 @@ jobs:
                               if ($LASTEXITCODE -ne 0) { throw "Could not remove stale draft asset $($asset.name)." }
                           }
                       }
-                      gh release edit $tag --title "Melodify $tag" --notes-file "release-assets/release-notes.md"
+                      gh release edit $tag --title "Quelody $tag" --notes-file "release-assets/release-notes.md"
                       if ($LASTEXITCODE -ne 0) { throw "Could not update draft release $tag." }
                   } else {
-                      gh release create $tag --draft --verify-tag --title "Melodify $tag" --notes-file "release-assets/release-notes.md"
+                      gh release create $tag --draft --verify-tag --title "Quelody $tag" --notes-file "release-assets/release-notes.md"
                       if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
                   }
 

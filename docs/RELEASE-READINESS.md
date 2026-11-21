@@ -1,11 +1,12 @@
-# Melodify 1.1.0 — release readiness
+# Quelody 1.1.0 — release readiness
 
 Master checklist for publishing the Windows desktop app. The technical tag/publish
 steps live in [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md); this file covers the
 full launch surface.
 
 **Last updated:** 2026-11-21
-**Status:** release candidate prep — live QA and legal gates remain
+**Status:** free public release candidate — live QA and install testing remain.
+Legal/store/monetization items are parked by the owner's no-lawyer-zone decision.
 
 ## 0. Blockers
 
@@ -18,7 +19,7 @@ full launch surface.
       and `update.json` with the v1.1.0 asset URL.
 - [ ] **Protected GitHub `release` environment** still needs to exist.
 - [ ] **KVKK controller identity and Turkish legal review** are pending.
-- [ ] **Name clearance** for "Melodify Live" is pending.
+- [ ] **Name clearance** for "Quelody" is pending.
 
 ## 1. Product and quality
 
@@ -39,7 +40,7 @@ full launch surface.
 - [ ] **Dependency audit** (`npm audit`, license scan) and a packaged-app
       dependency review.
 - [ ] **Uninstall / data lifecycle:** verify what remains in
-      `%APPDATA%\melodify` after uninstall and document deletion.
+      `%APPDATA%\quelody` after uninstall and document deletion.
 - [ ] **Windows support matrix:** Windows 10/11, x64 only, minimum build, high-DPI.
 - [ ] **Accessibility pass:** keyboard-only, screen reader, high contrast.
 - [ ] **Turkish/English UI pass** at 100% and 125% scaling.
@@ -54,6 +55,12 @@ full launch surface.
 - [x] Ed25519 update-manifest verification; public key pinned in the app,
       private key outside the repo, signing secret configured in GitHub Actions.
 - [x] Signed `update-manifest.json` + `.sig` release assets.
+- [x] Third-party notices generated and shipped with the installer; Electron
+      and Chromium license files remain next to the executable.
+- [x] Name-check checklist created; other “Quelody” music apps found, no exact
+      “Quelody”. Private-use only, not clearance.
+- [x] README and in-app About notice: free, local-only, as-is, no affiliation;
+      platform logos removed from the UI.
 - [x] Unsigned-release decision and SHA-256 checksum process.
 - [ ] **Signing decision revisited** for public launch (unsigned means
       SmartScreen "unknown publisher" and possible Smart App Control blocks).
@@ -73,7 +80,7 @@ full launch surface.
 - [ ] Controller name, address, email and website filled in.
 - [ ] Turkish KVKK legal review.
 - [ ] VERBİS exemption recorded by the controller.
-- [ ] **Trademark clearance** for "Melodify Live" (TÜRKPATENT classes 9/41/42;
+- [ ] **Trademark clearance** for "Quelody" (TÜRKPATENT classes 9/41/42;
       EUIPO/USPTO if global).
 - [ ] **MIT license and copyright holder** confirmed for the public repo.
 - [ ] **Terms of use / EULA** decision (free direct download vs store vs paid).
@@ -82,12 +89,13 @@ full launch surface.
 
 ## 4. Brand and distribution
 
-- [x] Domain owned: `melodifylive.app`.
-- [ ] Display brand "Melodify Live" applied (in progress).
-- [ ] Installer identity decision: keep `Melodify` for 1.1.0 upgrade safety;
-      rename only with a migration plan.
+- [ ] Quelody domain: acquire `quelody.app` or redirect the legacy
+      `melodifylive.app`; the legacy domain is owned.
+- [x] Display brand "Quelody" applied.
+- [x] Installer/profile identity renamed to `Quelody` / `%APPDATA%\quelody`.
+      Melodify 1.0.7 does not upgrade in place; install Quelody separately.
 - [ ] Logo/mark ownership and icon sizes (installer, shortcuts, window, store).
-- [ ] **Website/download page** on `melodifylive.app`: requirements, checksums,
+- [ ] **Website/download page** on `quelody.app`: requirements, checksums,
       privacy, SmartScreen note, changelog.
 - [ ] GitHub repo metadata: description, topics, social preview, README
       screenshots.
@@ -123,7 +131,7 @@ full launch surface.
 
 ## 7. After 1.1.0
 
-- [ ] Installer identity rename to "Melodify Live" with migration.
+- [ ] Installer identity rename to "Quelody" with migration.
 - [ ] Website/landing and download page.
 - [ ] Microsoft Store or winget packaging, if desired.
 - [ ] Paid/open-core packaging, refunds and tax review, if monetizing.
@@ -132,7 +140,7 @@ full launch surface.
 ## Decisions needed from the owner
 
 1. **Electron:** resolved — 45.2.3→45.4.1 is merged; the 36 EOL risk is removed.
-2. **Name:** proceed with "Melodify Live" and run clearance, or clear a new name?
+2. **Name:** proceed with "Quelody" and run clearance, or clear a new name?
 3. **KVKK:** controller details and legal review owner.
 4. **Distribution:** direct download only, or Microsoft Store/winget as well?
 5. **Monetization:** free/open-core for 1.1.0, or paid features at launch?

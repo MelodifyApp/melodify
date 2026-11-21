@@ -1,0 +1,14 @@
+{
+    "displayName": "Quelody",
+    "packageName": "quelody",
+    "productName": "Quelody",
+    "executableName": "Quelody",
+    "installerName": "Quelody.Setup.exe",
+    "appId": "com.emirhanpisgin.quelody",
+    "profileName": "quelody",
+    "legacyProfileName": "melodify",
+    "description": "Quelody is a desktop app that lets viewers request songs in Kick or Twitch chat, which are then played on your device using Spotify.",
+    "githubRepo": "MelodifyApp/melodify",
+    "website": "https://quelody.app",
+    "updateKeyId": "quelody-release-2026-11"
+}

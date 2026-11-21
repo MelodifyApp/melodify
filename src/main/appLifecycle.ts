@@ -93,7 +93,7 @@ export function createAppLifecycle(deps: AppLifecycleDeps): AppLifecycle {
         const acquired = deps.app.requestSingleInstanceLock();
         if (!acquired) {
             log.warn(
-                "Another Melodify instance owns the app lock; exiting",
+                "Another Quelody instance owns the app lock; exiting",
                 "lifecycle:singleInstance"
             );
             deps.app.quit();

@@ -20,7 +20,7 @@ const logsViewSource = fs.readFileSync(
 test("Logs copy describes startup-only 30-day cleanup and no Clear action", () => {
     assert.match(
         en.logs.logsRetentionNotice,
-        /older than 30 days are removed when Melodify starts/i
+        /older than 30 days are removed when Quelody starts/i
     );
     assert.match(en.logs.logsRetentionNotice, /no Clear action/i);
     assert.doesNotMatch(
@@ -28,7 +28,7 @@ test("Logs copy describes startup-only 30-day cleanup and no Clear action", () =
         /automatically cleaned after 30 days|clear to remove/i
     );
 
-    assert.match(tr.logs.logsRetentionNotice, /Melodify başlarken silinir/i);
+    assert.match(tr.logs.logsRetentionNotice, /Quelody başlarken silinir/i);
     assert.match(tr.logs.logsRetentionNotice, /Temizle işlemi yoktur/i);
     assert.doesNotMatch(tr.logs.logsRetentionNotice, /30 gün sonra silinir/i);
 

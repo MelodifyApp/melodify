@@ -1,12 +1,12 @@
-interface MelodifyMarkProps {
+interface BrandMarkProps {
     className?: string;
 }
 
 /**
- * Approved Melodify brand mark. Decorative here because the titlebar already
+ * Approved product brand mark. Decorative here because the titlebar already
  * exposes the app name as text.
  */
-export default function MelodifyMark({ className }: MelodifyMarkProps) {
+export default function BrandMark({ className }: BrandMarkProps) {
     return (
         <svg
             className={className}
@@ -17,7 +17,7 @@ export default function MelodifyMark({ className }: MelodifyMarkProps) {
         >
             <defs>
                 <linearGradient
-                    id="melodify-mark-gradient"
+                    id="brand-mark-gradient"
                     x1="0"
                     y1="0"
                     x2="1"
@@ -31,7 +31,7 @@ export default function MelodifyMark({ className }: MelodifyMarkProps) {
                 width="64"
                 height="64"
                 rx="16"
-                fill="url(#melodify-mark-gradient)"
+                fill="url(#brand-mark-gradient)"
             />
             <rect
                 x="1.5"

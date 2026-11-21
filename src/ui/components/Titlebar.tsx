@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import MelodifyMark from "./MelodifyMark";
+import BrandMark from "./BrandMark";
 import { SettingsIcon } from "./studio/icons";
 import { STUDIO_THEMES } from "@/ui/theme";
 import type { StudioThemeName } from "@/ui/components/studio";
@@ -91,7 +91,7 @@ export default function Titlebar({
                 title={t("navigation.homePage")}
             >
                 <span className="studio-titlebar-mark" aria-hidden="true">
-                    <MelodifyMark />
+                    <BrandMark />
                 </span>
                 <span className="studio-titlebar-name">{t("app.name")}</span>
                 <span className="studio-titlebar-sep" aria-hidden="true" />

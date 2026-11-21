@@ -93,7 +93,7 @@ test("Select is a custom Studio combobox with label/value association and no nat
     const html = render("Select", {
         id: "language",
         label: "Interface language",
-        helper: "Used in Melodify.",
+        helper: "Used in Quelody.",
         value: "en",
         options,
         onChange() {},
@@ -147,7 +147,7 @@ test("Select exposes disabled, required, helper, error and invalid state", () =>
     const html = render("Select", {
         id: "language",
         label: "Interface language",
-        helper: "Used in Melodify.",
+        helper: "Used in Quelody.",
         error: "Choose a language.",
         value: "en",
         options,

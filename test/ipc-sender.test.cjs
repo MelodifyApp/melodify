@@ -11,7 +11,7 @@ const {
 test("accepts packaged and local development renderer URLs", () => {
     assert.equal(
         isTrustedRendererUrl(
-            "file:///C:/Program%20Files/Melodify/resources/app.asar/.webpack/renderer/main_window/index.html"
+            "file:///C:/Program%20Files/Quelody/resources/app.asar/.webpack/renderer/main_window/index.html"
         ),
         true
     );

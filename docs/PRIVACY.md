@@ -1,4 +1,4 @@
-# Melodify Live — Privacy Notice
+# Quelody — Privacy Notice
 
 **Last updated:** [LAST UPDATED]
 **App version:** 1.1.0
@@ -7,13 +7,13 @@
 **Email:** [EMAIL]
 **Website:** [WEBSITE]
 
-This notice explains how Melodify Live handles personal data. The **Turkish version
+This notice explains how Quelody handles personal data. The **Turkish version
 (`PRIVACY.tr.md`) is the operative text for KVKK**; this English version is a
 translation for international users.
 
 ## 1. Scope and model
 
-Melodify Live is a Windows desktop application that runs on the user's own machine.
+Quelody is a Windows desktop application that runs on the user's own machine.
 It does not create accounts, send data to a developer-operated server, include
 telemetry, analytics or advertising, or upload a profile to the cloud.
 
@@ -118,7 +118,7 @@ Requests can be sent in writing to **[EMAIL]**. Responses are provided within
 30 days. Complaints can be filed with the Turkish KVKK (www.kvkk.gov.tr).
 
 Local data can also be deleted by removing the app profile:
-`%APPDATA%\melodify`.
+`%APPDATA%\quelody`.
 
 ## 8. Cookies and website
 

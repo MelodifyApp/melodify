@@ -29,7 +29,7 @@ Reports are reviewed on a best-effort basis. There is no paid bug bounty. Confir
 
 ## Scope
 
-This policy covers the Melodify Live desktop application and its updater integration.
+This policy covers the Quelody desktop application and its updater integration.
 
 Spotify, Kick and Twitch services, accounts, developer applications, OAuth provider behavior and third-party platform policy are outside this repository's control. Report those issues to the relevant provider.
 

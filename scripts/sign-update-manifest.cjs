@@ -4,17 +4,18 @@
  * Builds the signed update manifest from the prepared installer and signs the
  * exact manifest bytes with the release Ed25519 private key.
  *
- * The private key is read from MELODIFY_UPDATE_SIGNING_KEY (PEM or base64
- * PKCS8 DER) and is never written to disk or printed.
+ * The private key is read from UPDATE_SIGNING_KEY (PEM or base64 PKCS8 DER)
+ * and is never written to disk or printed.
  */
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const brand = require("../src/shared/brand.json");
 
-const DEFAULT_KEY_ID = "melodify-release-2026-11";
-const DEFAULT_APP_ID = "com.emirhanpisgin.melodify";
-const DEFAULT_ASSET = "Melodify.Setup.exe";
+const DEFAULT_KEY_ID = brand.updateKeyId;
+const DEFAULT_APP_ID = brand.appId;
+const DEFAULT_ASSET = brand.installerName;
 const DEFAULT_EXPIRY_DAYS = 90;
 
 function fail(message) {
@@ -45,9 +46,9 @@ function readVersion(options) {
 }
 
 function loadPrivateKey() {
-    const value = process.env.MELODIFY_UPDATE_SIGNING_KEY;
+    const value = process.env.UPDATE_SIGNING_KEY;
     if (!value || !value.trim()) {
-        fail("MELODIFY_UPDATE_SIGNING_KEY is required");
+        fail("UPDATE_SIGNING_KEY is required");
     }
     try {
         if (value.includes("BEGIN PRIVATE KEY")) {
@@ -59,7 +60,7 @@ function loadPrivateKey() {
             type: "pkcs8",
         });
     } catch {
-        fail("MELODIFY_UPDATE_SIGNING_KEY could not be parsed");
+        fail("UPDATE_SIGNING_KEY could not be parsed");
     }
 }
 
@@ -103,9 +104,8 @@ function main() {
     const expiresAt = new Date(
         now.getTime() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000
     );
-    const keyId =
-        process.env.MELODIFY_UPDATE_SIGNING_KEY_ID || DEFAULT_KEY_ID;
-    const appId = process.env.MELODIFY_UPDATE_APP_ID || DEFAULT_APP_ID;
+    const keyId = process.env.UPDATE_SIGNING_KEY_ID || DEFAULT_KEY_ID;
+    const appId = process.env.UPDATE_APP_ID || DEFAULT_APP_ID;
 
     const manifest = {
         schemaVersion: 1,

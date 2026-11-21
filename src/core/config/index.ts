@@ -4,6 +4,7 @@ import { app, safeStorage } from "electron";
 import { logInfo, logError, logDebug, logWarn } from "@/core/logging";
 import { redactSecrets } from "@/core/logging/utils";
 import { resolveUserDataDirectory, previewOverrideIgnored } from "./userDataDirectory";
+import { LEGACY_PROFILE_NAME, PROFILE_NAME } from "@/shared/brand";
 import {
     decryptSecret,
     encryptSecret,
@@ -122,25 +123,62 @@ interface AppConfig {
     cooldownMessageTemplate?: string;
 }
 
+const appDataDirectory = app.getPath("appData");
 const userDataDirectory = resolveUserDataDirectory(
-    app.getPath("userData"),
-    process.env.MELODIFY_PREVIEW_USER_DATA,
+    path.join(appDataDirectory, PROFILE_NAME),
+    process.env.APP_PREVIEW_USER_DATA,
     process.env.NODE_ENV === "development"
 );
 
 // Never silently fall back to the real profile when a preview was requested.
 if (
     previewOverrideIgnored(
-        app.getPath("userData"),
-        process.env.MELODIFY_PREVIEW_USER_DATA,
+        path.join(appDataDirectory, PROFILE_NAME),
+        process.env.APP_PREVIEW_USER_DATA,
         process.env.NODE_ENV === "development"
     )
 ) {
     logWarn(
-        "MELODIFY_PREVIEW_USER_DATA ignored: preview isolation only applies to development builds",
+        "APP_PREVIEW_USER_DATA ignored: preview isolation only applies to development builds",
         "config:userDataDirectory"
     );
 }
+
+/**
+ * One-time profile migration after a product rename. Copies the old config,
+ * queue history and request files into the new profile without overwriting any
+ * existing new-profile data. This runs before the config is loaded.
+ */
+function migrateLegacyProfile(): void {
+    if (process.env.APP_PREVIEW_USER_DATA) return;
+    const targetConfig = path.join(userDataDirectory, "config.json");
+    if (fs.existsSync(targetConfig)) return;
+    const legacyDirectory = path.join(appDataDirectory, LEGACY_PROFILE_NAME);
+    const legacyConfig = path.join(legacyDirectory, "config.json");
+    if (!fs.existsSync(legacyConfig)) return;
+
+    try {
+        fs.mkdirSync(userDataDirectory, { recursive: true });
+        fs.copyFileSync(legacyConfig, targetConfig);
+        for (const name of ["queue-history.json", "current-song.txt"]) {
+            const source = path.join(legacyDirectory, name);
+            const target = path.join(userDataDirectory, name);
+            if (fs.existsSync(source) && !fs.existsSync(target)) {
+                fs.copyFileSync(source, target);
+            }
+        }
+        const legacyRequests = path.join(legacyDirectory, "song-requests");
+        const targetRequests = path.join(userDataDirectory, "song-requests");
+        if (fs.existsSync(legacyRequests) && !fs.existsSync(targetRequests)) {
+            fs.cpSync(legacyRequests, targetRequests, { recursive: true });
+        }
+        logInfo("Migrated the previous profile to the new product name", "config:userDataDirectory");
+    } catch (error) {
+        logWarn("Could not migrate the previous profile", "config:userDataDirectory");
+    }
+}
+
+migrateLegacyProfile();
 
 /**
  * Returns language-specific default configuration values

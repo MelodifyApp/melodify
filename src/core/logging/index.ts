@@ -88,7 +88,7 @@ const SESSION_ID = `session_${Date.now()}`;
 const userDataDirectory = app
     ? resolveUserDataDirectory(
           app.getPath("userData"),
-          process.env.MELODIFY_PREVIEW_USER_DATA,
+          process.env.APP_PREVIEW_USER_DATA,
           process.env.NODE_ENV === "development"
       )
     : process.cwd();

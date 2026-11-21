@@ -1,7 +1,7 @@
 # Local data lifecycle
 
-Melodify Live is local-only. There is **no telemetry, analytics, crash upload,
-account or Melodify server**. Data leaves the machine only through provider
+Quelody is local-only. There is **no telemetry, analytics, crash upload,
+account or Quelody server**. Data leaves the machine only through provider
 APIs, the GitHub update check, artwork CDNs, or an export the user explicitly
 chooses.
 
@@ -9,7 +9,7 @@ See [IRREVERSIBLE.md](IRREVERSIBLE.md) for actions that need owner approval.
 
 ## What is stored
 
-| Location (under `%APPDATA%\melodify`) | Contents | Retention | Sensitivity |
+| Location (under `%APPDATA%\quelody`) | Contents | Retention | Sensitivity |
 | --- | --- | --- | --- |
 | `config.json` | Settings and credentials (`enc:v1:` via DPAPI) | Until reset | High: encrypted credentials |
 | `config.corrupt-*.json` | Quarantined unreadable config copies | Kept until the user deletes them | High: may contain credentials |
@@ -46,7 +46,7 @@ only because the history is meant to be readable by the streamer.
 - **Queue history → Clear history** removes past sessions and keeps the current
   live session. The user is asked to confirm; export first if the data is
   wanted.
-- **Full deletion:** quit Melodify and delete `%APPDATA%\melodify`. Uninstalling
+- **Full deletion:** quit Quelody and delete `%APPDATA%\quelody`. Uninstalling
   the app does **not** currently remove this folder.
 - **Credentials:** reset or replace them in Settings → API Keys.
 
@@ -61,7 +61,7 @@ Windows user.
 - Spotify, Kick and Twitch APIs for auth, playback and chat.
 - GitHub Releases for update checks.
 - Spotify/Kick/Twitch artwork CDNs when artwork is displayed.
-- No request goes to a Melodify-operated server. There is no Melodify API,
+- No request goes to a Quelody-operated server. There is no Quelody API,
   dashboard or telemetry endpoint.
 
 ## Support bundles

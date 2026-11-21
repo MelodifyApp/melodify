@@ -9,18 +9,32 @@ function readSource(relativePath) {
     return fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 }
 
-test("titlebar uses the approved Melodify brand mark", () => {
-    const titlebar = readSource("src/ui/components/Titlebar.tsx");
-    const mark = readSource("src/ui/components/MelodifyMark.tsx");
+const brand = JSON.parse(readSource("src/shared/brand.json"));
 
-    assert.match(titlebar, /MelodifyMark/);
+test("titlebar uses the approved product brand mark", () => {
+    const titlebar = readSource("src/ui/components/Titlebar.tsx");
+    const mark = readSource("src/ui/components/BrandMark.tsx");
+
+    assert.match(titlebar, /BrandMark/);
+    assert.doesNotMatch(titlebar, /MelodifyMark/);
     assert.doesNotMatch(titlebar, /\bMusic\b/);
     assert.match(mark, /#34d399/);
     assert.match(mark, /#c084fc/);
     assert.match(mark, /viewBox="0 0 64 64"/);
 });
 
-test("the public display brand is Melodify Live", () => {
+test("the brand is defined in one source of truth", () => {
+    assert.equal(brand.displayName, "Quelody");
+    assert.equal(brand.packageName, "quelody");
+    assert.equal(brand.productName, "Quelody");
+    assert.equal(brand.executableName, "Quelody");
+    assert.equal(brand.installerName, "Quelody.Setup.exe");
+    assert.equal(brand.appId, "com.emirhanpisgin.quelody");
+    assert.equal(brand.profileName, "quelody");
+    assert.equal(brand.legacyProfileName, "melodify");
+});
+
+test("public UI, HTML, package and docs use the brand value", () => {
     const en = JSON.parse(readSource("src/core/i18n/locales/en.json"));
     const tr = JSON.parse(readSource("src/core/i18n/locales/tr.json"));
     const html = readSource("src/renderer/index.html");
@@ -28,55 +42,55 @@ test("the public display brand is Melodify Live", () => {
     const readme = readSource("README.md");
     const security = readSource("SECURITY.md");
 
-    assert.equal(en.app.name, "Melodify Live");
-    assert.equal(tr.app.name, "Melodify Live");
-    assert.match(html, /<title>Melodify Live<\/title>/);
+    assert.equal(en.app.name, brand.displayName);
+    assert.equal(tr.app.name, brand.displayName);
+    assert.match(html, new RegExp(`<title>${brand.displayName}</title>`));
 
-    assert.match(
-        pkg.description,
-        /^Melodify Live is a desktop app/
-    );
-    assert.match(readme, /^# Melodify Live\b/m);
-    assert.match(readme, /Melodify Live is a Windows desktop app/);
-    assert.match(readme, /https:\/\/melodifylive\.app/);
-    assert.match(security, /Melodify Live desktop application/);
+    assert.equal(pkg.name, brand.packageName);
+    assert.equal(pkg.productName, brand.productName);
+    assert.match(pkg.description, new RegExp(`^${brand.displayName} is a desktop app`));
+    assert.match(readme, new RegExp(`^# ${brand.displayName}\\b`, "m"));
+    assert.match(readme, new RegExp(`${brand.displayName} is a Windows desktop app`));
+    assert.match(security, new RegExp(`${brand.displayName} desktop application`));
 
     for (const [file, heading] of [
-        ["docs/PRIVACY.md", "# Melodify Live — Privacy Notice"],
-        ["docs/KVKK.md", "# Melodify Live — KVKK assessment"],
+        ["docs/PRIVACY.md", `# ${brand.displayName} — Privacy Notice`],
+        ["docs/KVKK.md", `# ${brand.displayName} — KVKK assessment`],
         [
-            "docs/RELEASE-NOTES-1.1.0.md",
-            "# Melodify Live 1.1.0 — release-note planning",
+            "RELEASE-NOTES-v1.1.0.md",
+            `# ${brand.displayName} 1.1.0`,
         ],
     ]) {
-        assert.match(readSource(file), new RegExp(`^${heading}`, "m"), file);
+        assert.match(
+            readSource(file),
+            new RegExp(`^${heading}`, "m"),
+            file
+        );
     }
     assert.match(
         readSource("docs/PRIVACY.tr.md"),
-        /^# Melodify Live — Kişisel Verilerin Korunması Aydınlatma Metni/m
+        new RegExp(
+            `^# ${brand.displayName} — Kişisel Verilerin Korunması Aydınlatma Metni`,
+            "m"
+        )
     );
 });
 
-test("installer and internal identity stay Melodify for upgrade compatibility", () => {
+test("installer identity comes from the brand config", () => {
     const pkg = JSON.parse(readSource("package.json"));
     const forge = readSource("forge.config.ts");
     const config = readSource("src/core/config/index.ts");
-    const readme = readSource("README.md");
-    const notes = readSource("docs/RELEASE-NOTES-1.1.0.md");
 
-    assert.equal(pkg.name, "melodify");
-    assert.equal(pkg.productName, "melodify");
-    assert.match(forge, /name: "Melodify"/);
-    assert.match(forge, /executableName: "Melodify"/);
-    assert.match(forge, /setupExe: "Melodify\.Setup\.exe"/);
-    assert.match(forge, /exe: "Melodify\.exe"/);
-    assert.match(forge, /appBundleId: "com\.emirhanpisgin\.melodify"/);
-    assert.match(forge, /owner: "MelodifyApp"/);
-    assert.match(forge, /name: "melodify"/);
+    assert.equal(pkg.name, brand.packageName);
+    assert.equal(pkg.productName, brand.productName);
+    assert.match(forge, /import brand from "\.\/src\/shared\/brand\.json"/);
+    assert.match(forge, /name: brand\.productName/);
+    assert.match(forge, /executableName: brand\.executableName/);
+    assert.match(forge, /setupExe: brand\.installerName/);
+    assert.match(forge, /appBundleId: brand\.appId/);
+    assert.match(config, /LEGACY_PROFILE_NAME/);
+    assert.match(config, /migrateLegacyProfile/);
     assert.match(config, /config\.json/);
-    assert.match(readme, /installer identity remains `Melodify`/i);
-    assert.match(notes, /installer identity remains `Melodify`/i);
-    assert.match(notes, /%APPDATA%\\melodify/);
 });
 
 test("the titlebar wordmark hides at the existing 380px breakpoint", () => {

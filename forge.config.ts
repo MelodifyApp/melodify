@@ -10,23 +10,25 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
+import brand from "./src/shared/brand.json";
 
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
         icon: "./src/assets/icon",
-        name: "Melodify",
-        executableName: "Melodify",
-        appBundleId: "com.emirhanpisgin.melodify",
+        name: brand.productName,
+        executableName: brand.executableName,
+        appBundleId: brand.appId,
+        extraResource: ["./THIRD-PARTY-NOTICES.md"],
     },
     rebuildConfig: {},
     makers: [
         new MakerSquirrel({
             authors: "Emirhan Pisgin",
-            description: "Melodify - Listen with your viewers!",
-            setupExe: "Melodify.Setup.exe",
-            name: "Melodify",
-            exe: "Melodify.exe",
+            description: `${brand.displayName} - Listen with your viewers!`,
+            setupExe: brand.installerName,
+            name: brand.productName,
+            exe: `${brand.executableName}.exe`,
         }),
         new MakerZIP({}, ["darwin"]),
         new MakerRpm({}),

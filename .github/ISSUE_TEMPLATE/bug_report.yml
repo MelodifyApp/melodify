@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem with Melodify Live
+description: Report a reproducible problem with Quelody
 title: "[Bug]: "
 body:
   - type: markdown
@@ -11,7 +11,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Melodify Live version
+      label: Quelody version
       description: Shown in the titlebar footer or Settings → Debug.
       placeholder: 1.1.0
     validations:

@@ -94,7 +94,7 @@ export interface KickGuestClient {
 
 const BASE_URL = "https://web.kick.com/api/v1/realtime";
 const CONNECT_FRAME_ID = 1;
-const CLIENT_NAME = "melodify";
+const CLIENT_NAME = "Quelody";
 const MAX_RECONNECT_ATTEMPTS = 5;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 15_000;

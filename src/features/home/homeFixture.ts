@@ -3,12 +3,12 @@ import type { HomePlatform, HomeSessionSnapshot } from "./homeSessionTypes";
 /**
  * Development-only visual fixture for Home review. It is compiled into the
  * development bundle but never enabled unless the isolated launch sets
- * MELODIFY_HOME_FIXTURE=1. It must not be used in a packaged build.
+ * APP_HOME_FIXTURE=1. It must not be used in a packaged build.
  */
 export function homeFixtureEnabled(): boolean {
     return (
         process.env.NODE_ENV === "development" &&
-        process.env.MELODIFY_HOME_FIXTURE === "1"
+        process.env.APP_HOME_FIXTURE === "1"
     );
 }
 
