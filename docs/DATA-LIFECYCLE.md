@@ -27,6 +27,9 @@ only because the history is meant to be readable by the streamer.
 - Logs and song-request files: **30 days**, pruned on application startup.
 - Queue history: **90 days or 50 sessions**, whichever comes first; the active
   session is never pruned automatically.
+- The active session’s pending entries are reused to restore the queue after a
+  crash or a recent relaunch while the stream is still live. No extra fields
+  are stored for this.
 - Credentials: until the user resets or clears them. No plaintext credential
   backup is kept; 1.0.7 recovery is unsupported, so lost credentials are
   re-entered in Settings → API Keys.

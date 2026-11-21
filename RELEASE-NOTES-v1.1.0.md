@@ -13,6 +13,11 @@ telemetry, no cloud sync and no Melodify server.
 - **Queue history.** Past sessions are grouped by stream, with played and
   unplayed requests. History can be exported to JSON or cleared from Settings;
   clearing keeps the active live session.
+- **Sessions survive a restart.** Relaunching or auto-updating while the stream
+  is still live resumes the same session and its pending queue instead of
+  splitting the stream.
+- **Optional live-only requests.** A Settings toggle can reject song requests
+  when no stream session is active.
 - **Dusk look.** Refreshed titlebar, mark, installer/tray icon rim, consistent
   Home and Settings rails, and slower, calmer motion.
 - **Runtime.** Electron 45.2.3 (Chromium 156, Node 24) and the Melodify updater

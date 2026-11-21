@@ -27,6 +27,8 @@ full launch surface.
 - [x] Dusk look, motion polish and reduced-motion behavior.
 - [x] Credential encryption at rest (DPAPI, `enc:v1:`) with migration.
 - [x] Queue history retention, export, clear and field minimization.
+- [x] Queue sessions resume after a crash or recent relaunch while live.
+- [x] Optional live-only request gate.
 - [x] Local data lifecycle and irreversible-action approval gate documented.
 - [x] Real-window visual QA at 1200/640/480 in Graphite/Light/Dark.
 - [x] Gallery state matrix for rare states (API failures, Home empty/error,
